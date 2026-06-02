@@ -16,6 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.database import init_db
+from app.api.endpoints import router as api_router
+from app.services.integrations.telegram_bot import start_telegram_bot_service, stop_telegram_bot_service
 
 # پیکربندی سیستم لاگ‌نویسی متمرکز
 setup_logging()
@@ -29,6 +31,7 @@ async def lifespan(app: FastAPI):
     /// </summary>
     /// <remarks>
     /// این متد در ابتدای راه‌اندازی سرور، پایگاه داده و اکستنشن‌های مربوطه را آماده‌سازی می‌کند.
+    /// همچنین ربات تلگرام سازمانی را به صورت پس‌زمینه اجرا می‌نماید.
     /// </remarks>
     """
     logger.info("ArioNex Enterprise Backend is starting up...")
@@ -40,11 +43,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Critical error during database initialization on startup: {str(e)}")
         
+    # راه‌اندازی سرویس ربات تلگرام سازمانی
+    try:
+        await start_telegram_bot_service()
+    except Exception as e:
+        logger.error(f"Failed to start telegram bot service inside lifespan: {str(e)}")
+        
     # ثبت لیست ماژول‌های فعال برای پیگیری در کنسول لاگ
     active_services = [k for k, v in settings.services.__dict__.items() if v]
     logger.info(f"Active Pipeline Expert Workers (Feature Toggles): {active_services}")
     
     yield
+    
+    # متوقف کردن ایمن ربات تلگرام سازمانی
+    try:
+        await stop_telegram_bot_service()
+    except Exception as e:
+        logger.error(f"Failed to stop telegram bot service inside lifespan: {str(e)}")
+        
     logger.info("ArioNex Enterprise Backend is shutting down...")
 
 # ساخت وب‌سرور با عنوان رسمی محصول تجاری
@@ -63,6 +79,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# اتصال اندپوینت‌های رسمی وب‌سرویس آریونکس
+app.include_router(api_router)
 
 @app.get("/health", tags=["System Status"])
 async def health_check():

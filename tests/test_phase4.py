@@ -8,7 +8,7 @@ import sys
 import os
 
 # اضافه کردن مسیر پروژه جهت شناسایی پکیج app
-sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
 from app.services.retrieval.synthesizer import route_query_intent, synthesize_rag_response, STANDARD_REFUSAL_MESSAGE
 from app.services.retrieval.query_rewriter import rewrite_query
