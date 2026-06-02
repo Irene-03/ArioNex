@@ -11,6 +11,56 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚙️  MOCK MODE — برای تست UI بدون بک‌اند
+//   true  → تمام API calls با داده‌های واقع‌بینانه شبیه‌سازی می‌شوند
+//   false → اتصال واقعی به http://localhost:8000
+// ─────────────────────────────────────────────────────────────────────────────
+const MOCK_MODE = true;
+
+/** شبیه‌سازی تاخیر شبکه (میلی‌ثانیه) */
+const mockDelay = (ms = 600) => new Promise(resolve => setTimeout(resolve, ms));
+
+/** داده‌های تنظیمات Mock */
+const MOCK_CONFIG = {
+  security: { pii_redaction: true, strict_non_hallucination: true },
+  services: { safety_auditor: false, log_processor: true, web_search: false },
+  integrations: { telegram_bot: true, popup_widget: true, rest_api: true }
+};
+
+/** پاسخ‌های نمونه برای چت Mock */
+const MOCK_ANSWERS = [
+  {
+    answer: 'بر اساس آیین‌نامه استخدامی شرکت، مرخصی سالانه کارکنان ۳۰ روز کاری است. کارکنان می‌توانند حداکثر ۱۵ روز آن را به سال بعد انتقال دهند.',
+    sources: [
+      { doc_name: 'HR_Policy_Manual_v2.docx', sequence_id: 12 },
+      { doc_name: 'Annual_Report_2024.pdf', sequence_id: 47 }
+    ],
+    is_safe: true
+  },
+  {
+    answer: 'مجموع بدهکاری شرکت در پایان سال مالی ۱۴۰۳ برابر با ۲۴۷ میلیارد ریال بوده که نسبت به سال قبل ۱۲٪ کاهش داشته است.',
+    sources: [
+      { doc_name: 'Sales_Data_Q2.csv', sequence_id: 3 }
+    ],
+    is_safe: true
+  },
+  {
+    answer: 'منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند.',
+    sources: [],
+    is_safe: true
+  },
+  {
+    answer: 'قرارداد با تامین‌کننده شماره A-2024-087 در تاریخ ۱۵ شهریور ۱۴۰۳ امضا شده و تا پایان اسفند ۱۴۰۴ اعتبار دارد. مبلغ قرارداد ۸۵۰ میلیون تومان می‌باشد.',
+    sources: [
+      { doc_name: 'Supplier_Contracts_Q3.pdf', sequence_id: 22 },
+      { doc_name: 'Supplier_Contracts_Q3.pdf', sequence_id: 23 }
+    ],
+    is_safe: true
+  }
+];
+let _mockAnswerIdx = 0;
+
 export default function App() {
   // صفحه فعال جاری در داشبورد
   const [activeScreen, setActiveScreen] = useState('dashboard');
@@ -64,9 +114,18 @@ export default function App() {
 
   // همگام‌سازی فیچر تاگل‌ها با روشن شدن فرانت‌اند
   useEffect(() => {
-    fetch('http://localhost:8000/v1/config')
-      .then(res => res.json())
-      .then(data => {
+    const loadConfig = async () => {
+      try {
+        let data;
+        if (MOCK_MODE) {
+          // --- حالت Mock: بدون نیاز به بک‌اند ---
+          await mockDelay(300);
+          data = MOCK_CONFIG;
+          console.info('[MOCK] Loaded config from mock data.');
+        } else {
+          const res = await fetch('http://localhost:8000/v1/config');
+          data = await res.json();
+        }
         if (data) {
           setFeatures({
             piiRedaction: data.security?.pii_redaction ?? true,
@@ -80,24 +139,28 @@ export default function App() {
             restApi: data.integrations?.rest_api ?? true
           });
         }
-      })
-      .catch(err => console.error("Error loading configuration from API:", err));
+      } catch (err) {
+        console.error('Error loading configuration:', err);
+      }
+    };
+    loadConfig();
   }, []);
 
   // کنترل تغییر وضعیت دکمه‌ها در پنل ادمین و ذخیره در بک‌اند
   const toggleFeature = (key) => {
-    const updatedFeatures = {
-      ...features,
-      [key]: !features[key]
-    };
+    const updatedFeatures = { ...features, [key]: !features[key] };
     setFeatures(updatedFeatures);
+
+    if (MOCK_MODE) {
+      // --- حالت Mock: فقط state محلی تغییر می‌کند ---
+      console.info('[MOCK] Feature toggle updated locally (no API call):', key, '->', !features[key]);
+      return;
+    }
 
     // ثبت زنده تاگل‌ها در وب‌سرور FastAPI
     fetch('http://localhost:8000/v1/config', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         services: {
           safety_auditor: updatedFeatures.localGemma,
@@ -116,64 +179,59 @@ export default function App() {
       })
     })
     .then(res => res.json())
-    .then(data => console.log("Administrative Feature Toggles synchronized live:", data))
-    .catch(err => console.error("Failed to sync feature toggles to API:", err));
+    .then(data => console.log('Feature toggles synchronized:', data))
+    .catch(err => console.error('Failed to sync feature toggles:', err));
   };
 
   // ارسال پیام جدید به دستیار هوشمند و دریافت پاسخ واقعی RAG
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
-    const userMessage = {
-      id: Date.now(),
-      sender: 'user',
-      text: inputText,
-      sources: []
-    };
-
+    const userMessage = { id: Date.now(), sender: 'user', text: inputText, sources: [] };
     setChatMessages(prev => [...prev, userMessage]);
     const queryText = inputText;
     setInputText('');
     setIsAiLoading(true);
 
-    // ارسال درخواست به وب‌سرور رسمی
-    fetch('http://localhost:8000/v1/query', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        query: queryText,
-        session_id: 'react_admin_dashboard_chat'
-      })
-    })
-    .then(res => res.json())
-    .then(data => {
+    try {
+      let data;
+      if (MOCK_MODE) {
+        // --- حالت Mock: پاسخ چرخشی از لیست نمونه ---
+        await mockDelay(900);
+        data = MOCK_ANSWERS[_mockAnswerIdx % MOCK_ANSWERS.length];
+        _mockAnswerIdx++;
+        console.info('[MOCK] Returned mock answer #', _mockAnswerIdx);
+      } else {
+        const res = await fetch('http://localhost:8000/v1/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: queryText, session_id: 'react_admin_dashboard_chat' })
+        });
+        data = await res.json();
+      }
+
       const isRefusal = data.answer === 'منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند.';
-      const aiMessage = {
+      setChatMessages(prev => [...prev, {
         id: Date.now() + 1,
         sender: 'ai',
-        text: data.answer || '⚠️ پاسخی از سرور دریافت نشد.',
+        text: data.answer || '⚠️ پاسخی دریافت نشد.',
         sources: data.sources || [],
         isSafe: data.is_safe ?? true,
-        isRefusal: isRefusal
-      };
-      setChatMessages(prev => [...prev, aiMessage]);
-      setIsAiLoading(false);
-    })
-    .catch(err => {
-      console.error("Error communicating with RAG query API:", err);
-      const errorMessage = {
+        isRefusal
+      }]);
+    } catch (err) {
+      console.error('Error communicating with query API:', err);
+      setChatMessages(prev => [...prev, {
         id: Date.now() + 1,
         sender: 'ai',
         text: '⚠️ خطا در برقراری ارتباط با وب‌سرور هوشمند آریونکس. لطفاً اطمینان حاصل فرمایید که بک‌اند بر روی پورت 8000 در حال اجراست.',
         sources: [],
         isSafe: true,
         isRefusal: true
-      };
-      setChatMessages(prev => [...prev, errorMessage]);
+      }]);
+    } finally {
       setIsAiLoading(false);
-    });
+    }
   };
 
   // ارسال فایل واقعی به اندپوینت آپلود و دریافت پیش‌نمایش قفل حریم شخصی PII
@@ -203,7 +261,7 @@ export default function App() {
     }
   };
 
-  const uploadFileToServer = (file) => {
+  const uploadFileToServer = async (file) => {
     const docId = Date.now();
     const newDoc = {
       id: docId,
@@ -215,72 +273,66 @@ export default function App() {
       progress: 15,
       ext: file.name.split('.').pop().toUpperCase().substring(0, 3)
     };
-
     setDocuments(prev => [newDoc, ...prev]);
-
-    const formData = new FormData();
-    formData.append('file', file);
 
     // میکروانیمیشن پیشرفت نوار بارگذاری
     const progressInterval = setInterval(() => {
       setDocuments(prev => prev.map(d => {
-        if (d.id === docId && d.progress < 85) {
-          return { ...d, progress: d.progress + 15 };
-        }
+        if (d.id === docId && d.progress < 85) return { ...d, progress: d.progress + 15 };
         return d;
       }));
     }, 250);
 
-    fetch('http://localhost:8000/v1/upload', {
-      method: 'POST',
-      body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-      clearInterval(progressInterval);
-      if (data.status === 'success') {
-        // به‌روزرسانی نهایی سند در جدول منابع
-        setDocuments(prev => prev.map(d => {
-          if (d.id === docId) {
-            return {
-              ...d,
-              status: 'ready',
-              progress: 100,
-              chunks: data.chunks_indexed
-            };
+    try {
+      let data;
+      if (MOCK_MODE) {
+        // --- حالت Mock: شبیه‌سازی پردازش و نمایش نمونه PII ---
+        await mockDelay(1800);
+        const mockChunks = Math.floor(Math.random() * 400) + 80;
+        data = {
+          status: 'success',
+          chunks_indexed: mockChunks,
+          pii_preview:
+            `نام فایل: ${file.name}\n\n` +
+            'متن نمونه پس از اعمال قفل حریم شخصی:\n\n' +
+            'کارمند گرامی،\n' +
+            'کد ملی [شناسه ملی سانسور شده] شما در سامانه ثبت شده است.\n' +
+            'لطفاً با شماره [شماره تلفن سانسور شده] تماس بگیرید.\n' +
+            'حساب بانکی [شماره کارت سانسور شده] تأیید گردید.\n' +
+            `\nمجموع ${mockChunks} قطعه متنی استخراج و ایندکس شد.`,
+          pii_audit_counts: {
+            national_id: 1,
+            phone: 1,
+            card: 1,
+            email: 0,
+            iban: 0
           }
-          return d;
-        }));
-
-        // رندر پیش‌نمایش ماسک اطلاعات شخصی PII در پنل
-        if (data.pii_preview) {
-          setPiiPreview(data.pii_preview);
-          setPiiAuditCounts(data.pii_audit_counts || {});
-        } else {
-          setPiiPreview("پیش‌نمایش ماسک برای این قالب فایل در دسترس نیست، اما سند با موفقیت در مخزن برداری ایندکس گردید.");
-          setPiiAuditCounts({});
-        }
+        };
+        console.info('[MOCK] File upload simulated:', file.name, '→', mockChunks, 'chunks');
       } else {
-        throw new Error(data.detail || "Upload failed");
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('http://localhost:8000/v1/upload', { method: 'POST', body: formData });
+        data = await res.json();
+        if (data.status !== 'success') throw new Error(data.detail || 'Upload failed');
       }
-    })
-    .catch(err => {
+
       clearInterval(progressInterval);
-      console.error("Smart file ingestion upload failed:", err);
-      setDocuments(prev => prev.map(d => {
-        if (d.id === docId) {
-          return {
-            ...d,
-            status: 'error',
-            progress: 0,
-            name: '⚠️ خطا: ' + d.name
-          };
-        }
-        return d;
-      }));
-      setPiiPreview("خطا در برقراری ارتباط با وب‌سرور جهت پردازش سند.");
+      setDocuments(prev => prev.map(d =>
+        d.id === docId ? { ...d, status: 'ready', progress: 100, chunks: data.chunks_indexed } : d
+      ));
+      setPiiPreview(data.pii_preview || 'پیش‌نمایش ماسک برای این قالب فایل در دسترس نیست، اما سند با موفقیت ایندکس گردید.');
+      setPiiAuditCounts(data.pii_audit_counts || {});
+
+    } catch (err) {
+      clearInterval(progressInterval);
+      console.error('Smart file ingestion upload failed:', err);
+      setDocuments(prev => prev.map(d =>
+        d.id === docId ? { ...d, status: 'error', progress: 0, name: '⚠️ خطا: ' + d.name } : d
+      ));
+      setPiiPreview('خطا در پردازش سند.');
       setPiiAuditCounts({});
-    });
+    }
   };
 
   return (
