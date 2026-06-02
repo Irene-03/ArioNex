@@ -1,0 +1,103 @@
+"""
+/// <summary>
+/// عامل بازیابی پرسش و پاسخ‌های متداول و لاگ‌های پشتیبانی - سرپرست پشتیبانی (The Support Lead FAQ Agent)
+/// </summary>
+/// <remarks>
+/// این ماژول بر روی الگوهای پرسش و پاسخ ثبت شده در جدول qna_query جستجوی شباهت معنایی انجام می‌دهد.
+/// هدف این عامل پیدا کردن مستقیم لوپ‌های چت پرسش و پاسخ پیشین سازمانی و تیکت‌ها است.
+/// </remarks>
+"""
+
+import logging
+from app.core.config import settings
+from app.core.database import get_db_connection
+from app.core.embeddings import get_embedding
+
+logger = logging.getLogger("arionex.support_lead")
+
+class SupportLeadAgent:
+    """
+    /// <summary>
+    /// کلاس عامل سرپرست پشتیبانی جهت جستجوی لاگ‌های QnA پشتیبانی و سوالات متداول
+    /// </summary>
+    """
+    def __init__(self):
+        # بررسی روشن بودن ماژول در تنظیمات ویژگی‌ها
+        self.is_enabled = settings.services.qna_processor
+
+    def retrieve_context(self, query: str, threshold: float = 0.5, k: int = 4, file_ids: list[int] = None) -> list[dict]:
+        """
+        /// <summary>
+        /// بازیابی معنایی و تطبیق مستقیم الگوهای Q&A از جدول qna_query
+        /// </summary>
+        /// <param name="query">جستار بازنویسی شده مستقل کاربر</param>
+        /// <param name="threshold">حد آستانه شباهت کسینوسی (پیش‌فرض: ۰.۵)</param>
+        /// <param name="k">تعداد رکوردهای بازگشتی (پیش‌فرض: ۴)</param>
+        /// <param name="file_ids">شناسه‌های فایل محدودکننده RAG</param>
+        /// <returns>لیستی از الگوهای پرسش و پاسخ متناظر یافت شده فوق آستانه</returns>
+        """
+        if not self.is_enabled:
+            logger.info("Support Lead Agent is disabled in config.yaml. Skipping QnA vector retrieval.")
+            return []
+            
+        logger.info(f"Support Lead Agent starting similarity search for query: '{query}'")
+        
+        # ۱. استخراج امبدینگ ۳۰۷۲ تایی برای جستار ورودی
+        embedding = get_embedding(query)
+        
+        # ۲. فیلترینگ داینامیک بر اساس شناسه‌ها
+        filter_clause = ""
+        params = [embedding]
+        
+        if file_ids:
+            placeholders = ",".join(["%s"] * len(file_ids))
+            filter_clause = f"AND file_id IN ({placeholders})"
+            params.extend(file_ids)
+            
+        params.append(k)
+        
+        # ۳. کوئری روی جدول qna_query
+        sql = f"""
+        SELECT content, file_id, sequence_id,
+               1 - (embedding <=> %s::vector) AS similarity
+        FROM qna_query
+        WHERE TRUE
+        {filter_clause}
+        ORDER BY similarity DESC
+        LIMIT %s
+        """
+        
+        results = []
+        conn = None
+        
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+                
+            for row in rows:
+                content, file_id, seq_id, similarity = row
+                
+                # اعمال فیلتر شباهت آستانه RAG
+                if similarity >= threshold:
+                    results.append({
+                        "content": content,
+                        "label": f"Support_Logs_ID_{file_id}" if file_id else "QnA_Template",
+                        "file_id": file_id or 0,
+                        "sequence_id": seq_id or 0,
+                        "similarity": similarity,
+                        "source_type": "qna"
+                    })
+                    
+            logger.info(f"Support Lead Agent retrieved {len(results)} chunks from qna_query above threshold {threshold}.")
+        except Exception as e:
+            logger.error(f"Support Lead Agent database operation failed: {str(e)}")
+        finally:
+            if conn:
+                conn.close()
+                
+        return results
+
+# نمونه سراسری عامل سرپرست پشتیبانی
+support_lead_agent = SupportLeadAgent()
