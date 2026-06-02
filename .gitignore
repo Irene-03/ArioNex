@@ -1,0 +1,45 @@
+# ----------------------------------------------------
+# فایل نادیده‌گیری گیت ریشه آریونکس (ArioNex Root .gitignore)
+# ----------------------------------------------------
+
+# فایل‌ها و داده‌های ورودی خام دمو
+raw data for start/
+
+# ذخیره‌سازی محلی فایل‌ها
+backend/storage/
+
+# تنظیمات محلی و حساس
+backend/.env
+.env
+
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+
+# کش‌های پایتون
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+ENV/
+
+# پوشه‌های وابستگی‌های فرانت‌اند
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+
+# لاگ‌ها
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# کش‌های سیستم‌عامل
+.DS_Store
+Thumbs.db
