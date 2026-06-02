@@ -8,7 +8,7 @@ import sys
 import os
 
 # اضافه کردن مسیر پروژه جهت شناسایی پکیج app
-sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
 from app.services.workers.unstructured_processor import unstructured_processor
 from app.services.workers.qna_processor import qna_processor

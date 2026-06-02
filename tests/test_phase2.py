@@ -8,7 +8,7 @@ import sys
 import os
 
 # اضافه کردن آدرس مسیر بک‌بند جهت شناسایی پکیج app
-sys.path.append(os.path.join(os.path.dirname(__file__), "backend"))
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
 from app.services.workers.text_processor import normalize_text, chunk_text
 from app.services.safety.pii_redactor import redact_text, redact_and_audit
