@@ -1,4 +1,4 @@
-"""
+/*
 /// <summary>
 /// کامپوننت اصلی و روت فرانت‌اند سامانه تجاری آریونکس (ArioNex React Dashboard Client)
 /// </summary>
@@ -6,7 +6,7 @@
 /// این بخش تمامی صفحات داشبورد، چت بات، آپلود فایل، پنل ادمین و یکپارچه‌سازی‌ها را
 /// به همراه تعاملات داینامیک و افکت‌های میکرو بر اساس پالت رنگی سورمه‌ای و مسی پیاده‌سازی می‌کند.
 /// </remarks>
-"""
+*/
 
 import React, { useState, useEffect } from 'react';
 import './App.css';
@@ -58,15 +58,69 @@ export default function App() {
     { id: 5, name: 'Support_Tickets_2024.csv', size: '3.4 MB', chunks: 918, date: '۱۵ اردیبهشت', status: 'ready', ext: 'CSV' }
   ]);
 
-  // کنترل تغییر وضعیت دکمه‌ها در پنل ادمین
+  // متغیرهای وضعیت پیش‌نمایش قفل حریم شخصی PII
+  const [piiPreview, setPiiPreview] = useState('');
+  const [piiAuditCounts, setPiiAuditCounts] = useState({});
+
+  // همگام‌سازی فیچر تاگل‌ها با روشن شدن فرانت‌اند
+  useEffect(() => {
+    fetch('http://localhost:8000/v1/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data) {
+          setFeatures({
+            piiRedaction: data.security?.pii_redaction ?? true,
+            localGemma: data.services?.safety_auditor ?? false,
+            hallucinationGuard: data.security?.strict_non_hallucination ?? true,
+            externalApiBlocked: !(data.services?.web_search ?? true),
+            strictCitation: true,
+            auditLog: data.services?.log_processor ?? true,
+            telegramBot: data.integrations?.telegram_bot ?? true,
+            popupWidget: data.integrations?.popup_widget ?? true,
+            restApi: data.integrations?.rest_api ?? true
+          });
+        }
+      })
+      .catch(err => console.error("Error loading configuration from API:", err));
+  }, []);
+
+  // کنترل تغییر وضعیت دکمه‌ها در پنل ادمین و ذخیره در بک‌اند
   const toggleFeature = (key) => {
-    setFeatures(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
+    const updatedFeatures = {
+      ...features,
+      [key]: !features[key]
+    };
+    setFeatures(updatedFeatures);
+
+    // ثبت زنده تاگل‌ها در وب‌سرور FastAPI
+    fetch('http://localhost:8000/v1/config', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        services: {
+          safety_auditor: updatedFeatures.localGemma,
+          log_processor: updatedFeatures.auditLog,
+          web_search: !updatedFeatures.externalApiBlocked
+        },
+        integrations: {
+          telegram_bot: updatedFeatures.telegramBot,
+          popup_widget: updatedFeatures.popupWidget,
+          rest_api: updatedFeatures.restApi
+        },
+        security: {
+          pii_redaction: updatedFeatures.piiRedaction,
+          strict_non_hallucination: updatedFeatures.hallucinationGuard
+        }
+      })
+    })
+    .then(res => res.json())
+    .then(data => console.log("Administrative Feature Toggles synchronized live:", data))
+    .catch(err => console.error("Failed to sync feature toggles to API:", err));
   };
 
-  // ارسال پیام جدید به دستیار هوشمند
+  // ارسال پیام جدید به دستیار هوشمند و دریافت پاسخ واقعی RAG
   const handleSendMessage = () => {
     if (!inputText.trim()) return;
 
@@ -78,74 +132,155 @@ export default function App() {
     };
 
     setChatMessages(prev => [...prev, userMessage]);
+    const queryText = inputText;
     setInputText('');
     setIsAiLoading(true);
 
-    // شبیه‌سازی هوشمند پاسخ‌دهی موتور تجاری RAG بر اساس دیتای حسابداری و اسناد
-    setTimeout(() => {
-      let aiResponseText = '';
-      let sources = [];
-      let isRefusal = false;
-
-      const lowerInput = inputText.toLowerCase();
-
-      if (lowerInput.includes('سود') || lowerInput.includes('محصول b') || lowerInput.includes('q2')) {
-        aiResponseText = 'بر اساس گزارش‌های مالی آپلودشده، خط محصول B در Q2 2024 به حاشیه سود ناخالص ۳۸.۴٪ دست یافت؛ در مقایسه با ۳۴.۷٪ در Q1 2024 — بهبود ۳.۷ واحد درصدی.\n\nعوامل کلیدی مطرح‌شده در گزارش: کاهش هزینه مواد اولیه (−۸٪) و بهبود بهره‌وری تولید در کارخانه شرقی.';
-        sources = [
-          { name: 'Q2_Financial_Report.pdf', page: 'صفحه ۱۴' },
-          { name: 'ProductLine_Analysis_Q2.xlsx', page: 'تحلیل آماری' }
-        ];
-      } else if (lowerInput.includes('مرخصی') || lowerInput.includes('hr')) {
-        aiResponseText = 'بر اساس فایل HR_Policy_Manual_v2.docx، سیاست مرخصی سالانه به شرح زیر است:\n\n• کارمندان جدید (۰–۲ سال): ۱۵ روز کاری در سال\n• سطح میانی (۲–۵ سال): ۲۰ روز کاری در سال\n• ارشد (بیش از ۵ سال): ۲۵ روز کاری + ۳ روز اختیاری\n\nدرخواست مرخصی باید حداقل ۴۸ ساعت قبل از طریق سیستم HR ثبت شود.';
-        sources = [
-          { name: 'HR_Policy_Manual_v2.docx', page: 'صفحه ۸' },
-          { name: 'HR_Policy_Manual_v2.docx', page: 'صفحه ۹' }
-        ];
-      } else if (lowerInput.includes('فسخ') || lowerInput.includes('قرارداد')) {
-        aiResponseText = 'از فایل Supplier_Contracts_Q3.pdf (۲,۸۸۱ chunk) موارد زیر یافت شد:\n\nبند ۱۲.۳ — فسخ با اطلاع:\nهر طرف می‌تواند با ارسال اطلاعیه کتبی ۳۰ روزه قرارداد را خاتمه دهد.\n\nبند ۱۲.۵ — فسخ فوری:\nدر صورت نقض جدی تعهدات، تأخیر بیش از ۴۵ روز در پرداخت، یا ورشکستگی تأمین‌کننده.\n\nبند ۱۳.۱ — غرامت پس از فسخ:\nمعادل ۱۵٪ ارزش باقی‌مانده قرارداد در صورت فسخ یک‌طرفه بدون دلیل موجه.';
-        sources = [
-          { name: 'Supplier_Contracts_Q3.pdf', page: 'صفحه ۲۲' },
-          { name: 'Supplier_Contracts_Q3.pdf', page: 'صفحه ۲۴' }
-        ];
-      } else if (lowerInput.includes('تیکت') || lowerInput.includes('پشتیبانی') || lowerInput.includes('صورتحساب')) {
-        aiResponseText = 'بر اساس فایل Support_Tickets_2024.csv، در سال ۲۰۲۴ در مجموع ۲۱۷ تیکت با دسته‌بندی «صورتحساب / Billing» ثبت شده است.\n\nتوزیع فصلی تیکت‌ها:\n• بهار (Q1): ۴۸ تیکت\n• تابستان (Q2): ۶۳ تیکت\n• پاییز (Q3): ۷۱ تیکت\n• زمستان (Q4): ۳۵ تیکت';
-        sources = [
-          { name: 'Support_Tickets_2024.csv', page: 'آمار نهایی' }
-        ];
-      } else {
-        // قانون طلایی عدم توهم و استفاده از متن Refusal استاندارد فارسی
-        aiResponseText = 'منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند.';
-        isRefusal = true;
-      }
-
+    // ارسال درخواست به وب‌سرور رسمی
+    fetch('http://localhost:8000/v1/query', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        query: queryText,
+        session_id: 'react_admin_dashboard_chat'
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      const isRefusal = data.answer === 'منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند.';
       const aiMessage = {
         id: Date.now() + 1,
         sender: 'ai',
-        text: aiResponseText,
-        sources: sources,
-        isSafe: true,
+        text: data.answer || '⚠️ پاسخی از سرور دریافت نشد.',
+        sources: data.sources || [],
+        isSafe: data.is_safe ?? true,
         isRefusal: isRefusal
       };
-
       setChatMessages(prev => [...prev, aiMessage]);
       setIsAiLoading(false);
-    }, 1200);
+    })
+    .catch(err => {
+      console.error("Error communicating with RAG query API:", err);
+      const errorMessage = {
+        id: Date.now() + 1,
+        sender: 'ai',
+        text: '⚠️ خطا در برقراری ارتباط با وب‌سرور هوشمند آریونکس. لطفاً اطمینان حاصل فرمایید که بک‌اند بر روی پورت 8000 در حال اجراست.',
+        sources: [],
+        isSafe: true,
+        isRefusal: true
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+      setIsAiLoading(false);
+    });
   };
 
-  // شبیه‌سازی درگ اند دراپ فایل جدید
+  // ارسال فایل واقعی به اندپوینت آپلود و دریافت پیش‌نمایش قفل حریم شخصی PII
   const handleFileUpload = (e) => {
     e.preventDefault();
+    let file = null;
+
+    if (e.type === 'drop') {
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        file = e.dataTransfer.files[0];
+      }
+    } else {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = '.pdf,.docx,.doc,.csv,.txt,.json,.xml,.mmd';
+      fileInput.onchange = (event) => {
+        if (event.target.files && event.target.files[0]) {
+          uploadFileToServer(event.target.files[0]);
+        }
+      };
+      fileInput.click();
+      return;
+    }
+
+    if (file) {
+      uploadFileToServer(file);
+    }
+  };
+
+  const uploadFileToServer = (file) => {
+    const docId = Date.now();
     const newDoc = {
-      id: Date.now(),
-      name: 'Q3_Financial_Draft.pdf',
-      size: '2.9 MB',
+      id: docId,
+      name: file.name,
+      size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
       chunks: 0,
       date: 'امروز',
       status: 'processing',
-      progress: 39,
-      ext: 'PDF'
+      progress: 15,
+      ext: file.name.split('.').pop().toUpperCase().substring(0, 3)
     };
+
     setDocuments(prev => [newDoc, ...prev]);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // میکروانیمیشن پیشرفت نوار بارگذاری
+    const progressInterval = setInterval(() => {
+      setDocuments(prev => prev.map(d => {
+        if (d.id === docId && d.progress < 85) {
+          return { ...d, progress: d.progress + 15 };
+        }
+        return d;
+      }));
+    }, 250);
+
+    fetch('http://localhost:8000/v1/upload', {
+      method: 'POST',
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      clearInterval(progressInterval);
+      if (data.status === 'success') {
+        // به‌روزرسانی نهایی سند در جدول منابع
+        setDocuments(prev => prev.map(d => {
+          if (d.id === docId) {
+            return {
+              ...d,
+              status: 'ready',
+              progress: 100,
+              chunks: data.chunks_indexed
+            };
+          }
+          return d;
+        }));
+
+        // رندر پیش‌نمایش ماسک اطلاعات شخصی PII در پنل
+        if (data.pii_preview) {
+          setPiiPreview(data.pii_preview);
+          setPiiAuditCounts(data.pii_audit_counts || {});
+        } else {
+          setPiiPreview("پیش‌نمایش ماسک برای این قالب فایل در دسترس نیست، اما سند با موفقیت در مخزن برداری ایندکس گردید.");
+          setPiiAuditCounts({});
+        }
+      } else {
+        throw new Error(data.detail || "Upload failed");
+      }
+    })
+    .catch(err => {
+      clearInterval(progressInterval);
+      console.error("Smart file ingestion upload failed:", err);
+      setDocuments(prev => prev.map(d => {
+        if (d.id === docId) {
+          return {
+            ...d,
+            status: 'error',
+            progress: 0,
+            name: '⚠️ خطا: ' + d.name
+          };
+        }
+        return d;
+      }));
+      setPiiPreview("خطا در برقراری ارتباط با وب‌سرور جهت پردازش سند.");
+      setPiiAuditCounts({});
+    });
   };
 
   return (
@@ -651,13 +786,31 @@ export default function App() {
                   🔒 پیش‌نمایش قفل حریم خصوصی (PII Masking Preview)
                   <span className="q-badge qb-done">قفل حریم شخصی فعال</span>
                 </div>
-                <div style={{fontSize: '12.5px', color: 'var(--text-secondary)', marginBottom: '12px'}}>نمونه ماسک گذاری زنده روی متون فارسی اسناد بارگذاری شده:</div>
+                <div style={{fontSize: '12.5px', color: 'var(--text-secondary)', marginBottom: '12px'}}>پیش‌نمایش زنده و هوشمند اقلام ماسک‌شده:</div>
                 
-                <div className="pii-demo">
-                  کارمند سازمان به شماره پرسنلی ۶۷۴۳ با <span className="pii-redact">کد ملی ۲۹۸۰۳****۱</span> بررسی پرونده گردید. جهت هماهنگی‌های لازم با شماره <span className="pii-redact">تلفن همراه ۰۹۱۲***۴۵۶۷</span> یا ایمیل رسمی ایشان به آدرس <span className="pii-redact">ایمیل ali***@organization.ir</span> ارتباط برقرار فرمایید.
-                  پرداختی‌های حقوق ایشان به شماره <span className="pii-redact">حساب بانکی IR۷۶۰۱۲****************</span> واریز خواهد شد.
+                <div className="pii-demo" style={{whiteSpace: 'pre-wrap'}}>
+                  {piiPreview ? (
+                    piiPreview
+                  ) : (
+                    <span>
+                      کارمند سازمان به شماره پرسنلی ۶۷۴۳ با <span className="pii-redact">کد ملی ۲۹۸۰۳****۱</span> بررسی پرونده گردید. جهت هماهنگی‌های لازم با شماره <span className="pii-redact">تلفن همراه ۰۹۱۲***۴۵۶۷</span> یا ایمیل رسمی ایشان به آدرس <span className="pii-redact">ایمیل ali***@organization.ir</span> ارتباط برقرار فرمایید.
+                      پرداختی‌های حقوق ایشان به شماره <span className="pii-redact">حساب بانکی IR۷۶۰۱۲****************</span> واریز خواهد شد.
+                    </span>
+                  )}
                 </div>
-                <div style={{fontSize: '12px', color: 'var(--text-muted)', marginTop: '10px'}}>۴ هویت شخصی حساس با موفقیت پیش از ایندکس شدن ماسک گردیدند.</div>
+                <div style={{fontSize: '12px', color: 'var(--text-muted)', marginTop: '10px'}}>
+                  {Object.keys(piiAuditCounts).length > 0 ? (
+                    <span>
+                      اقلام حساس فیلتر شده در آخرین فایل: {
+                        Object.entries(piiAuditCounts)
+                          .map(([k, v]) => `${k === 'national_id' ? 'کد ملی' : k === 'phone_number' ? 'تلفن همراه' : k === 'email' ? 'ایمیل' : k === 'card_number' ? 'کارت بانکی' : 'شبا'}: ${v} مورد`)
+                          .join(' | ')
+                      }
+                    </span>
+                  ) : (
+                    "پیش‌نمایش زنده اقلام حساس شامل کد ملی، تلفن همراه، ایمیل، کارت بانکی و شبا پیش از ایندکس در پایگاه دانش."
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -1,98 +1,65 @@
-# طرح فنی پیاده‌سازی فاز ۵: درگاه‌های ارتباطی و ادغام‌های چندگانه (Omni-Channel Integration)
+# طرح فنی پیاده‌سازی فاز ۶: اتصال پنل مجلل React به اندپوینت‌های رسمی بک‌اند (React integration with REST API)
 
-این سند شامل جزئیات فنی و مراحل پیاده‌سازی دقیق **فاز ۵** دستیار هوشمند سازمانی **آریونکس (ArioNex)** است. در این فاز، زیرساخت ارتباطی یکپارچه دستیار با سازمان‌ها از طریق سه کانال مجزا (REST API، ربات تلگرام سازمانی و ابزارک چت شناور وب‌سایت) برقرار می‌گردد.
+این سند شامل جزئیات فنی و مراحل پیاده‌سازی دقیق **فاز ۶** دستیار هوشمند سازمانی **آریونکس (ArioNex)** است. در این فاز، تمامی المان‌های مجلل رابط کاربری ری‌اکت به صورت بلادرنگ به وب‌سرور FastAPI متصل می‌شوند تا دستیار هوش مصنوعی، پایگاه دانش، آپلود فایل و پیش‌نمایش قفل حریم شخصی، و پنل تنظیمات تاگل‌ها به صورت کاملاً واقعی و پویا کار کنند.
 
 ---
 
 ## User Review Required
 
 > [!IMPORTANT]
-> برای راه‌اندازی و اجرای پایدار ربات تلگرام در محیط ایران و ممانعت از کرش وب‌سرور FastAPI در زمان خطاهای احتمالی شبکه یا توکن نامعتبر، تمهیدات زیر اندیشیده شده است:
+> برای برقراری اتصال روان و امن فرانت‌اند به اندپوینت‌های بک‌اند در محیط محلی (CORS)، موارد زیر برنامه‌ریزی شده است:
 > 
-> ۱. **اجرای کاملاً ناهمگام (Async Non-blocking):** ربات تلگرام با استفاده از متدهای اصولی `initialize()`, `start()` و `updater.start_polling()` به طور کاملاً بومی و ناهمگام در حلقه رویدادهای (Lifespan Event Loop) وب‌سرور FastAPI اجرا می‌شود تا نیازی به ساخت ترد (Thread) اضافه و بار اضافی پردازنده نباشد.
-> ۲. **مدیریت شکست ایمن (Graceful Failure Management):** در صورت نامعتبر بودن توکن یا قطع اتصال شبکه/پروکسی، ربات به طور خودکار خطای مربوطه را به صورت انگلیسی لاگ می‌کند اما از بالا آمدن وب‌سرور FastAPI جلوگیری نخواهد کرد.
-> ۳. **مدیریت نشست‌های چت تلگرام (Session Store):** برای هر کاربر بر اساس شناسه منحصربه‌فرد `chat_id` یک حافظه نشست محلی در نظر گرفته می‌شود تا ربات بتواند با خواندن پیام‌های قبلی، ابهامات را برطرف نموده و به صورت RAG با تاریخچه هوشمند پاسخ دهد.
+> ۱. **اتصال بلادرنگ چت (Live RAG Chat):** پیام‌های ارسالی کاربر در صفحه چت مستقیماً به اندپوینت `/v1/query` ارسال شده و پاسخ‌های واقعی هوش مصنوعی به همراه لیست دقیق کارت‌های استناد (نام سند و شماره قطعه/صفحه) رندر خواهند شد.
+> ۲. **یکپارچه‌سازی تاگل‌های ادمین (Dynamic Feature Toggles):** با بالا آمدن فرانت‌اند، تنظیمات زنده سیستم از `/v1/config` (با متد GET) خوانده شده و در ایالت‌های (States) ری‌اکت تنظیم می‌شوند. با تغییر هر تاگل در پنل ادمین، یک درخواست POST به `/v1/config` ارسال می‌شود تا تغییرات بدون نیاز به راه‌اندازی مجدد سرور، مستقیماً اعمال شوند.
+> ۳. **آپلود واقعی فایل و پیش‌نمایش امنیتی (Live Upload & PII Preview):** بخش آپلود Drag & Drop به اندپوینت `/v1/upload` متصل می‌گردد. با آپلود هر فایل، فرآیند چانک‌ساز و بردارساز اجرا شده و خروجی فیلتر حریم خصوصی (PII Masking Preview) بازگردانده شده از سرور، مستقیماً در پنل سمت راست پیش‌نمایش رندر خواهد شد. همچنین فایل جدید به جدول اسناد فرانت‌اند اضافه می‌شود.
 
 ---
 
 ## Open Questions
 
 > [!NOTE]
-> هیچ سوال بازی برای این فاز وجود ندارد. تمام الزامات و استانداردهای طراحی پالت رنگی (سرمه‌ای و مسی) و قانون طلایی عدم توهم RAG کاملاً مشخص و شفاف است. در صورت تمایل کاربر به استفاده از پروکسی تلگرام، متغیرهای استاندارد پروکسی نیز در کد ربات پیش‌بینی خواهند شد.
+> هیچ سوال بازی وجود ندارد. آدرس پایه سرور بک‌اند به صورت ثابت روی `http://localhost:8000` در نظر گرفته می‌شود تا در فرآیند تست و استقرار محلی هماهنگ باشد.
 
 ---
 
 ## Proposed Changes
 
-در این فاز، تغییرات زیر در لایه‌های بک‌اند، سیستم ادغام‌ها و پوشه تست‌ها اعمال خواهد شد:
+تغییرات اصلی این فاز در کدهای فرانت‌اند ری‌اکت اعمال خواهد شد:
 
 ```mermaid
 flowchart TD
-    FastAPI_App[FastAPI Lifespan Startup] --> |"Check Toggle: settings.integrations.telegram_bot"| TG_Init{Telegram Enabled & Token exists?}
-    TG_Init --> |Yes| TG_Start[Initialize and start polling telegram bot async]
-    TG_Init --> |No| TG_Skip[Log and Skip Telegram Bot]
+    React_App[React Admin Panel Startup] --> |"GET http://localhost:8000/v1/config"| Load_Config[Sync features toggles state at runtime]
     
-    FastAPI_App --> |"Include API Router"| REST_Endpoints[Active /v1/query, /v1/config, /v1/upload, /v1/widget.js, /v1/widget/chat]
+    React_Chat[AI Chat View] --> |"POST user query to /v1/query"| Central_RAG[Central FastAPI RAG Engine]
+    Central_RAG --> |"Return real answer & citation details"| React_Chat
     
-    subgraph Telegram_Bot_Service [Telegram Bot Integration]
-        TG_Msg[User message via Telegram] --> TG_Session[Load chat history for chat_id]
-        TG_Session --> TG_RAG[Call synthesize_rag_response]
-        TG_RAG --> TG_Reply[Send formatted response + Citation Tags]
-    end
+    React_Upload[Drag & Drop Upload] --> |"POST file data via FormData to /v1/upload"| Ingestion_Router[Safety Airlock & Expert Workers Ingestion]
+    Ingestion_Router --> |"Return live PII preview text & chunks count"| React_Upload
     
-    subgraph Web_Widget_Service [Floating Web Widget]
-        Widget_Script[Serve /v1/widget.js script dynamically] --> Widget_UI[Renders custom floating chat UI with Deep Navy & Copper colors]
-        Widget_UI --> |"POST message to /v1/widget/chat"| Widget_Endpoint[Process via central RAG engine]
-    end
+    React_Admin[Admin Toggle Switch] --> |"POST updated features to /v1/config"| Config_Manager[FastAPI settings.services runtime update]
 ```
 
 ---
 
-### [Component: Integrations & API Core]
+### [Component: React Frontend integration]
 
-توسعه زیرسیستم ربات تلگرام، اسکریپت جاوااسکریپت ابزارک پاپ‌آپ و ویرایش نقاط اتصال در وب‌سرور اصلی.
+اتصال المان‌های رابط کاربری به وب‌سرویس بک‌اند.
 
-#### [NEW] [telegram_bot.py](file:///e:/ario/backend/app/services/integrations/telegram_bot.py)
-* پیاده‌سازی ربات تلگرام سازمانی با استفاده از نسخه مدرن `python-telegram-bot` به صورت ناهمگام.
-* بررسی تنظیمات `settings.integrations.telegram_bot` پیش از اقدام به اتصال.
-* مدیریت خطاهای اتصال و توکن‌های خالی با مکانیزم Try-Except جهت ثبات صددرصدی وب‌سرور بک‌اند.
-* مدیریت پویای سشن تاریخچه چت بر اساس شناسه عددی تلگرام (`chat_id`) کاربران جهت ادغام با زنجیره رفع ابهام RAG.
-* ارسال پاسخ نهایی فارسی به همراه تگ‌های دقیق منابع و استنادات.
-
-#### [MODIFY] [endpoints.py](file:///e:/ario/backend/app/api/endpoints.py)
-* تعریف اندپویند `/v1/widget.js` جهت بازگرداندن داینامیک و فشرده اسکریپت ابزارک وب با هدر مناسب `application/javascript`.
-* پیاده‌سازی اندپوینت ارتباطی ویژه ابزارک پاپ‌آپ `/v1/widget/chat` برای دریافت ورودی‌ها و بازگرداندن پاسخ‌های RAG در تم مجلل آریونکس.
-* افزودن دایرکتوری و سشن‌های تستی برای تست روان فرانت‌اند و سیستم‌های خارجی.
-
-#### [MODIFY] [main.py](file:///e:/ario/backend/app/main.py)
-* وارد کردن و ثبت روتر اندپوینت‌های آریونکس با دستور `app.include_router(router)`.
-* اتصال وقایع راه‌اندازی و متوقف کردن ربات تلگرام سازمانی در چرخه حیات `lifespan` وب‌سرور FastAPI.
-
----
-
-### [Component: Quality Assurance & Testing]
-
-تضمین صحت عملکرد صددرصدی تمام اندپوینت‌ها و ماژول‌ها بدون شکست در فرآیندهای گیت‌هاب و محیط لوکال.
-
-#### [NEW] [test_phase5.py](file:///e:/ario/tests/test_phase5.py)
-* بررسی دقیق اتصالات REST API شامل تست ریکوئست‌های `/v1/query` و `/v1/config` و `/v1/widget/chat`.
-* شبیه‌سازی (Mocking) درخواست‌های ربات تلگرام جهت اطمینان از عملکرد عالی مدیریت مکالمه‌ها و پردازش کلمات.
-* اعتبارسنجی استناد به اسناد و رفتار عدم توهم (Non-Hallucination) در ورودی‌های جدید فاز ۵.
+#### [MODIFY] [App.jsx](file:///e:/ario/frontend/src/App.jsx)
+* افزودن درخواست `fetch` در هوک `useEffect` برای همگام‌سازی فیچر تاگل‌های ادمین داشبورد از اندپوینت `/v1/config` به محض لود شدن برنامه.
+* اصلاح تابع `toggleFeature` به گونه‌ای که پس از تغییر محلی وضعیت دکمه‌ها، تنظیمات به‌روزرسانی شده را با متد POST به `/v1/config` در بک‌اند ارسال و ذخیره کند.
+* اتصال تابع `handleSendMessage` به اندپوینت `/v1/query` بک‌اند برای اجرای RAG واقعی، دریافت پاسخ‌ها و ارجاعات دقیق متادیتای منابع و نمایش تگ‌های امنیتی تایید شده.
+* توسعه و اصلاح فرآیند آپلود فایل در صفحه `upload` به گونه‌ای که فایل انتخابی را در قالب شیء `FormData` به اندپوینت `/v1/upload` ارسال کند؛ نوار پیشرفت را به صورت پویا مدیریت کند؛ تعداد چانک‌ها را ثبت کرده و متن ماسک شده برگشتی را مستقیماً در پیش‌نمایش زنده قفل حریم شخصی (PII Redaction Preview) رندر کند.
 
 ---
 
 ## Verification Plan
 
 ### Automated Tests
-برای اجرای تست‌های خودکار فاز ۵ و اطمینان از صحت کامل فرآیندها، دستورات زیر در محیط PowerShell ویندوز اجرا خواهند شد:
-```powershell
-# فعال‌سازی یونیکد فارسی برای خروجی‌های ترمینال ویندوز
-$env:PYTHONIOENCODING="utf-8"
-
-# اجرای تست‌های فاز ۵
-python -m pytest tests/test_phase5.py -v
-```
+* صحت اجرای فرآیندها با شبیه‌سازی لود و پاسخ‌دهی فرانت‌اند و برقراری موفق ارتباط با بک‌اند.
 
 ### Manual Verification
-* **بررسی رابط چت ابزارک:** باز کردن فایل متنی HTML در مرورگر و لود کردن اسکریپت `http://localhost:8000/v1/widget.js` جهت اطمینان از بالا آمدن چت‌باکس شناور با تم کلاسیک آریونکس (سرمه‌ای تیره `#0f1a2e` و مسی `#c4894a`).
-* **شبیه‌سازی ارتباط ربات تلگرام:** بررسی رفتار لاگ‌ها و اطمینان از مقداردهی درست توکن و لود شدن کنترلر ربات در زمان اجرای برنامه.
+* **اجرای سرور بک‌اند و فرانت‌اند:** بالا آوردن بک‌اند FastAPI روی پورت ۸۰۰۰ و فرانت‌اند React روی پورت ۵۱۷۳.
+* **تست زنده چت دستیار:** ارسال سوالات متنی فارسی و تراکنش‌های حسابداری و مشاهده رندر شدن پاسخ‌های واقعی به همراه کارت‌های استناد.
+* **تست زنده تاگل‌ها:** خاموش کردن ربات تلگرام در فرانت‌اند و مشاهده اعمال آن به صورت زنده در لاگ‌های بک‌اند.
+* **تست زنده آپلود اسناد:** درگ کردن یک فایل متنی تستی حاوی شماره تلفن و کد ملی و بررسی هایلایت شدن متون ماسک شده در کادر پیش‌نمایش حریم خصوصی.
