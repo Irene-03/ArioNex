@@ -1,0 +1,63 @@
+# ----------------------------------------------------
+# پیکربندی پویای سیستم هوشمند آریونکس (ArioNex Configuration)
+# این فایل مدیریت روشن/خاموش بودن تمامی سرویس‌ها را بر عهده دارد
+# ----------------------------------------------------
+
+services:
+  # پردازشگر اسناد بدون ساختار (فایل‌های متنی، PDF، Word)
+  unstructured_document_processor:
+    enabled: true
+
+  # پردازشگر پرسش و پاسخ‌های پشتیبانی (سوالات متداول FAQ)
+  qna_processor:
+    enabled: true
+
+  # پردازشگر فایل‌های لاگ سیستمی
+  log_processor:
+    enabled: true
+
+  # تحلیلگر داده‌های ساختاریافته (CSV و تراکنش‌های حسابداری)
+  structured_data_analytics:
+    enabled: true
+
+  # جستجوی زنده وب (با استفاده از Tavily API)
+  web_search:
+    enabled: true
+
+  # استخراج‌کننده موجودیت‌ها (بخش گراف دانش) - فعلا در فازهای بعدی فعال می‌شود
+  entity_extractor:
+    enabled: false
+
+  # استخراج‌کننده قوانین کسب‌وکار (بخش گراف دانش) - فعلا در فازهای بعدی فعال می‌شود
+  rule_extractor:
+    enabled: false
+
+  # دیتابیس گرافی نئو فور جی (Neo4j)
+  neo4j:
+    enabled: false
+
+  # بازرس محلی ایمنی (Local Gemma-2b Auditor) - در فازهای بعدی مستقر خواهد شد
+  safety_auditor:
+    enabled: false
+
+integrations:
+  # فعال بودن ربات تلگرام سازمانی
+  telegram_bot:
+    enabled: true
+    
+  # فعال بودن ویجت پاپ‌آپ وب‌سایت
+  popup_widget:
+    enabled: true
+    
+  # فعال بودن خروجی وب‌سرویس REST API
+  rest_api:
+    enabled: true
+
+security:
+  # فعال بودن ماسک خودکار اطلاعات شخصی (PII Redaction)
+  pii_redaction:
+    enabled: true
+    
+  # قانون سخت‌گیرانه عدم توهم و الزام استناد دقیق به منابع
+  strict_non_hallucination:
+    enabled: true
