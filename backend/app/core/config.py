@@ -112,21 +112,34 @@ def load_settings() -> Settings:
             if yaml_data:
                 # ادغام تنظیمات سرویس‌ها
                 if "services" in yaml_data:
-                    settings_obj.services = ServiceToggles(**yaml_data["services"])
+                    services_data = {
+                        k: v.get("enabled", True) if isinstance(v, dict) else v
+                        for k, v in yaml_data["services"].items()
+                    }
+                    settings_obj.services = ServiceToggles(**services_data)
                 
                 # ادغام تنظیمات کانال‌های خروجی
                 if "integrations" in yaml_data:
-                    settings_obj.integrations = IntegrationToggles(**yaml_data["integrations"])
+                    integrations_data = {
+                        k: v.get("enabled", True) if isinstance(v, dict) else v
+                        for k, v in yaml_data["integrations"].items()
+                    }
+                    settings_obj.integrations = IntegrationToggles(**integrations_data)
                     
                 # ادغام تنظیمات ایمنی و حریم خصوصی
                 if "security" in yaml_data:
-                    settings_obj.security = SecuritySettings(**yaml_data["security"])
+                    security_data = {
+                        k: v.get("enabled", True) if isinstance(v, dict) else v
+                        for k, v in yaml_data["security"].items()
+                    }
+                    settings_obj.security = SecuritySettings(**security_data)
                     
             logger.info("Successfully loaded dynamic feature toggles from config.yaml")
         except Exception as e:
             logger.error(f"Failed to parse config.yaml, using defaults. Error: {str(e)}")
     else:
         logger.warning("config.yaml not found at root, using default feature toggles.")
+
         
     return settings_obj
 
