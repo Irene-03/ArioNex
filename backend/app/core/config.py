@@ -1,0 +1,134 @@
+"""
+/// <summary>
+/// فایل مدیریت پیکربندی و تنظیمات هوشمند سیستم آریونکس (ArioNex Configuration Manager)
+/// </summary>
+/// <remarks>
+/// این ماژول وظیفه لود کردن و اعتبارسنجی تنظیمات سیستم از فایل config.yaml (فیچر تاگل‌ها)
+/// و متغیرهای محیطی سیستم (.env) با استفاده از Pydantic را بر عهده دارد.
+/// </remarks>
+"""
+
+import os
+import yaml
+import logging
+from typing import Dict, Any
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
+
+# لود کردن فایل env محلی
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"))
+
+logger = logging.getLogger("arionex.config")
+
+class ServiceToggles(BaseSettings):
+    """
+    /// <summary>
+    /// مدل وضعیت فعال یا غیرفعال بودن سرویس‌های بک‌اند
+    /// </summary>
+    """
+    unstructured_document_processor: bool = True
+    qna_processor: bool = True
+    log_processor: bool = True
+    structured_data_analytics: bool = True
+    web_search: bool = True
+    entity_extractor: bool = False
+    rule_extractor: bool = False
+    neo4j: bool = False
+    safety_auditor: bool = False
+
+class IntegrationToggles(BaseSettings):
+    """
+    /// <summary>
+    /// مدل وضعیت فعال یا غیرفعال بودن کانال‌های ارتباطی (ادغام‌ها)
+    /// </summary>
+    """
+    telegram_bot: bool = True
+    popup_widget: bool = True
+    rest_api: bool = True
+
+class SecuritySettings(BaseSettings):
+    """
+    /// <summary>
+    /// تنظیمات امنیتی RAG و ماسک حریم خصوصی
+    /// </summary>
+    """
+    pii_redaction: bool = True
+    strict_non_hallucination: bool = True
+
+class Settings(BaseSettings):
+    """
+    /// <summary>
+    /// کلاس اصلی نگهداری تمامی پیکربندی‌های فعال سیستم آریونکس
+    /// </summary>
+    """
+    # متغیرهای محیطی لود شده از دات-ای‌ان‌وی (.env)
+    openai_api_key: str = Field(default="mock_key", validation_alias="OPENAI_API_KEY")
+    model_name: str = Field(default="gpt-4o-mini", validation_alias="MODEL_NAME")
+    tavily_api_key: str = Field(default="", validation_alias="TAVILY_API_KEY")
+    
+    postgres_user: str = Field(default="postgres", validation_alias="POSTGRES_USER")
+    postgres_password: str = Field(default="postgres", validation_alias="POSTGRES_PASSWORD")
+    postgres_db: str = Field(default="postgres", validation_alias="POSTGRES_DB")
+    postgres_host: str = Field(default="localhost", validation_alias="POSTGRES_HOST")
+    postgres_port: str = Field(default="5432", validation_alias="POSTGRES_PORT")
+    
+    minio_root_user: str = Field(default="admin", validation_alias="MINIO_ROOT_USER")
+    minio_root_password: str = Field(default="admin123", validation_alias="MINIO_ROOT_PASSWORD")
+    minio_endpoint: str = Field(default="localhost:9000", validation_alias="MINIO_ENDPOINT")
+    minio_bucket_name: str = Field(default="arionex-raw-files", validation_alias="MINIO_BUCKET_NAME")
+    
+    telegram_bot_token: str = Field(default="", validation_alias="TELEGRAM_BOT_TOKEN")
+    
+    # تنظیمات داینامیک لود شده از config.yaml
+    services: ServiceToggles = ServiceToggles()
+    integrations: IntegrationToggles = IntegrationToggles()
+    security: SecuritySettings = SecuritySettings()
+
+    model_config = SettingsConfigDict(
+        env_file=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
+
+def load_settings() -> Settings:
+    """
+    /// <summary>
+    /// متد کمکی برای خواندن همزمان فایل yaml و متغیرهای محیطی و تولید آبجکت تنظیمات واحد
+    /// </summary>
+    /// <returns>یک نمونه معتبر از کلاس Settings</returns>
+    """
+    # ابتدا تنظیمات پیش‌فرض را لود می‌کنیم
+    settings_obj = Settings()
+    
+    # پیدا کردن مسیر فایل config.yaml
+    config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config.yaml")
+    
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                yaml_data = yaml.safe_load(f)
+                
+            if yaml_data:
+                # ادغام تنظیمات سرویس‌ها
+                if "services" in yaml_data:
+                    settings_obj.services = ServiceToggles(**yaml_data["services"])
+                
+                # ادغام تنظیمات کانال‌های خروجی
+                if "integrations" in yaml_data:
+                    settings_obj.integrations = IntegrationToggles(**yaml_data["integrations"])
+                    
+                # ادغام تنظیمات ایمنی و حریم خصوصی
+                if "security" in yaml_data:
+                    settings_obj.security = SecuritySettings(**yaml_data["security"])
+                    
+            logger.info("Successfully loaded dynamic feature toggles from config.yaml")
+        except Exception as e:
+            logger.error(f"Failed to parse config.yaml, using defaults. Error: {str(e)}")
+    else:
+        logger.warning("config.yaml not found at root, using default feature toggles.")
+        
+    return settings_obj
+
+# آبجکت تنظیمات سراسری برنامه جهت استفاده در تمام ماژول‌ها
+settings = load_settings()
