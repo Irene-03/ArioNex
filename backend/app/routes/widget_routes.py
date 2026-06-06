@@ -13,8 +13,10 @@
 """
 
 import logging
+from typing import Optional
 from fastapi import APIRouter, Response
 from app.core.config import settings
+from app.core.database import get_db_connection
 from app.schemas.query_schemas import QueryRequest, QueryResponse
 from app.logics.widget_logic import execute_widget_logic
 
@@ -27,11 +29,12 @@ router = APIRouter(prefix="/v1", tags=["Widget — Website Chat Popup"])
     summary="دریافت فایل JavaScript ابزارک چت پاپ‌آپ",
     description="اسکریپت JavaScript خودمحور (self-contained) ابزارک چت وب‌سایت را برمی‌گرداند.",
 )
-async def get_web_widget_script():
+async def get_web_widget_script(website: Optional[str] = None):
     """
     /// <summary>
     /// اندپوینت دریافت فایل جاوااسکریپت ابزارک چت پاپ‌آپ وب‌سایت
     /// </summary>
+    /// <param name="website">آدرس وب‌سایت درخواست‌دهنده جهت شخصی‌سازی تم و پیام</param>
     /// <returns>کدهای جاوااسکریپت خودمحور با استایل‌دهی لوکس و بومی</returns>
     """
     if not settings.integrations.popup_widget:
@@ -40,6 +43,32 @@ async def get_web_widget_script():
             content="console.warn('ArioNex Website Chat Widget is disabled by the administrator.');",
             media_type="application/javascript",
         )
+
+    # مقادیر پیش‌فرض تم و پیام خوش‌آمدگویی
+    welcome_message = "سلام! من دستیار هوشمند آریونکس (ArioNex) هستم. چطور می‌توانم به شما کمک کنم؟ 💼✨"
+    theme_color = "#1a2744"
+    accent_color = "#c4894a"
+
+    if website:
+        conn = None
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT welcome_message, theme_color, accent_color FROM website_widgets WHERE %s LIKE '%' || url || '%' OR url LIKE '%' || %s || '%' LIMIT 1",
+                    (website, website)
+                )
+                row = cur.fetchone()
+                if row:
+                    welcome_message = row[0] or welcome_message
+                    theme_color = row[1] or theme_color
+                    accent_color = row[2] or accent_color
+                    logger.info(f"Loaded customized widget config for website='{website}': theme_color={theme_color}")
+        except Exception as e:
+            logger.error(f"Error querying website widget database: {str(e)}")
+        finally:
+            if conn:
+                conn.close()
 
     js_code = """(function() {
     // ایجاد شناسه مکالمه منحصربه‌فرد برای کاربر و ذخیره در حافظه محلی مرورگر
@@ -322,7 +351,15 @@ async def get_web_widget_script():
     inputField.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
 })();"""
 
-    return Response(content=js_code, media_type="application/javascript")
+    # اعمال پویای تنظیمات ابزارک
+    custom_js = js_code.replace("#1a2744", theme_color)
+    custom_js = custom_js.replace("#c4894a", accent_color)
+    custom_js = custom_js.replace(
+        "سلام! من دستیار هوشمند آریونکس (ArioNex) هستم. چطور می‌توانم به شما کمک کنم؟ 💼✨",
+        welcome_message
+    )
+
+    return Response(content=custom_js, media_type="application/javascript")
 
 
 @router.post(

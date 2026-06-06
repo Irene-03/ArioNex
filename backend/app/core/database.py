@@ -95,6 +95,30 @@ def init_db() -> None:
             status VARCHAR(30) NOT NULL,
             pii_masked_count INT DEFAULT 0
         );
+        """,
+        # ۵. جدول ابزارک‌های وب‌سایت (Website Widgets)
+        """
+        CREATE TABLE IF NOT EXISTS website_widgets (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            url VARCHAR(255) NOT NULL UNIQUE,
+            welcome_message TEXT,
+            theme_color VARCHAR(50),
+            accent_color VARCHAR(50),
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """,
+        # ۶. جدول کلیدهای دسترسی API (API Keys)
+        """
+        CREATE TABLE IF NOT EXISTS api_keys (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            api_key VARCHAR(255) NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_active BOOLEAN DEFAULT TRUE,
+            last_used_at TIMESTAMP
+        );
         """
     ]
     
