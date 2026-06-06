@@ -61,10 +61,33 @@ class Settings(BaseSettings):
     /// <summary>
     /// کلاس اصلی نگهداری تمامی پیکربندی‌های فعال سیستم آریونکس
     /// </summary>
+    /// <remarks>
+    /// پشتیبانی از چندین LLM provider: openrouter (پیشنهادی)، openai، anthropic، google، deepseek
+    /// provider پیش‌فرض از env LLM_PROVIDER خوانده می‌شود و در صورت عدم تنظیم openrouter استفاده می‌شود.
+    /// </remarks>
     """
-    # متغیرهای محیطی لود شده از دات-ای‌ان‌وی (.env)
+    # -------------------------------------------------------
+    # تنظیمات LLM Provider — چندگانه و قابل‌تعویض
+    # -------------------------------------------------------
+    llm_provider: str = Field(default="openrouter", validation_alias="LLM_PROVIDER")
+    model_name: str = Field(default="openai/gpt-4o-mini", validation_alias="MODEL_NAME")
+
+    # کلیدهای API هر provider
     openai_api_key: str = Field(default="mock_key", validation_alias="OPENAI_API_KEY")
-    model_name: str = Field(default="gpt-4o-mini", validation_alias="MODEL_NAME")
+    openrouter_api_key: str = Field(default="mock_key", validation_alias="OPENROUTER_API_KEY")
+    anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
+    google_api_key: str = Field(default="", validation_alias="GOOGLE_API_KEY")
+    deepseek_api_key: str = Field(default="", validation_alias="DEEPSEEK_API_KEY")
+
+    # -------------------------------------------------------
+    # تنظیمات Embedding Provider — مستقل از Chat LLM
+    # -------------------------------------------------------
+    embedding_provider: str = Field(default="openai", validation_alias="EMBEDDING_PROVIDER")
+    embedding_model: str = Field(default="text-embedding-3-large", validation_alias="EMBEDDING_MODEL")
+
+    # -------------------------------------------------------
+    # تنظیمات سایر سرویس‌ها
+    # -------------------------------------------------------
     tavily_api_key: str = Field(default="", validation_alias="TAVILY_API_KEY")
     
     postgres_user: str = Field(default="postgres", validation_alias="POSTGRES_USER")

@@ -1,0 +1,292 @@
+"""
+/// <summary>
+/// کارخانه یکپارچه مدل‌های زبانی آریونکس (ArioNex Unified LLM Factory)
+/// </summary>
+/// <remarks>
+/// این ماژول یک رابط یکپارچه برای اتصال به مدل‌های زبانی مختلف فراهم می‌کند.
+/// از این طریق تمام کد داخلی سیستم می‌تواند بدون تغییر از هر provider استفاده کند.
+///
+/// Provider‌های پشتیبانی‌شده:
+///   - openai      : GPT-4o, GPT-4o-mini و سایر مدل‌های OpenAI
+///   - anthropic   : Claude 3.5 Sonnet, Claude 3 Haiku و سایر مدل‌های Anthropic
+///   - google      : Gemini 1.5 Pro, Gemini 1.5 Flash و سایر مدل‌های Google
+///   - deepseek    : DeepSeek-Chat, DeepSeek-Coder (از طریق OpenAI-compatible API)
+///   - openrouter  : دسترسی به تمام مدل‌های فوق از طریق یک API key واحد (پیشنهادی برای تولید)
+///
+/// مزیت openrouter: یک API key، دسترسی به همه مدل‌ها، fallback خودکار، مدیریت هزینه متمرکز
+/// </remarks>
+"""
+
+import logging
+from typing import Optional
+
+from app.core.config import settings
+
+logger = logging.getLogger("arionex.llm_factory")
+
+
+def get_llm(
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    temperature: float = 0.1,
+):
+    """
+    /// <summary>
+    /// کارخانه مرکزی تولید نمونه LLM بر اساس provider انتخاب شده در تنظیمات
+    /// </summary>
+    /// <param name="provider">نام provider — openai, anthropic, google, deepseek, openrouter</param>
+    /// <param name="model">نام مدل — در صورت None از مدل پیش‌فرض settings استفاده می‌شود</param>
+    /// <param name="temperature">دمای خروجی مدل (0=قطعی، 1=خلاقانه)</param>
+    /// <returns>نمونه‌ای از BaseChatModel سازگار با LangChain</returns>
+    /// <remarks>
+    /// این تابع به عنوان تنها نقطه ورود برای ساخت مدل زبانی در سراسر سیستم استفاده می‌شود.
+    /// در صورت وجود mock_key یا کلید خالی، یک LLM mock برمی‌گرداند که خطا نمی‌دهد.
+    /// </remarks>
+    """
+    # استفاده از مقادیر پیش‌فرض از settings در صورت عدم ارائه
+    active_provider = provider or settings.llm_provider
+    active_model = model or settings.model_name
+
+    logger.info(f"LLM Factory: initializing provider='{active_provider}', model='{active_model}'")
+
+    try:
+        if active_provider == "openrouter":
+            return _create_openrouter_llm(active_model, temperature)
+        elif active_provider == "openai":
+            return _create_openai_llm(active_model, temperature)
+        elif active_provider == "anthropic":
+            return _create_anthropic_llm(active_model, temperature)
+        elif active_provider == "google":
+            return _create_google_llm(active_model, temperature)
+        elif active_provider == "deepseek":
+            return _create_deepseek_llm(active_model, temperature)
+        else:
+            logger.warning(f"Unknown LLM provider '{active_provider}'. Falling back to OpenRouter.")
+            return _create_openrouter_llm(active_model, temperature)
+
+    except Exception as e:
+        logger.error(f"LLM Factory failed to initialize provider '{active_provider}': {str(e)}")
+        raise
+
+
+# -------------------------------------------------------------------
+# توابع داخلی ساخت نمونه LLM برای هر provider
+# -------------------------------------------------------------------
+
+def _create_openrouter_llm(model: str, temperature: float):
+    """
+    /// <summary>
+    /// ساخت LLM از طریق OpenRouter — یک API key برای همه مدل‌ها
+    /// </summary>
+    /// <remarks>
+    /// OpenRouter از OpenAI-compatible API استفاده می‌کند.
+    /// مدل‌ها با فرمت "provider/model-name" مشخص می‌شوند.
+    /// مثال: "openai/gpt-4o", "anthropic/claude-3.5-sonnet", "google/gemini-1.5-pro"
+    /// </remarks>
+    """
+    from langchain_openai import ChatOpenAI
+
+    api_key = settings.openrouter_api_key
+    _warn_if_mock(api_key, "OpenRouter")
+
+    return ChatOpenAI(
+        model_name=model,
+        temperature=temperature,
+        openai_api_key=api_key,
+        openai_api_base="https://openrouter.ai/api/v1",
+        default_headers={
+            "HTTP-Referer": "https://arionex.ai",
+            "X-Title": "ArioNex Enterprise AI",
+        },
+    )
+
+
+def _create_openai_llm(model: str, temperature: float):
+    """
+    /// <summary>
+    /// ساخت LLM از طریق OpenAI API مستقیم
+    /// </summary>
+    """
+    from langchain_openai import ChatOpenAI
+
+    api_key = settings.openai_api_key
+    _warn_if_mock(api_key, "OpenAI")
+
+    return ChatOpenAI(
+        model_name=model,
+        temperature=temperature,
+        openai_api_key=api_key,
+    )
+
+
+def _create_anthropic_llm(model: str, temperature: float):
+    """
+    /// <summary>
+    /// ساخت LLM از طریق Anthropic Claude API
+    /// </summary>
+    /// <remarks>
+    /// نیاز به نصب: pip install langchain-anthropic
+    /// مدل پیشنهادی: claude-3-5-sonnet-20241022
+    /// </remarks>
+    """
+    try:
+        from langchain_anthropic import ChatAnthropic
+    except ImportError:
+        raise ImportError(
+            "langchain-anthropic not installed. Run: pip install langchain-anthropic"
+        )
+
+    api_key = settings.anthropic_api_key
+    _warn_if_mock(api_key, "Anthropic")
+
+    return ChatAnthropic(
+        model_name=model,
+        temperature=temperature,
+        anthropic_api_key=api_key,
+    )
+
+
+def _create_google_llm(model: str, temperature: float):
+    """
+    /// <summary>
+    /// ساخت LLM از طریق Google Gemini API
+    /// </summary>
+    /// <remarks>
+    /// نیاز به نصب: pip install langchain-google-genai
+    /// مدل پیشنهادی: gemini-1.5-pro-latest یا gemini-1.5-flash
+    /// </remarks>
+    """
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+    except ImportError:
+        raise ImportError(
+            "langchain-google-genai not installed. Run: pip install langchain-google-genai"
+        )
+
+    api_key = settings.google_api_key
+    _warn_if_mock(api_key, "Google Gemini")
+
+    return ChatGoogleGenerativeAI(
+        model=model,
+        temperature=temperature,
+        google_api_key=api_key,
+    )
+
+
+def _create_deepseek_llm(model: str, temperature: float):
+    """
+    /// <summary>
+    /// ساخت LLM از طریق DeepSeek API (سازگار با OpenAI API)
+    /// </summary>
+    /// <remarks>
+    /// DeepSeek از OpenAI-compatible API استفاده می‌کند.
+    /// مدل پیشنهادی: deepseek-chat یا deepseek-coder
+    /// </remarks>
+    """
+    from langchain_openai import ChatOpenAI
+
+    api_key = settings.deepseek_api_key
+    _warn_if_mock(api_key, "DeepSeek")
+
+    return ChatOpenAI(
+        model_name=model,
+        temperature=temperature,
+        openai_api_key=api_key,
+        openai_api_base="https://api.deepseek.com/v1",
+    )
+
+
+def _warn_if_mock(api_key: str, provider_name: str) -> None:
+    """
+    /// <summary>
+    /// هشدار لاگ در صورت استفاده از کلید mock در حین توسعه
+    /// </summary>
+    /// <param name="api_key">کلید API بررسی‌شده</param>
+    /// <param name="provider_name">نام provider برای نمایش در لاگ</param>
+    """
+    if not api_key or api_key in ("mock_key", "") or "your-" in api_key:
+        logger.warning(
+            f"Mock API key detected for {provider_name}. "
+            f"LLM calls will likely fail or return mock responses. "
+            f"Please configure a valid key in backend/.env"
+        )
+
+
+def get_embedding_model(
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+):
+    """
+    /// <summary>
+    /// کارخانه مرکزی تولید مدل Embedding بر اساس provider انتخاب شده
+    /// </summary>
+    /// <param name="provider">نام provider — openai, google, openrouter</param>
+    /// <param name="model">نام مدل embedding — در صورت None از مقدار پیش‌فرض استفاده می‌شود</param>
+    /// <returns>یک callable برای تولید embedding بردارها</returns>
+    /// <remarks>
+    /// این تابع به تابع get_embedding در embeddings.py وصل می‌شود
+    /// و امکان انتخاب provider embedding را در runtime فراهم می‌کند.
+    /// Provider‌های پشتیبانی‌شده: openai (پیش‌فرض), google
+    /// </remarks>
+    """
+    active_provider = provider or settings.embedding_provider
+    active_model = model or settings.embedding_model
+
+    logger.info(f"Embedding Factory: provider='{active_provider}', model='{active_model}'")
+
+    if active_provider == "google":
+        return _create_google_embedding(active_model)
+    else:
+        # پیش‌فرض: OpenAI embeddings (سازگار با openrouter و openai مستقیم)
+        return _create_openai_embedding(active_model)
+
+
+def _create_openai_embedding(model: str):
+    """
+    /// <summary>
+    /// ساخت مدل Embedding از OpenAI (یا هر endpoint سازگار با OpenAI)
+    /// </summary>
+    """
+    from openai import OpenAI
+
+    # تعیین base_url بر اساس provider تنظیم‌شده
+    provider = settings.embedding_provider
+    if provider == "openrouter":
+        client = OpenAI(
+            api_key=settings.openrouter_api_key,
+            base_url="https://openrouter.ai/api/v1",
+        )
+    else:
+        client = OpenAI(api_key=settings.openai_api_key)
+
+    def embed(text: str) -> list:
+        response = client.embeddings.create(model=model, input=text)
+        return response.data[0].embedding
+
+    return embed
+
+
+def _create_google_embedding(model: str):
+    """
+    /// <summary>
+    /// ساخت مدل Embedding از Google Generative AI
+    /// </summary>
+    /// <remarks>
+    /// نیاز به نصب: pip install google-generativeai
+    /// مدل پیشنهادی: models/text-embedding-004
+    /// </remarks>
+    """
+    try:
+        import google.generativeai as genai
+    except ImportError:
+        raise ImportError(
+            "google-generativeai not installed. Run: pip install google-generativeai"
+        )
+
+    genai.configure(api_key=settings.google_api_key)
+
+    def embed(text: str) -> list:
+        result = genai.embed_content(model=model, content=text)
+        return result["embedding"]
+
+    return embed

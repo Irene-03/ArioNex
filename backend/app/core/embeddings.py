@@ -1,46 +1,122 @@
 """
 /// <summary>
-/// ماژول تولید امبدینگ‌های برداری آریونکس (ArioNex Embedding Generation Engine)
+/// ماژول تولید امبدینگ‌های برداری آریونکس — چندین provider (ArioNex Multi-Provider Embedding Engine)
 /// </summary>
 /// <remarks>
-/// این ماژول وظیفه تبدیل متون چانک به برداری با طول ۳۰۷۲ (با استفاده از مدل text-embedding-3-large)
-/// را بر عهده دارد. برای راحتی کار در مرحله توسعه محلی، در صورت بروز خطای عدم وجود یا نامعتبر بودن
-/// کلید API، موتور به صورت هوشمند یک بردار صفر با طول ۳۰۷۲ بازمی‌گرداند تا فرآیند پردازش متوقف نشود.
+/// این ماژول وظیفه تبدیل متون chunk به بردار چند-بعدی را بر عهده دارد.
+/// Provider و مدل embedding از settings قابل انتخاب هستند:
+///
+///   - openai: text-embedding-3-large (۳۰۷۲ بعد) یا text-embedding-3-small (۱۵۳۶ بعد)
+///   - google: models/text-embedding-004
+///
+/// در صورت عدم وجود کلید API یا بروز خطا، بردار صفر با طول مناسب برمی‌گردد
+/// تا فرآیند پردازش بدون کرش ادامه یابد (Graceful Degradation).
 /// </remarks>
 """
 
 import logging
 import numpy as np
-from openai import OpenAI
 from app.core.config import settings
 
 logger = logging.getLogger("arionex.embeddings")
 
-def get_embedding(text: str, model: str = "text-embedding-3-large") -> list[float]:
+# نگاشت ابعاد مدل‌های شناخته‌شده
+_EMBEDDING_DIMENSIONS = {
+    "text-embedding-3-large": 3072,
+    "text-embedding-3-small": 1536,
+    "text-embedding-ada-002": 1536,
+    "models/text-embedding-004": 768,
+}
+
+def _get_embedding_dimension() -> int:
     """
     /// <summary>
-    /// تولید بردار ویژگی (Embedding) برای متن ورودی
+    /// دریافت تعداد ابعاد بردار بر اساس مدل embedding انتخاب‌شده
     /// </summary>
-    /// <param name="text">متن ورودی</param>
-    /// <param name="model">نام مدل امبدینگ (پیش‌فرض: text-embedding-3-large)</param>
-    /// <returns>لیستی از اعداد اعشاری به طول ۳۰۷۲</returns>
+    /// <returns>تعداد ابعاد بردار (پیش‌فرض: ۳۰۷۲)</returns>
     """
+    return _EMBEDDING_DIMENSIONS.get(settings.embedding_model, 3072)
+
+
+def get_embedding(text: str) -> list[float]:
+    """
+    /// <summary>
+    /// تولید بردار ویژگی (Embedding) برای متن ورودی با استفاده از provider انتخاب‌شده
+    /// </summary>
+    /// <param name="text">متن ورودی برای embedding</param>
+    /// <returns>لیستی از اعداد اعشاری — طول بستگی به مدل انتخاب‌شده دارد</returns>
+    /// <remarks>
+    /// در صورت خطا یا mock mode، بردار صفر با طول مناسب برمی‌گردد.
+    /// این رفتار graceful degradation امکان تست بدون API key را فراهم می‌کند.
+    /// </remarks>
+    """
+    dim = _get_embedding_dimension()
+
     if not text:
-        return [0.0] * 3072
-        
-    # در صورتی که کلید API معتبر نباشد، برای تست محلی بردار صفر برمی‌گردانیم تا سیستم کرش نکند
-    if not settings.openai_api_key or settings.openai_api_key == "mock_key" or "your-openai-key" in settings.openai_api_key:
-        logger.warning("Using mock zero-embeddings. Please configure a valid OPENAI_API_KEY in backend/.env for real RAG search.")
-        return [0.0] * 3072
-        
+        return [0.0] * dim
+
+    provider = settings.embedding_provider
+
     try:
-        client = OpenAI(api_key=settings.openai_api_key)
-        response = client.embeddings.create(
-            model=model,
-            input=text
-        )
-        return response.data[0].embedding
+        if provider == "google":
+            return _embed_with_google(text)
+        else:
+            # پیش‌فرض: OpenAI یا هر endpoint سازگار
+            return _embed_with_openai(text)
     except Exception as e:
-        logger.error(f"Failed to generate embedding from OpenAI API: {str(e)}. Falling back to zero-vector.")
-        # برگرداندن بردار صفر به طول ۳۰۷۲
-        return [0.0] * 3072
+        logger.error(
+            f"Embedding generation failed (provider={provider}): {str(e)}. "
+            f"Falling back to zero-vector of dimension {dim}."
+        )
+        return [0.0] * dim
+
+
+def _embed_with_openai(text: str) -> list[float]:
+    """
+    /// <summary>
+    /// تولید embedding از طریق OpenAI API یا هر endpoint سازگار با OpenAI
+    /// </summary>
+    """
+    from openai import OpenAI
+
+    api_key = settings.openai_api_key
+    model = settings.embedding_model
+    dim = _get_embedding_dimension()
+
+    # بررسی mock mode
+    if not api_key or api_key in ("mock_key", "") or "your-" in api_key:
+        logger.warning(
+            "Mock mode active: no valid OPENAI_API_KEY. "
+            "Returning zero-vector. Configure a real key in backend/.env for actual RAG."
+        )
+        return [0.0] * dim
+
+    client = OpenAI(api_key=api_key)
+    response = client.embeddings.create(model=model, input=text)
+    return response.data[0].embedding
+
+
+def _embed_with_google(text: str) -> list[float]:
+    """
+    /// <summary>
+    /// تولید embedding از طریق Google Generative AI
+    /// </summary>
+    """
+    try:
+        import google.generativeai as genai
+    except ImportError:
+        raise ImportError(
+            "google-generativeai not installed. Run: pip install google-generativeai"
+        )
+
+    api_key = settings.google_api_key
+    model = settings.embedding_model
+    dim = _get_embedding_dimension()
+
+    if not api_key or "your-" in api_key:
+        logger.warning("Mock mode active: no valid GOOGLE_API_KEY. Returning zero-vector.")
+        return [0.0] * dim
+
+    genai.configure(api_key=api_key)
+    result = genai.embed_content(model=model, content=text)
+    return result["embedding"]
