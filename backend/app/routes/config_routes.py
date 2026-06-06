@@ -36,6 +36,7 @@ async def get_active_configuration():
         "services": settings.services.__dict__,
         "integrations": settings.integrations.__dict__,
         "security": settings.security.__dict__,
+        "providers": settings.providers.__dict__ if hasattr(settings, "providers") else {},
         "llm_provider": settings.llm_provider,
         "model_name": settings.model_name,
         "embedding_provider": settings.embedding_provider,
@@ -71,6 +72,11 @@ async def update_active_configuration(update: ConfigUpdateRequest):
                 if hasattr(settings.security, k):
                     setattr(settings.security, k, bool(v))
 
+        if update.providers and hasattr(settings, "providers"):
+            for k, v in update.providers.items():
+                if hasattr(settings.providers, k):
+                    setattr(settings.providers, k, bool(v))
+
         logger.info("Administrative Feature Toggles updated successfully at runtime.")
         return {
             "status": "success",
@@ -79,6 +85,7 @@ async def update_active_configuration(update: ConfigUpdateRequest):
                 "services": settings.services.__dict__,
                 "integrations": settings.integrations.__dict__,
                 "security": settings.security.__dict__,
+                "providers": settings.providers.__dict__ if hasattr(settings, "providers") else {},
             },
         }
     except Exception as e:

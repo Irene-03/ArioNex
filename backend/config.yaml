@@ -61,3 +61,20 @@ security:
   # قانون سخت‌گیرانه عدم توهم و الزام استناد دقیق به منابع
   strict_non_hallucination:
     enabled: true
+
+# وضعیت فعال/غیرفعال بودن پروایدرهای هوش مصنوعی
+providers:
+  openai:
+    enabled: true
+  openrouter:
+    enabled: true
+  anthropic:
+    enabled: true
+  google:
+    enabled: true
+  deepseek:
+    enabled: true
+  gapgpt:
+    enabled: true
+  avalai:
+    enabled: true

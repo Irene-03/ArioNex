@@ -36,3 +36,7 @@ class ConfigUpdateRequest(BaseModel):
         default=None,
         description="تنظیمات امنیتی — PII Redaction، Non-Hallucination و..."
     )
+    providers: Optional[dict] = Field(
+        default=None,
+        description="تنظیمات روشن/خاموش بودن پروایدرهای هوش مصنوعی"
+    )

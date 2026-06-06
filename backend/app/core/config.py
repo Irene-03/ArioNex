@@ -37,6 +37,20 @@ class ServiceToggles(BaseSettings):
     neo4j: bool = False
     safety_auditor: bool = False
 
+class ProviderToggles(BaseSettings):
+    """
+    /// <summary>
+    /// مدل وضعیت فعال یا غیرفعال بودن پروایدرهای مدل‌های زبانی
+    /// </summary>
+    """
+    openai: bool = True
+    openrouter: bool = True
+    anthropic: bool = True
+    google: bool = True
+    deepseek: bool = True
+    gapgpt: bool = True
+    avalai: bool = True
+
 class IntegrationToggles(BaseSettings):
     """
     /// <summary>
@@ -78,6 +92,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
     google_api_key: str = Field(default="", validation_alias="GOOGLE_API_KEY")
     deepseek_api_key: str = Field(default="", validation_alias="DEEPSEEK_API_KEY")
+    gapgpt_api_key: str = Field(default="", validation_alias="GAPGPT_API_KEY")
+    avalai_api_key: str = Field(default="", validation_alias="AVALAI_API_KEY")
 
     # -------------------------------------------------------
     # تنظیمات Embedding Provider — مستقل از Chat LLM
@@ -105,6 +121,7 @@ class Settings(BaseSettings):
     
     # تنظیمات داینامیک لود شده از config.yaml
     services: ServiceToggles = ServiceToggles()
+    providers: ProviderToggles = ProviderToggles()
     integrations: IntegrationToggles = IntegrationToggles()
     security: SecuritySettings = SecuritySettings()
 
@@ -140,6 +157,14 @@ def load_settings() -> Settings:
                         for k, v in yaml_data["services"].items()
                     }
                     settings_obj.services = ServiceToggles(**services_data)
+
+                # ادغام تنظیمات پروایدرها
+                if "providers" in yaml_data:
+                    providers_data = {
+                        k: v.get("enabled", True) if isinstance(v, dict) else v
+                        for k, v in yaml_data["providers"].items()
+                    }
+                    settings_obj.providers = ProviderToggles(**providers_data)
                 
                 # ادغام تنظیمات کانال‌های خروجی
                 if "integrations" in yaml_data:

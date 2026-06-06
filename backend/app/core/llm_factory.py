@@ -47,6 +47,15 @@ def get_llm(
     active_provider = provider or settings.llm_provider
     active_model = model or settings.model_name
 
+    # بررسی فعال بودن پروایدر در تنظیمات سیستم
+    is_enabled = True
+    if hasattr(settings, "providers"):
+        is_enabled = getattr(settings.providers, active_provider, True)
+
+    if not is_enabled:
+        logger.error(f"LLM Provider '{active_provider}' is disabled in configuration.")
+        raise ValueError(f"LLM provider '{active_provider}' is currently disabled in config.yaml.")
+
     logger.info(f"LLM Factory: initializing provider='{active_provider}', model='{active_model}'")
 
     try:
@@ -60,6 +69,10 @@ def get_llm(
             return _create_google_llm(active_model, temperature)
         elif active_provider == "deepseek":
             return _create_deepseek_llm(active_model, temperature)
+        elif active_provider == "gapgpt":
+            return _create_gapgpt_llm(active_model, temperature)
+        elif active_provider == "avalai":
+            return _create_avalai_llm(active_model, temperature)
         else:
             logger.warning(f"Unknown LLM provider '{active_provider}'. Falling back to OpenRouter.")
             return _create_openrouter_llm(active_model, temperature)
@@ -193,6 +206,50 @@ def _create_deepseek_llm(model: str, temperature: float):
         temperature=temperature,
         openai_api_key=api_key,
         openai_api_base="https://api.deepseek.com/v1",
+    )
+
+
+def _create_gapgpt_llm(model: str, temperature: float):
+    """
+    /// <summary>
+    /// ساخت LLM از طریق GapGPT API (سازگار با OpenAI API)
+    /// </summary>
+    """
+    from langchain_openai import ChatOpenAI
+
+    api_key = settings.gapgpt_api_key
+    _warn_if_mock(api_key, "GapGPT")
+
+    # اگر مدل پیش‌فرض بود، از gpt-4o-mini به عنوان مقدار پیش‌فرض GapGPT استفاده شود
+    active_model = model if model != "openai/gpt-4o-mini" else "gpt-4o-mini"
+
+    return ChatOpenAI(
+        model_name=active_model,
+        temperature=temperature,
+        openai_api_key=api_key,
+        openai_api_base="https://api.gapgpt.app/v1",
+    )
+
+
+def _create_avalai_llm(model: str, temperature: float):
+    """
+    /// <summary>
+    /// ساخت LLM از طریق AvalAI API (سازگار با OpenAI API)
+    /// </summary>
+    """
+    from langchain_openai import ChatOpenAI
+
+    api_key = settings.avalai_api_key
+    _warn_if_mock(api_key, "AvalAI")
+
+    # اگر مدل پیش‌فرض بود، از gpt-4o-mini به عنوان مقدار پیش‌فرض AvalAI استفاده شود
+    active_model = model if model != "openai/gpt-4o-mini" else "gpt-4o-mini"
+
+    return ChatOpenAI(
+        model_name=active_model,
+        temperature=temperature,
+        openai_api_key=api_key,
+        openai_api_base="https://api.avalai.ir/v1",
     )
 
 
