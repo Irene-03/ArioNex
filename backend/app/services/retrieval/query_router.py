@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// موتور متمرکز تجمیع، رتبه‌بندی مجدد و پاسخ‌دهی امن - ترکیب‌کننده (The Central Retrieval Synthesizer & Reranker)
+/// موتور مرکزی مسیریابی، بازیابی، رتبه‌بندی مجدد و پاسخ‌دهی RAG (ArioNex Query Router & Synthesizer)
 /// </summary>
 /// <remarks>
 /// این ماژول قلب تپنده خواندن (Read Path) سیستم RAG است. وظیفه روت کردن پرسش‌ها بر اساس
-/// کلمات کلیدی، استخراج داده‌ها از عامل‌های Librarian و Support Lead، رتبه‌بندی مجدد (Reranking)
+/// کلمات کلیدی، استخراج داده‌ها از عامل‌های vector_search و qna، رتبه‌بندی مجدد (Reranking)
 /// بر اساس امتیاز شباهت کسینوسی، فراخوانی Tavily Web Search در صورت فعال بودن به عنوان منبع زنده زاپاس،
 /// و اعمال قانون طلایی عدم توهم (Non-Hallucination Refusal) را بر عهده دارد.
 /// </remarks>
@@ -13,41 +13,18 @@
 import logging
 import re
 import requests
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 
 from app.core.config import settings
+from app.core.llm_factory import get_llm
+from app.prompts.rag_prompts import RESPONDER_TEMPLATE, STANDARD_REFUSAL_MESSAGE
 from app.services.retrieval.query_rewriter import rewrite_query
-from app.services.retrieval.librarian import librarian_agent
-from app.services.retrieval.support_lead import support_lead_agent
+from app.services.retrieval.vector_search import vector_search_agent
+from app.services.retrieval.qna import qna_agent
 from app.services.retrieval.analyst import analyst_agent
 
-logger = logging.getLogger("arionex.synthesizer")
+logger = logging.getLogger("arionex.query_router")
 
-# پرامپت پاسخ‌دهنده نهایی با استناد به منابع بر اساس دموی prompts.py
-RESPONDER_TEMPLATE = """You're a responder assistant designed to provide professional answers using the CONTEXT below.
-
-Key instructions for the AI assistant:
-    1. Use the below CONTEXT (delimited with XML tags) to answer the QUESTION.
-    2. If CONTEXT does not provide enough information to answer the QUESTION, the output must be exactly the four characters: "####"
-    3. Don't try to make up an answer.
-    4. Respond in Persian.
-
-<CONTEXT>
-{reranked_text}
-</CONTEXT>
-
-Conversation history (retain a concise summary of context to avoid repetition or contradictions):
-{chat_history}
-
-QUESTION:
-{user_input}
-
-AI Assistant Response:
-"""
-
-# متن امتناع استاندارد طلایی فارسی برای جلوگیری از توهم RAG
-STANDARD_REFUSAL_MESSAGE = "منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند."
 
 def route_query_intent(query: str) -> str:
     """
@@ -155,12 +132,12 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
             }
 
     # سناریو ب: موتور بازیابی RAG برداری اسناد
-    # بازیابی نتایج از عامل‌های کتابدار (Librarian) و سرپرست پشتیبانی (Support Lead)
-    librarian_results = librarian_agent.retrieve_context(standalone_query, threshold=threshold, k=k)
-    support_results = support_lead_agent.retrieve_context(standalone_query, threshold=threshold, k=k)
+    # بازیابی نتایج از عامل جستجوی برداری اسناد (vector_search) و عامل پرسش‌وپاسخ (qna)
+    vector_results = vector_search_agent.retrieve_context(standalone_query, threshold=threshold, k=k)
+    qna_results = qna_agent.retrieve_context(standalone_query, threshold=threshold, k=k)
     
     # تجمیع نتایج محلی
-    all_results = librarian_results + support_results
+    all_results = vector_results + qna_results
     
     # مرتب‌سازی مجدد (Reranking) بر اساس امتیاز شباهت کسینوسی به صورت نزولی
     sorted_results = sorted(all_results, key=lambda x: x.get("similarity", 0), reverse=True)[:k]
@@ -202,9 +179,14 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
         
     context_str = "\n\n".join(formatted_context_list)
     
-    # در صورت عدم وجود کلید واقعی OpenAI، شبیه‌سازی RAG محلی می‌کنیم تا برنامه برای تست کار کند
-    if not settings.openai_api_key or settings.openai_api_key == "mock_key" or "your-openai-key" in settings.openai_api_key:
-        logger.warning("Mock mode active in Synthesizer. Simulating LLM response based on context.")
+    # بررسی mock mode: در صورت عدم وجود کلید واقعی برای provider فعال
+    active_provider = settings.llm_provider
+    active_key = (
+        settings.openrouter_api_key if active_provider == "openrouter"
+        else settings.openai_api_key
+    )
+    if not active_key or active_key in ("mock_key", "") or "your-" in active_key:
+        logger.warning("Mock mode active in Query Router. Simulating LLM response based on context.")
         # بازگرداندن چانک بازیابی شده اول به عنوان پاسخ شبیه‌سازی شده
         mock_response = f"بر اساس گزارش موجود در {sources[0]['name']}: \n{formatted_context_list[0][:150]}..."
         return {
@@ -213,13 +195,9 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
             "is_safe": True
         }
         
-    # ۶. فراخوانی مدل نهایی Responder
+    # ۶. فراخوانی مدل نهایی Responder از طریق LLM Factory
     try:
-        llm = ChatOpenAI(
-            model_name=settings.model_name,
-            temperature=0.1, # لتنسی کم و تمایل بسیار کم به توهم
-            openai_api_key=settings.openai_api_key
-        )
+        llm = get_llm(temperature=0.1)
         
         # تبدیل تاریخچه چت به ساختار متنی روان برای پرامپت
         from app.services.retrieval.query_rewriter import format_chat_history

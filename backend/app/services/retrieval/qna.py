@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// عامل بازیابی پرسش و پاسخ‌های متداول و لاگ‌های پشتیبانی - سرپرست پشتیبانی (The Support Lead FAQ Agent)
+/// عامل جستجوی الگوهای Q&A متداول و لاگ‌های پشتیبانی (ArioNex QnA Retrieval Agent)
 /// </summary>
 /// <remarks>
 /// این ماژول بر روی الگوهای پرسش و پاسخ ثبت شده در جدول qna_query جستجوی شباهت معنایی انجام می‌دهد.
@@ -13,12 +13,12 @@ from app.core.config import settings
 from app.core.database import get_db_connection
 from app.core.embeddings import get_embedding
 
-logger = logging.getLogger("arionex.support_lead")
+logger = logging.getLogger("arionex.qna")
 
-class SupportLeadAgent:
+class QnAAgent:
     """
     /// <summary>
-    /// کلاس عامل سرپرست پشتیبانی جهت جستجوی لاگ‌های QnA پشتیبانی و سوالات متداول
+    /// کلاس عامل جستجوی Q&A جهت تطبیق مستقیم الگوهای پرسش‌وپاسخ سازمانی
     /// </summary>
     """
     def __init__(self):
@@ -99,5 +99,5 @@ class SupportLeadAgent:
                 
         return results
 
-# نمونه سراسری عامل سرپرست پشتیبانی
-support_lead_agent = SupportLeadAgent()
+# نمونه سراسری عامل جستجوی Q&A
+qna_agent = QnAAgent()

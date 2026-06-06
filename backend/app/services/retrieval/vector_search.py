@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// عامل بازیابی اسناد بدون ساختار عمومی - کتابدار (The Librarian RAG Retrieval Agent)
+/// عامل جستجوی برداری اسناد عمومی (ArioNex Vector Search Agent)
 /// </summary>
 /// <remarks>
 /// این ماژول جستجوی شباهت کسینوسی (Cosine Similarity Search) را روی امبدینگ‌های ۳۰۷۲ بعدی
@@ -15,12 +15,12 @@ from app.core.config import settings
 from app.core.database import get_db_connection
 from app.core.embeddings import get_embedding
 
-logger = logging.getLogger("arionex.librarian")
+logger = logging.getLogger("arionex.vector_search")
 
-class LibrarianAgent:
+class VectorSearchAgent:
     """
     /// <summary>
-    /// کلاس عامل کتابدار جهت جستجو و بازیابی بخش‌های متنی اسناد
+    /// کلاس عامل جستجوی برداری اسناد جهت بازیابی معنایی از pg_supervisor
     /// </summary>
     """
     def __init__(self):
@@ -132,5 +132,5 @@ class LibrarianAgent:
                 
         return results
 
-# نمونه سراسری از عامل کتابدار اسناد
-librarian_agent = LibrarianAgent()
+# نمونه سراسری عامل جستجوی برداری اسناد
+vector_search_agent = VectorSearchAgent()

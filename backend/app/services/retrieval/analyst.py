@@ -23,6 +23,8 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import ToolNode
 
 from app.core.config import settings
+from app.core.llm_factory import get_llm
+from app.prompts.analyst_prompts import get_analyst_system_prompt
 
 logger = logging.getLogger("arionex.analyst")
 
@@ -173,46 +175,26 @@ class AnalystAgent:
         if df_to_use is None:
             return "DOUBTFUL ANSWER: No structural dataframe is loaded."
 
-        # در صورت عدم وجود کلید معتبر، برای پیشگیری از تعلیق مفسر کاذب پاسخ می‌دهیم
-        if not settings.openai_api_key or settings.openai_api_key == "mock_key" or "your-openai-key" in settings.openai_api_key:
+        # بررسی mock mode: در صورت عدم وجود کلید واقعی برای provider فعال
+        active_provider = settings.llm_provider
+        active_key = (
+            settings.openrouter_api_key if active_provider == "openrouter"
+            else settings.openai_api_key
+        )
+        if not active_key or active_key in ("mock_key", "") or "your-" in active_key:
             # شبیه‌سازی نتایج حسابداری دمو جهت اجرای تست محلی
             logger.warning("Mock mode active in LangGraph Analyst. Answering using mock solver.")
             if "بدهکاری" in query or "چک" in query:
-                return "مجموع بدهکاری اسناد از نوع سند چک برابر با ۶۲۳,۳۴۶ ریال می‌باشد."
-            return "DOUBTFUL ANSWER: Mock solver cannot process this query without active OpenAI API."
+                return "مجموع بدهکاری اسناد از نوع سند چک برابر با ۶۲۳،۳۴۶ ریال می‌باشد."
+            return "DOUBTFUL ANSWER: Mock solver cannot process this query without active LLM API key."
 
-        # ۲. پیکربندی ابزارها و مدل ChatOpenAI
+        # ۲. پیکربندی ابزارها و مدل LLM از طریق Factory
         tools_list = self.get_tools(df_to_use)
-        llm = ChatOpenAI(model_name=settings.model_name, temperature=0, openai_api_key=settings.openai_api_key)
+        llm = get_llm(temperature=0)
         model_with_tools = llm.bind_tools(tools_list, tool_choice="auto")
 
-        # ۳. ساخت پرامپت سیستمی تحلیلگر بر اساس دموی prompts.py
-        system_prompt = f"""You are an intelligent accounting assistant working with a DataFrame containing accounting records.
-
-**Your goal is to answer questions about the data by following these steps:**
-1. Carefully analyze the question
-2. Determine which tool(s) you need to use to answer the question
-3. Use the tools systematically
-4. If data is missing or pandas returns 0, respond with "DOUBTFUL ANSWER :" followed by your response and provide a reason to why you failed.
-5. Do not guess or answer without data
-6. Provide a clear, concise answer based on the tool results
-7. Stop when you have a complete answer
-
-**DataFrame Columns:**
-{df_to_use.columns.tolist()}
-
-**Available Tools:**
-- analyze_df – Shows first 3 rows.
-- column_sum – Calculates the sum of a column. Input: column name.
-- groupby_aggregate – Group and aggregate. Input: [group_col, agg_col, agg_func].
-- filter_rows – Filter by condition. Input: [col, op, val].
-- python_repl_ast – Run custom Python code on df. Use only if other tools cannot achieve the task.
-
-**Rules:**
- - Always use the most appropriate tool for the task
- - If you cannot answer the question with the available tools only respond with "DOUBTFUL ANSWER: " and provide a short reason to why you failed.
- - Respond in Persian.
-"""
+        # ۳. ساخت پرامپت سیستمی تحلیلگر با ستون‌های واقعی DataFrame
+        system_prompt = get_analyst_system_prompt(df_to_use.columns.tolist())
 
         # ۴. تعریف توابع گره (Node Functions) بر اساس دموی nodes.py
         def call_model(state: AgentState):
