@@ -119,6 +119,41 @@ def init_db() -> None:
             is_active BOOLEAN DEFAULT TRUE,
             last_used_at TIMESTAMP
         );
+        """,
+        # ۷. جدول موجودیت‌های استخراج شده برای گراف دانش (Extracted Entities)
+        """
+        CREATE TABLE IF NOT EXISTS extracted_entities (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            type VARCHAR(100),
+            description TEXT,
+            file_id INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """,
+        # ۸. جدول روابط بین موجودیت‌ها برای گراف دانش (Extracted Relationships)
+        """
+        CREATE TABLE IF NOT EXISTS extracted_relationships (
+            id SERIAL PRIMARY KEY,
+            source VARCHAR(255) NOT NULL,
+            target VARCHAR(255) NOT NULL,
+            relationship VARCHAR(255),
+            description TEXT,
+            file_id INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """,
+        # ۹. جدول قوانین و آیین‌نامه‌های استخراج شده (Extracted Compliance Rules)
+        """
+        CREATE TABLE IF NOT EXISTS extracted_rules (
+            id SERIAL PRIMARY KEY,
+            rule_code VARCHAR(100),
+            clause TEXT NOT NULL,
+            type VARCHAR(100),
+            description TEXT,
+            file_id INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         """
     ]
     
