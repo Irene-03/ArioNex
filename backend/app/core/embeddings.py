@@ -6,8 +6,10 @@
 /// این ماژول وظیفه تبدیل متون chunk به بردار چند-بعدی را بر عهده دارد.
 /// Provider و مدل embedding از settings قابل انتخاب هستند:
 ///
-///   - openai: text-embedding-3-large (۳۰۷۲ بعد) یا text-embedding-3-small (۱۵۳۶ بعد)
-///   - google: models/text-embedding-004
+///   - openai:    text-embedding-3-large (۳۰۷۲ بعد) یا text-embedding-3-small (۱۵۳۶ بعد)
+///   - google:    models/text-embedding-004
+///   - hormouz:   هر مدل سازگار با OpenAI از طریق https://api.hormouz.net/v1
+///   - openrouter: هر مدل سازگار با OpenAI از طریق https://openrouter.ai/api/v1
 ///
 /// در صورت عدم وجود کلید API یا بروز خطا، بردار صفر با طول مناسب برمی‌گردد
 /// تا فرآیند پردازش بدون کرش ادامه یابد (Graceful Degradation).
@@ -74,24 +76,35 @@ def get_embedding(text: str) -> list[float]:
 def _embed_with_openai(text: str) -> list[float]:
     """
     /// <summary>
-    /// تولید embedding از طریق OpenAI API یا هر endpoint سازگار با OpenAI
+    /// تولید embedding از طریق OpenAI API یا هر endpoint سازگار با OpenAI (Hormouz, OpenRouter ...)
     /// </summary>
     """
     from openai import OpenAI
 
-    api_key = settings.openai_api_key
+    provider = settings.embedding_provider
     model = settings.embedding_model
     dim = _get_embedding_dimension()
+
+    # انتخاب کلید و base_url بر اساس provider فعال
+    if provider == "hormouz":
+        api_key = settings.hormouz_api_key
+        base_url = "https://api.hormouz.net/v1"
+    elif provider == "openrouter":
+        api_key = settings.openrouter_api_key
+        base_url = "https://openrouter.ai/api/v1"
+    else:
+        api_key = settings.openai_api_key
+        base_url = None
 
     # بررسی mock mode
     if not api_key or api_key in ("mock_key", "") or "your-" in api_key:
         logger.warning(
-            "Mock mode active: no valid OPENAI_API_KEY. "
-            "Returning zero-vector. Configure a real key in backend/.env for actual RAG."
+            f"Mock mode active: no valid API key for embedding provider '{provider}'. "
+            f"Returning zero-vector. Configure a real key in backend/.env for actual RAG."
         )
         return [0.0] * dim
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
     response = client.embeddings.create(model=model, input=text)
     return response.data[0].embedding
 

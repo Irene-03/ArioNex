@@ -12,6 +12,7 @@
 ///   - google      : Gemini 1.5 Pro, Gemini 1.5 Flash و سایر مدل‌های Google
 ///   - deepseek    : DeepSeek-Chat, DeepSeek-Coder (از طریق OpenAI-compatible API)
 ///   - openrouter  : دسترسی به تمام مدل‌های فوق از طریق یک API key واحد (پیشنهادی برای تولید)
+///   - hormouz     : دروازه ۳۵۰+ مدل از طریق یک API key واحد — سازگار با OpenAI (https://api.hormouz.net/v1)
 ///
 /// مزیت openrouter: یک API key، دسترسی به همه مدل‌ها، fallback خودکار، مدیریت هزینه متمرکز
 /// </remarks>
@@ -73,6 +74,8 @@ def get_llm(
             return _create_gapgpt_llm(active_model, temperature)
         elif active_provider == "avalai":
             return _create_avalai_llm(active_model, temperature)
+        elif active_provider == "hormouz":
+            return _create_hormouz_llm(active_model, temperature)
         else:
             logger.warning(f"Unknown LLM provider '{active_provider}'. Falling back to OpenRouter.")
             return _create_openrouter_llm(active_model, temperature)
@@ -253,6 +256,32 @@ def _create_avalai_llm(model: str, temperature: float):
     )
 
 
+def _create_hormouz_llm(model: str, temperature: float):
+    """
+    /// <summary>
+    /// ساخت LLM از طریق Hormouz API (سازگار با OpenAI API) — دروازه ۳۵۰+ مدل
+    /// </summary>
+    /// <remarks>
+    /// Hormouz از OpenAI-compatible API استفاده می‌کند.
+    /// Base URL: https://api.hormouz.net/v1
+    /// مدل‌ها با فرمت "provider/model-name" مشخص می‌شوند مانند openai/gpt-4o.
+    /// پشتیبانی از streaming (SSE) و billing اعتبار-محور.
+    /// </remarks>
+    """
+    from langchain_openai import ChatOpenAI
+
+    api_key = settings.hormouz_api_key
+    _warn_if_mock(api_key, "Hormouz")
+
+    return ChatOpenAI(
+        model_name=model,
+        temperature=temperature,
+        openai_api_key=api_key,
+        openai_api_base="https://api.hormouz.net/v1",
+        streaming=True,
+    )
+
+
 def _warn_if_mock(api_key: str, provider_name: str) -> None:
     """
     /// <summary>
@@ -312,6 +341,11 @@ def _create_openai_embedding(model: str):
         client = OpenAI(
             api_key=settings.openrouter_api_key,
             base_url="https://openrouter.ai/api/v1",
+        )
+    elif provider == "hormouz":
+        client = OpenAI(
+            api_key=settings.hormouz_api_key,
+            base_url="https://api.hormouz.net/v1",
         )
     else:
         client = OpenAI(api_key=settings.openai_api_key)

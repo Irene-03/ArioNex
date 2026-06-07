@@ -8,7 +8,7 @@ version: '3.8'
 services:
   # پایگاه داده برداری رسمی سیستم (PostgreSQL + pgvector)
   db:
-    image: pgvector/pgvector:16-pgdg
+    image: pgvector/pgvector:pg16
     container_name: arionex-vector-db
     environment:
       - POSTGRES_USER=postgres

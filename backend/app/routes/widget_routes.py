@@ -15,10 +15,11 @@
 import logging
 from typing import Optional
 from fastapi import APIRouter, Response
+from fastapi.responses import StreamingResponse
 from app.core.config import settings
 from app.core.database import get_db_connection
 from app.schemas.query_schemas import QueryRequest, QueryResponse
-from app.logics.widget_logic import execute_widget_logic
+from app.logics.widget_logic import execute_widget_logic, execute_widget_stream_logic
 
 logger = logging.getLogger("arionex.widget_routes")
 router = APIRouter(prefix="/v1", tags=["Widget — Website Chat Popup"])
@@ -304,41 +305,86 @@ async def get_web_widget_script(website: Optional[str] = None):
         messagesContainer.appendChild(loader);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
+        // پیام دستیار به صورت placeholder که توکن به توکن پر می‌شود
+        const botMsg = document.createElement('div');
+        botMsg.className = 'arionex-widget-message arionex-widget-message-bot';
+        botMsg.innerHTML = '';
+
+        let accumulated = '';
+        let sources = [];
+        let loaderRemoved = false;
+
         try {
-            const response = await fetch('http://localhost:8000/v1/widget/chat', {
+            const response = await fetch('http://localhost:8000/v1/widget/chat/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: text, session_id: sessionId })
             });
 
-            const data = await response.json();
-            messagesContainer.removeChild(loader);
+            if (!response.body) throw new Error('Streaming not supported');
 
-            const botMsg = document.createElement('div');
-            botMsg.className = 'arionex-widget-message arionex-widget-message-bot';
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
 
-            let replyText = data.answer || '⚠️ مشکلی در دریافت پاسخ پیش آمده است.';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
 
-            if (data.sources && data.sources.length > 0 && !replyText.includes('اطلاعات کافی')) {
-                const uniqueSources = [];
-                const seen = new Set();
-                data.sources.forEach(src => {
-                    const key = src.name + ' (' + src.page + ')';
-                    if (!seen.has(key)) { seen.add(key); uniqueSources.push(src.name + ' - ' + src.page); }
-                });
-                if (uniqueSources.length > 0) {
-                    replyText += '<div class="arionex-widget-message-sources">📚 <b>منابع:</b><br>' +
-                                 uniqueSources.map(s => '• ' + s).join('<br>') + '</div>';
+                let sepIdx;
+                while ((sepIdx = buffer.indexOf('\\n\\n')) !== -1) {
+                    const rawEvent = buffer.slice(0, sepIdx);
+                    buffer = buffer.slice(sepIdx + 2);
+
+                    let eventName = 'message';
+                    let dataLine = '';
+                    rawEvent.split('\\n').forEach(line => {
+                        if (line.startsWith('event:')) eventName = line.slice(6).trim();
+                        else if (line.startsWith('data:')) dataLine += line.slice(5).trim();
+                    });
+
+                    const decodedData = dataLine.replace(/\\\\n/g, '\\n');
+
+                    if (eventName === 'token') {
+                        if (!loaderRemoved) {
+                            messagesContainer.removeChild(loader);
+                            messagesContainer.appendChild(botMsg);
+                            loaderRemoved = true;
+                        }
+                        accumulated += decodedData;
+                        botMsg.innerHTML = accumulated.replace(/\\n/g, '<br>');
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    } else if (eventName === 'sources') {
+                        try { sources = JSON.parse(decodedData); } catch (_) {}
+                    } else if (eventName === 'done') {
+                        if (!loaderRemoved) {
+                            messagesContainer.removeChild(loader);
+                            messagesContainer.appendChild(botMsg);
+                            loaderRemoved = true;
+                        }
+                        if (sources && sources.length > 0 && !accumulated.includes('اطلاعات کافی')) {
+                            const uniqueSources = [];
+                            const seen = new Set();
+                            sources.forEach(src => {
+                                const key = src.name + ' (' + src.page + ')';
+                                if (!seen.has(key)) { seen.add(key); uniqueSources.push(src.name + ' - ' + src.page); }
+                            });
+                            if (uniqueSources.length > 0) {
+                                botMsg.innerHTML = accumulated.replace(/\\n/g, '<br>') +
+                                    '<div class="arionex-widget-message-sources">📚 <b>منابع:</b><br>' +
+                                    uniqueSources.map(s => '• ' + s).join('<br>') + '</div>';
+                            }
+                        }
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    }
                 }
             }
-
-            botMsg.innerHTML = replyText.replace(/\\n/g, '<br>');
-            messagesContainer.appendChild(botMsg);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
         } catch (error) {
-            console.error('ArioNex Widget API Error:', error);
-            messagesContainer.removeChild(loader);
+            console.error('ArioNex Widget Streaming Error:', error);
+            if (!loaderRemoved) {
+                messagesContainer.removeChild(loader);
+            }
             const errMsg = document.createElement('div');
             errMsg.className = 'arionex-widget-message arionex-widget-message-bot';
             errMsg.textContent = '⚠️ خطا در برقراری ارتباط با سرور هوشمند آریونکس. لطفاً مجدداً امتحان کنید.';
@@ -377,3 +423,26 @@ async def process_widget_query(request: QueryRequest):
     /// <returns>پاسخ نهایی دستیار به همراه آرایه منابع استنادی</returns>
     """
     return await execute_widget_logic(request)
+
+
+@router.post(
+    "/widget/chat/stream",
+    summary="پردازش streaming پیام ابزارک چت وب‌سایت (SSE)",
+    description="پاسخ ابزارک را به صورت Server-Sent Events ارسال می‌کند — کاربر هر توکن را به محض تولید می‌بیند.",
+)
+async def stream_widget_query(request: QueryRequest):
+    """
+    /// <summary>
+    /// اندپوینت streaming تبادل پیام ابزارک — مناسب برای UX چت زنده
+    /// </summary>
+    /// <returns>StreamingResponse با media-type text/event-stream</returns>
+    """
+    return StreamingResponse(
+        execute_widget_stream_logic(request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )

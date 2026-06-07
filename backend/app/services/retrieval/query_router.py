@@ -13,6 +13,7 @@
 import logging
 import re
 import requests
+from typing import AsyncGenerator
 from langchain_core.prompts import PromptTemplate
 
 from app.core.config import settings
@@ -24,6 +25,27 @@ from app.services.retrieval.qna import qna_agent
 from app.services.retrieval.analyst import analyst_agent
 
 logger = logging.getLogger("arionex.query_router")
+
+
+def _get_active_api_key(provider: str) -> str:
+    """
+    /// <summary>
+    /// نگاشت provider فعال به کلید API متناظر در settings
+    /// </summary>
+    /// <param name="provider">نام provider فعال (openrouter, openai, hormouz, ...)</param>
+    /// <returns>مقدار کلید API ذخیره شده برای این provider</returns>
+    """
+    mapping = {
+        "openrouter": settings.openrouter_api_key,
+        "openai": settings.openai_api_key,
+        "anthropic": settings.anthropic_api_key,
+        "google": settings.google_api_key,
+        "deepseek": settings.deepseek_api_key,
+        "gapgpt": settings.gapgpt_api_key,
+        "avalai": settings.avalai_api_key,
+        "hormouz": settings.hormouz_api_key,
+    }
+    return mapping.get(provider, settings.openai_api_key)
 
 
 def route_query_intent(query: str) -> str:
@@ -181,10 +203,7 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
     
     # بررسی mock mode: در صورت عدم وجود کلید واقعی برای provider فعال
     active_provider = settings.llm_provider
-    active_key = (
-        settings.openrouter_api_key if active_provider == "openrouter"
-        else settings.openai_api_key
-    )
+    active_key = _get_active_api_key(active_provider)
     if not active_key or active_key in ("mock_key", "") or "your-" in active_key:
         logger.warning("Mock mode active in Query Router. Simulating LLM response based on context.")
         # بازگرداندن چانک بازیابی شده اول به عنوان پاسخ شبیه‌سازی شده
@@ -237,3 +256,147 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
             "sources": [],
             "is_safe": True
         }
+
+
+async def synthesize_rag_response_stream(
+    user_input: str,
+    chat_history: list,
+    threshold: float = 0.4,
+    k: int = 4,
+) -> AsyncGenerator[dict, None]:
+    """
+    /// <summary>
+    /// نسخه streaming موتور RAG — نتایج را به صورت توکن به توکن (SSE) برمی‌گرداند
+    /// </summary>
+    /// <param name="user_input">پرسش جدید کاربر</param>
+    /// <param name="chat_history">تاریخچه چت نشست جاری</param>
+    /// <param name="threshold">آستانه شباهت بردارها</param>
+    /// <param name="k">تعداد چانک‌های نهایی استنادی</param>
+    /// <returns>async generator که رویدادهای دیکشنری شکل {"event": "...", "data": ...} تولید می‌کند</returns>
+    /// <remarks>
+    /// انواع رویدادهای منتشرشده:
+    ///   - {"event": "sources", "data": [...]}  — منابع استنادی پیش از شروع تولید پاسخ
+    ///   - {"event": "token",   "data": "..."}  — هر توکن جدید مدل
+    ///   - {"event": "done",    "data": {"is_safe": true}}  — پایان پاسخ
+    ///   - {"event": "error",   "data": "..."}  — در صورت بروز خطا
+    /// </remarks>
+    """
+    logger.info("Synthesizer (stream) received query from chat session.")
+
+    # ۱. بازنویسی پرسش جهت رفع ابهام
+    standalone_query = rewrite_query(user_input, chat_history)
+
+    # ۲. روت کردن پرسش
+    intent = route_query_intent(standalone_query)
+    logger.info(f"Routed query intent category (stream): '{intent}'")
+
+    # سناریو الف: مسیر محاسباتی → نتیجه قطعی است و قابلیت streaming ندارد
+    if intent == "analyst":
+        analysis_result = analyst_agent.execute_analysis(standalone_query)
+        if "DOUBTFUL ANSWER" not in analysis_result:
+            if not analysis_result.strip() or analysis_result == "####":
+                yield {"event": "sources", "data": []}
+                yield {"event": "token", "data": STANDARD_REFUSAL_MESSAGE}
+                yield {"event": "done", "data": {"is_safe": True}}
+                return
+            yield {
+                "event": "sources",
+                "data": [{"name": "accounting_data.csv", "page": "تحلیل آماری حسابداری"}],
+            }
+            yield {"event": "token", "data": analysis_result}
+            yield {"event": "done", "data": {"is_safe": True}}
+            return
+        logger.warning("Analyst Agent fallback to vector search in stream mode.")
+
+    # سناریو ب: بازیابی برداری اسناد + Q&A
+    vector_results = vector_search_agent.retrieve_context(standalone_query, threshold=threshold, k=k)
+    qna_results = qna_agent.retrieve_context(standalone_query, threshold=threshold, k=k)
+    all_results = vector_results + qna_results
+    sorted_results = sorted(all_results, key=lambda x: x.get("similarity", 0), reverse=True)[:k]
+
+    # ۳. در صورت خالی بودن، جستجوی وب زنده
+    if not sorted_results and settings.services.web_search:
+        logger.info("Local KB empty in stream. Activating Tavily fallback...")
+        web_results = perform_tavily_web_search(standalone_query)
+        sorted_results = sorted(web_results, key=lambda x: x.get("similarity", 0), reverse=True)[:k]
+
+    # ۴. قانون عدم توهم
+    if not sorted_results:
+        logger.warning("Zero context in stream mode. Emitting standard refusal.")
+        yield {"event": "sources", "data": []}
+        yield {"event": "token", "data": STANDARD_REFUSAL_MESSAGE}
+        yield {"event": "done", "data": {"is_safe": True}}
+        return
+
+    # ۵. قالب‌بندی منابع و کانتکست
+    formatted_context_list = []
+    sources = []
+    for item in sorted_results:
+        clean_content = item["content"].replace(", Answer:", "\nAnswer:")
+        formatted_context_list.append(clean_content)
+        page_label = f"قطعه {item['sequence_id']}" if item["sequence_id"] else "مخزن داده"
+        sources.append({"name": item["label"], "page": page_label})
+
+    context_str = "\n\n".join(formatted_context_list)
+
+    # ارسال منابع پیش از شروع streaming
+    yield {"event": "sources", "data": sources[:3]}
+
+    # بررسی mock mode
+    active_provider = settings.llm_provider
+    active_key = _get_active_api_key(active_provider)
+    if not active_key or active_key in ("mock_key", "") or "your-" in active_key:
+        logger.warning("Mock mode active in stream Query Router. Emitting simulated response.")
+        mock_response = f"بر اساس گزارش موجود در {sources[0]['name']}: \n{formatted_context_list[0][:150]}..."
+        # شبیه‌سازی streaming با تکه تکه فرستادن
+        for chunk in _chunk_text_for_mock(mock_response, size=20):
+            yield {"event": "token", "data": chunk}
+        yield {"event": "done", "data": {"is_safe": True}}
+        return
+
+    # ۶. فراخوانی streaming مدل
+    try:
+        llm = get_llm(temperature=0.1)
+
+        from app.services.retrieval.query_rewriter import format_chat_history
+        formatted_history = format_chat_history(chat_history)
+
+        prompt = PromptTemplate.from_template(RESPONDER_TEMPLATE)
+        chain = prompt | llm
+
+        accumulated = ""
+        # langchain BaseChatModel پشتیبانی از .astream دارد که به صورت async توکن‌ها را تولید می‌کند
+        async for chunk in chain.astream({
+            "reranked_text": context_str,
+            "chat_history": formatted_history,
+            "user_input": user_input,
+        }):
+            piece = getattr(chunk, "content", None) or ""
+            if not piece:
+                continue
+            accumulated += piece
+            yield {"event": "token", "data": piece}
+
+        # ۷. قانون عدم توهم در خروجی نهایی
+        if accumulated.strip() == "####" or not accumulated.strip():
+            logger.warning("Stream responder produced refusal placeholder. Emitting standard refusal.")
+            yield {"event": "token", "data": STANDARD_REFUSAL_MESSAGE}
+
+        logger.info("Successfully streamed RAG response.")
+        yield {"event": "done", "data": {"is_safe": True}}
+
+    except Exception as e:
+        logger.error(f"Stream LLM responder failed: {str(e)}. Emitting refusal.")
+        yield {"event": "error", "data": str(e)}
+        yield {"event": "token", "data": STANDARD_REFUSAL_MESSAGE}
+        yield {"event": "done", "data": {"is_safe": True}}
+
+
+def _chunk_text_for_mock(text: str, size: int = 20):
+    """
+    /// <summary>
+    /// شکستن متن به تکه‌های کوچک جهت شبیه‌سازی streaming در mock mode
+    /// </summary>
+    """
+    for i in range(0, len(text), size):
+        yield text[i:i + size]

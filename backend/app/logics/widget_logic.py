@@ -13,12 +13,14 @@
 /// </remarks>
 """
 
+import json
 import logging
+from typing import AsyncGenerator
 from fastapi import HTTPException
 
 from app.core.config import settings
 from app.schemas.query_schemas import QueryRequest, QueryResponse
-from app.services.retrieval.query_router import synthesize_rag_response
+from app.services.retrieval.query_router import synthesize_rag_response, synthesize_rag_response_stream
 from app.helpers.audit_logger import log_audit_event
 
 logger = logging.getLogger("arionex.widget_logic")
@@ -85,3 +87,63 @@ async def execute_widget_logic(request: QueryRequest) -> QueryResponse:
     except Exception as e:
         logger.error(f"Error processing widget chat query: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Widget RAG failure: {str(e)}")
+
+
+async def execute_widget_stream_logic(request: QueryRequest) -> AsyncGenerator[str, None]:
+    """
+    /// <summary>
+    /// نسخه streaming منطق ابزارک — پاسخ را به صورت SSE توکن به توکن می‌فرستد
+    /// </summary>
+    /// <param name="request">درخواست شامل متن سوال و شناسه نشست ابزارک</param>
+    /// <returns>async generator از خطوط SSE</returns>
+    """
+    if not settings.integrations.popup_widget:
+        logger.warning("Widget streaming requested while popup_widget disabled.")
+        yield _sse_event("error", "Widget channel disabled")
+        yield _sse_event("done", {"is_safe": True})
+        return
+
+    session_id = request.session_id
+    if session_id not in _widget_sessions:
+        _widget_sessions[session_id] = []
+    history = _widget_sessions[session_id][-10:]
+
+    accumulated_answer = ""
+    try:
+        async for event in synthesize_rag_response_stream(
+            user_input=request.query,
+            chat_history=history,
+            threshold=0.4,
+            k=4,
+        ):
+            if event["event"] == "token":
+                accumulated_answer += event["data"]
+            yield _sse_event(event["event"], event["data"])
+
+        # به‌روزرسانی تاریخچه نشست پس از پایان stream
+        _widget_sessions[session_id].append({"Human": request.query})
+        _widget_sessions[session_id].append({"AI": accumulated_answer})
+
+        # ثبت ممیزی
+        log_audit_event(
+            user_name="Widget_User",
+            user_role="Viewer",
+            query_text=request.query,
+            response_text=accumulated_answer,
+        )
+    except Exception as e:
+        logger.error(f"Widget stream error: {str(e)}")
+        yield _sse_event("error", str(e))
+        yield _sse_event("done", {"is_safe": True})
+
+
+def _sse_event(event: str, data) -> str:
+    """
+    /// <summary>
+    /// قالب‌بندی یک رویداد در فرمت استاندارد Server-Sent Events
+    /// </summary>
+    """
+    if not isinstance(data, str):
+        data = json.dumps(data, ensure_ascii=False)
+    safe_data = data.replace("\r\n", "\n").replace("\n", "\\n")
+    return f"event: {event}\ndata: {safe_data}\n\n"

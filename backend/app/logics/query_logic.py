@@ -12,12 +12,14 @@
 /// </remarks>
 """
 
+import json
 import logging
+from typing import AsyncGenerator
 from fastapi import HTTPException
 
 from app.core.config import settings
 from app.schemas.query_schemas import QueryRequest, QueryResponse
-from app.services.retrieval.query_router import synthesize_rag_response
+from app.services.retrieval.query_router import synthesize_rag_response, synthesize_rag_response_stream
 from app.helpers.audit_logger import log_audit_event
 
 logger = logging.getLogger("arionex.query_logic")
@@ -68,3 +70,64 @@ async def execute_query_logic(request: QueryRequest) -> QueryResponse:
     except Exception as e:
         logger.error(f"Error processing API query: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal RAG engine failure: {str(e)}")
+
+
+async def execute_query_stream_logic(request: QueryRequest) -> AsyncGenerator[str, None]:
+    """
+    /// <summary>
+    /// نسخه streaming منطق پرسش — رویدادهای SSE تولید می‌کند (text/event-stream)
+    /// </summary>
+    /// <param name="request">درخواست شامل متن سوال و شناسه نشست</param>
+    /// <returns>async generator از خطوط SSE با فرمت "event: ...\ndata: ...\n\n"</returns>
+    /// <remarks>
+    /// رویدادهای SSE تولید شده:
+    ///   event: sources — منابع استنادی پیش از شروع تولید
+    ///   event: token   — تکه‌ای از پاسخ مدل
+    ///   event: done    — پایان پاسخ + وضعیت ایمنی
+    ///   event: error   — در صورت بروز خطا
+    /// </remarks>
+    """
+    if not settings.integrations.rest_api:
+        logger.warning("REST API streaming requested while disabled.")
+        yield _sse_event("error", "REST API channel disabled")
+        yield _sse_event("done", {"is_safe": True})
+        return
+
+    accumulated_answer = ""
+    try:
+        async for event in synthesize_rag_response_stream(
+            user_input=request.query,
+            chat_history=[],
+            threshold=0.4,
+            k=4,
+        ):
+            if event["event"] == "token":
+                accumulated_answer += event["data"]
+            yield _sse_event(event["event"], event["data"])
+
+        # ثبت در سیستم ممیزی پس از پایان stream
+        log_audit_event(
+            user_name="API_User",
+            user_role="Developer",
+            query_text=request.query,
+            response_text=accumulated_answer,
+        )
+    except Exception as e:
+        logger.error(f"Stream RAG error: {str(e)}")
+        yield _sse_event("error", str(e))
+        yield _sse_event("done", {"is_safe": True})
+
+
+def _sse_event(event: str, data) -> str:
+    """
+    /// <summary>
+    /// قالب‌بندی یک رویداد در فرمت استاندارد Server-Sent Events
+    /// </summary>
+    /// <param name="event">نام رویداد (sources, token, done, error)</param>
+    /// <param name="data">داده — رشته یا dict که به JSON تبدیل می‌شود</param>
+    """
+    if not isinstance(data, str):
+        data = json.dumps(data, ensure_ascii=False)
+    # حذف خطوط جدید از داده‌ها — SSE برای هر line جدا data: می‌خواهد
+    safe_data = data.replace("\r\n", "\n").replace("\n", "\\n")
+    return f"event: {event}\ndata: {safe_data}\n\n"

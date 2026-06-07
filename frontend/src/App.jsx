@@ -82,7 +82,8 @@ export default function App() {
     providerGoogle: true,
     providerDeepSeek: true,
     providerGapGPT: true,
-    providerAvalAI: true
+    providerAvalAI: true,
+    providerHormouz: true
   });
 
   // لیست پیام‌های پنجره چت
@@ -310,6 +311,7 @@ export default function App() {
             providerDeepSeek: data.providers?.deepseek ?? true,
             providerGapGPT: data.providers?.gapgpt ?? true,
             providerAvalAI: data.providers?.avalai ?? true,
+            providerHormouz: data.providers?.hormouz ?? true,
           });
         }
       } catch (err) {
@@ -365,6 +367,7 @@ export default function App() {
       deepseek: 'providerDeepSeek',
       gapgpt: 'providerGapGPT',
       avalai: 'providerAvalAI',
+      hormouz: 'providerHormouz',
     };
     const featureKey = keyMap[providerKey];
     if (!featureKey) return;
@@ -389,6 +392,7 @@ export default function App() {
           deepseek: providerKey === 'deepseek' ? !features.providerDeepSeek : features.providerDeepSeek,
           gapgpt: providerKey === 'gapgpt' ? !features.providerGapGPT : features.providerGapGPT,
           avalai: providerKey === 'avalai' ? !features.providerAvalAI : features.providerAvalAI,
+          hormouz: providerKey === 'hormouz' ? !features.providerHormouz : features.providerHormouz,
         }
       })
     })
@@ -397,7 +401,7 @@ export default function App() {
     .catch(err => console.error('Failed to sync provider toggles:', err));
   };
 
-  // ارسال پیام جدید به دستیار هوشمند و دریافت پاسخ واقعی RAG
+  // ارسال پیام جدید به دستیار هوشمند و دریافت پاسخ به صورت Streaming (SSE)
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
@@ -407,44 +411,116 @@ export default function App() {
     setInputText('');
     setIsAiLoading(true);
 
-    try {
-      let data;
-      if (MOCK_MODE) {
-        // --- حالت Mock: پاسخ چرخشی از لیست نمونه ---
-        await mockDelay(900);
-        data = MOCK_ANSWERS[_mockAnswerIdx % MOCK_ANSWERS.length];
-        _mockAnswerIdx++;
-        console.info('[MOCK] Returned mock answer #', _mockAnswerIdx);
-      } else {
-        const res = await fetch('http://localhost:8000/v1/query', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: queryText, session_id: 'react_admin_dashboard_chat' })
-        });
-        data = await res.json();
-      }
-
-      const isRefusal = data.answer === 'منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند.';
-      setChatMessages(prev => [...prev, {
-        id: Date.now() + 1,
+    if (MOCK_MODE) {
+      // --- حالت Mock: شبیه‌سازی streaming توکن به توکن از پاسخ نمونه ---
+      const mockData = MOCK_ANSWERS[_mockAnswerIdx % MOCK_ANSWERS.length];
+      _mockAnswerIdx++;
+      const aiMsgId = Date.now() + 1;
+      const aiPlaceholder = {
+        id: aiMsgId,
         sender: 'ai',
-        text: data.answer || '⚠️ پاسخی دریافت نشد.',
-        sources: data.sources || [],
-        isSafe: data.is_safe ?? true,
-        isRefusal
-      }]);
-    } catch (err) {
-      console.error('Error communicating with query API:', err);
-      setChatMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        sender: 'ai',
-        text: '⚠️ خطا در برقراری ارتباط با وب‌سرور هوشمند آریونکس. لطفاً اطمینان حاصل فرمایید که بک‌اند بر روی پورت 8000 در حال اجراست.',
-        sources: [],
-        isSafe: true,
-        isRefusal: true
-      }]);
-    } finally {
+        text: '',
+        sources: mockData.sources || [],
+        isSafe: mockData.is_safe ?? true,
+        isRefusal: mockData.answer === 'منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند.'
+      };
+      setChatMessages(prev => [...prev, aiPlaceholder]);
       setIsAiLoading(false);
+
+      const fullText = mockData.answer;
+      let cursor = 0;
+      await new Promise(resolve => {
+        const interval = setInterval(() => {
+          cursor += 3;
+          const partial = fullText.slice(0, cursor);
+          setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: partial } : m));
+          if (cursor >= fullText.length) {
+            clearInterval(interval);
+            resolve();
+          }
+        }, 30);
+      });
+      console.info('[MOCK] Streamed mock answer #', _mockAnswerIdx);
+      return;
+    }
+
+    // --- حالت واقعی: streaming SSE از /v1/query/stream ---
+    const aiMsgId = Date.now() + 1;
+    const aiPlaceholder = {
+      id: aiMsgId,
+      sender: 'ai',
+      text: '',
+      sources: [],
+      isSafe: true,
+      isRefusal: false,
+    };
+    setChatMessages(prev => [...prev, aiPlaceholder]);
+
+    try {
+      const res = await fetch('http://localhost:8000/v1/query/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: queryText, session_id: 'react_admin_dashboard_chat' })
+      });
+
+      if (!res.body) throw new Error('Streaming not supported by browser');
+
+      setIsAiLoading(false);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let accumulated = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // پردازش هر بلوک کامل SSE که با \n\n جدا شده است
+        let sepIdx;
+        while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, sepIdx);
+          buffer = buffer.slice(sepIdx + 2);
+
+          let eventName = 'message';
+          let dataLine = '';
+          rawEvent.split('\n').forEach(line => {
+            if (line.startsWith('event:')) eventName = line.slice(6).trim();
+            else if (line.startsWith('data:')) dataLine += line.slice(5).trim();
+          });
+
+          // SSE-encoded newlines (\n)
+          const decodedData = dataLine.replace(/\\n/g, '\n');
+
+          if (eventName === 'token') {
+            accumulated += decodedData;
+            setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: accumulated } : m));
+          } else if (eventName === 'sources') {
+            try {
+              const parsedSources = JSON.parse(decodedData);
+              setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, sources: parsedSources } : m));
+            } catch (_) { /* منابع نامعتبر — نادیده گرفته می‌شود */ }
+          } else if (eventName === 'done') {
+            try {
+              const meta = JSON.parse(decodedData);
+              const isRefusal = accumulated === 'منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند.';
+              setChatMessages(prev => prev.map(m => m.id === aiMsgId
+                ? { ...m, isSafe: meta.is_safe ?? true, isRefusal }
+                : m));
+            } catch (_) { /* meta نامعتبر */ }
+          } else if (eventName === 'error') {
+            console.error('Stream RAG error:', decodedData);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error streaming from query API:', err);
+      setIsAiLoading(false);
+      setChatMessages(prev => prev.map(m => m.id === aiMsgId ? {
+        ...m,
+        text: '⚠️ خطا در برقراری ارتباط با وب‌سرور هوشمند آریونکس. لطفاً اطمینان حاصل فرمایید که بک‌اند بر روی پورت 8000 در حال اجراست.',
+        isRefusal: true,
+      } : m));
     }
   };
 
@@ -1241,6 +1317,13 @@ export default function App() {
                   <div 
                     className={`toggle ${features.providerAvalAI ? 'toggle-on' : 'toggle-off'}`} 
                     onClick={() => toggleProvider('avalai')}
+                  />
+                </div>
+                <div className="toggle-row">
+                  <span className="toggle-label">Hormouz API (دروازه ۳۵۰+ مدل · streaming)</span>
+                  <div 
+                    className={`toggle ${features.providerHormouz ? 'toggle-on' : 'toggle-off'}`} 
+                    onClick={() => toggleProvider('hormouz')}
                   />
                 </div>
               </div>

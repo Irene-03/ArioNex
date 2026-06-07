@@ -78,3 +78,5 @@ providers:
     enabled: true
   avalai:
     enabled: true
+  hormouz:
+    enabled: true

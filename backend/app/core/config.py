@@ -50,6 +50,7 @@ class ProviderToggles(BaseSettings):
     deepseek: bool = True
     gapgpt: bool = True
     avalai: bool = True
+    hormouz: bool = True
 
 class IntegrationToggles(BaseSettings):
     """
@@ -94,6 +95,7 @@ class Settings(BaseSettings):
     deepseek_api_key: str = Field(default="", validation_alias="DEEPSEEK_API_KEY")
     gapgpt_api_key: str = Field(default="", validation_alias="GAPGPT_API_KEY")
     avalai_api_key: str = Field(default="", validation_alias="AVALAI_API_KEY")
+    hormouz_api_key: str = Field(default="", validation_alias="HORMOUZ_API_KEY")
 
     # -------------------------------------------------------
     # تنظیمات Embedding Provider — مستقل از Chat LLM
