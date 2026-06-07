@@ -43,3 +43,5 @@ yarn-error.log*
 # کش‌های سیستم‌عامل
 .DS_Store
 Thumbs.db
+
+.idea
