@@ -24,6 +24,10 @@ services:
   web_search:
     enabled: true
 
+  # کرالر وب‌سایت — استخراج محتوای صفحات برای RAG
+  web_crawler:
+    enabled: true
+
   # استخراج‌کننده موجودیت‌ها (بخش گراف دانش) - فعلا در فازهای بعدی فعال می‌شود
   entity_extractor:
     enabled: false
@@ -78,3 +82,34 @@ providers:
     enabled: true
   avalai:
     enabled: true
+
+# ----------------------------------------------------
+# تنظیمات موتور کرالر وب (Web Crawler Engine Settings)
+# ----------------------------------------------------
+crawler:
+  # رندر صفحات JavaScript (React/Vue/Angular) با استفاده از Playwright
+  # هشدار: فعال کردن این گزینه نیاز به نصب playwright و chromium دارد
+  js_render:
+    enabled: false
+
+  # دنبال کردن لینک‌های خارجی (خارج از دامنه اصلی)
+  # با سختگیری زیاد — فقط دامنه‌های مرتبط و ارزشمند دنبال می‌شوند
+  follow_external_domains:
+    enabled: false
+
+  # حداکثر تعداد صفحات پیش‌فرض برای هر job کرال
+  default_max_pages:
+    value: 50
+
+  # حداکثر عمق لینک از URL ریشه
+  default_max_depth:
+    value: 3
+
+  # تعداد درخواست‌های HTTP همزمان
+  default_concurrency:
+    value: 5
+
+  # تاخیر بین هر درخواست HTTP (میلی‌ثانیه) — رعایت ادب با سرور هدف
+  request_delay_ms:
+    value: 300
+

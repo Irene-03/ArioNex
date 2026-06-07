@@ -138,6 +138,20 @@ export default function App() {
   const [generatedKey, setGeneratedKey] = useState('');
   const [widgetPreviewSelected, setWidgetPreviewSelected] = useState(null);
 
+  // ─── Crawler State ─────────────────────────────────────────────────────────
+  const [crawlUrl, setCrawlUrl] = useState('');
+  const [crawlMaxPages, setCrawlMaxPages] = useState(50);
+  const [crawlMaxDepth, setCrawlMaxDepth] = useState(3);
+  const [crawlJsRender, setCrawlJsRender] = useState(false);
+  const [crawlFollowExternal, setCrawlFollowExternal] = useState(false);
+  const [crawlRobots, setCrawlRobots] = useState(true);
+  const [crawlJobs, setCrawlJobs] = useState([
+    { job_id: 'demo-job-1', url: 'https://example.com', status: 'completed', pages_crawled: 42, chunks_indexed: 318, pages_failed: 1, max_pages: 50, max_depth: 3, js_render: false, follow_external_domains: false, label: 'crawled:example.com', widget_id: null, error_message: null, created_at: '2026-06-07T09:00:00Z', updated_at: '2026-06-07T09:04:22Z' },
+    { job_id: 'demo-job-2', url: 'https://docs.company.ir', status: 'running', pages_crawled: 18, chunks_indexed: 94, pages_failed: 0, max_pages: 100, max_depth: 4, js_render: true, follow_external_domains: false, label: 'crawled:docs.company.ir', widget_id: 1, error_message: null, created_at: '2026-06-07T10:15:00Z', updated_at: '2026-06-07T10:18:45Z' },
+  ]);
+  const [crawlSubmitting, setCrawlSubmitting] = useState(false);
+  const [crawlStatusFilter, setCrawlStatusFilter] = useState('');
+
   const fetchIntegrations = async () => {
     if (MOCK_MODE) return;
     try {
@@ -590,6 +604,12 @@ export default function App() {
           >
             <span>📥</span> آپلود اسناد
           </div>
+          <div 
+            className={`nav-item ${activeScreen === 'crawler' ? 'active' : ''}`}
+            onClick={() => setActiveScreen('crawler')}
+          >
+            <span>🕷️</span> کرالر وب‌سایت
+          </div>
         </div>
 
         {/* بخش منوی مدیریتی ادمین */}
@@ -632,6 +652,7 @@ export default function App() {
             {activeScreen === 'upload' && 'آپلود اسناد سازمانی و فیلتر حریم خصوصی'}
             {activeScreen === 'admin' && 'کنسول مدیریت حریم خصوصی و امنیت'}
             {activeScreen === 'integrations' && 'کانال‌های خروجی و مستندات اتصال'}
+            {activeScreen === 'crawler' && 'کرالر هوشمند وب‌سایت — استخراج دانش'}
           </div>
           
           <div className="topbar-search">
@@ -1575,6 +1596,334 @@ export default function App() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── صفحه کرالر وب‌سایت ──────────────────────────────────────────── */}
+        {activeScreen === 'crawler' && (
+          <div className="screen fade-in">
+            {/* آمار کلی job‌ها */}
+            <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '20px'}}>
+              <div className="card" style={{borderTop: '3px solid var(--navy)'}}>
+                <div style={{fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px'}}>کل job‌های کرال</div>
+                <div style={{fontSize: '24px', fontWeight: '800', color: 'var(--navy)'}}>{crawlJobs.length}</div>
+              </div>
+              <div className="card" style={{borderTop: '3px solid var(--color-success)'}}>
+                <div style={{fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px'}}>تکمیل‌شده</div>
+                <div style={{fontSize: '24px', fontWeight: '800', color: 'var(--color-success)'}}>{crawlJobs.filter(j => j.status === 'completed').length}</div>
+              </div>
+              <div className="card" style={{borderTop: '3px solid var(--copper)'}}>
+                <div style={{fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px'}}>در حال اجرا</div>
+                <div style={{fontSize: '24px', fontWeight: '800', color: 'var(--copper)'}}>{crawlJobs.filter(j => j.status === 'running').length}</div>
+              </div>
+              <div className="card" style={{borderTop: '3px solid var(--color-info)'}}>
+                <div style={{fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px'}}>کل chunk‌های ایندکس</div>
+                <div style={{fontSize: '24px', fontWeight: '800', color: 'var(--navy)'}}>{crawlJobs.reduce((s, j) => s + j.chunks_indexed, 0)}</div>
+              </div>
+            </div>
+
+            <div className="two-col">
+              {/* فرم ایجاد job جدید */}
+              <div style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
+                <div className="card">
+                  <div className="card-title">🕷️ شروع کرال وب‌سایت جدید</div>
+                  <div style={{fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.7', marginBottom: '16px'}}>
+                    آدرس وب‌سایت را وارد کنید. سیستم تمام صفحات را به صورت async کرال کرده، محتوا را chunk و در پایگاه دانش ایندکس می‌کند.
+                  </div>
+
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!crawlUrl.trim() || crawlSubmitting) return;
+                    setCrawlSubmitting(true);
+                    try {
+                      if (MOCK_MODE) {
+                        await mockDelay(800);
+                        const newJob = {
+                          job_id: `job-${Date.now()}`,
+                          url: crawlUrl,
+                          status: 'queued',
+                          pages_crawled: 0,
+                          chunks_indexed: 0,
+                          pages_failed: 0,
+                          max_pages: crawlMaxPages,
+                          max_depth: crawlMaxDepth,
+                          js_render: crawlJsRender,
+                          follow_external_domains: crawlFollowExternal,
+                          label: null,
+                          widget_id: null,
+                          error_message: null,
+                          created_at: new Date().toISOString(),
+                          updated_at: new Date().toISOString(),
+                        };
+                        setCrawlJobs(prev => [newJob, ...prev]);
+                        setCrawlUrl('');
+                      } else {
+                        const res = await fetch('http://localhost:8000/v1/crawl/start', {
+                          method: 'POST',
+                          headers: {'Content-Type': 'application/json'},
+                          body: JSON.stringify({
+                            url: crawlUrl,
+                            max_pages: crawlMaxPages,
+                            max_depth: crawlMaxDepth,
+                            js_render: crawlJsRender,
+                            follow_external_domains: crawlFollowExternal,
+                            respect_robots: crawlRobots,
+                          }),
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                          setCrawlJobs(prev => [data, ...prev]);
+                          setCrawlUrl('');
+                        } else {
+                          alert(data.detail || 'خطا در شروع کرال');
+                        }
+                      }
+                    } catch(err) {
+                      alert('خطا در اتصال به سرور');
+                    } finally {
+                      setCrawlSubmitting(false);
+                    }
+                  }} style={{display: 'flex', flexDirection: 'column', gap: '14px'}}>
+
+                    <div>
+                      <label style={{fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', fontWeight: '600'}}>آدرس وب‌سایت (URL ریشه)</label>
+                      <input
+                        type="url"
+                        id="crawl-url-input"
+                        className="chat-input-box"
+                        style={{borderRadius: 'var(--radius)', width: '100%', direction: 'ltr', fontSize: '13px'}}
+                        placeholder="https://example.com"
+                        value={crawlUrl}
+                        onChange={e => setCrawlUrl(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px'}}>
+                      <div>
+                        <label style={{fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', fontWeight: '600'}}>حداکثر صفحات</label>
+                        <input
+                          type="number" min="1" max="500"
+                          id="crawl-max-pages"
+                          className="chat-input-box"
+                          style={{borderRadius: 'var(--radius)', width: '100%'}}
+                          value={crawlMaxPages}
+                          onChange={e => setCrawlMaxPages(Number(e.target.value))}
+                        />
+                      </div>
+                      <div>
+                        <label style={{fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px', fontWeight: '600'}}>حداکثر عمق</label>
+                        <input
+                          type="number" min="1" max="10"
+                          id="crawl-max-depth"
+                          className="chat-input-box"
+                          style={{borderRadius: 'var(--radius)', width: '100%'}}
+                          value={crawlMaxDepth}
+                          onChange={e => setCrawlMaxDepth(Number(e.target.value))}
+                        />
+                      </div>
+                    </div>
+
+                    {/* toggle‌های پیشرفته */}
+                    <div style={{background: 'var(--gray-50)', borderRadius: 'var(--radius)', padding: '14px', border: '1px solid var(--gray-100)'}}>
+                      <div style={{fontSize: '12px', fontWeight: '700', color: 'var(--navy)', marginBottom: '12px'}}>تنظیمات پیشرفته کرالر</div>
+
+                      <div className="toggle-row" style={{marginBottom: '10px'}}>
+                        <div>
+                          <span className="toggle-label" style={{display: 'block'}}>رندر JavaScript (Playwright)</span>
+                          <span style={{fontSize: '11px', color: 'var(--text-muted)'}}>برای سایت‌های React/Vue/Angular — نیاز به playwright</span>
+                        </div>
+                        <div
+                          id="toggle-js-render"
+                          className={`toggle ${crawlJsRender ? 'toggle-on' : 'toggle-off'}`}
+                          onClick={() => setCrawlJsRender(p => !p)}
+                        />
+                      </div>
+
+                      <div className="toggle-row" style={{marginBottom: '10px'}}>
+                        <div>
+                          <span className="toggle-label" style={{display: 'block'}}>دنبال کردن دامنه‌های خارجی</span>
+                          <span style={{fontSize: '11px', color: 'var(--text-muted)'}}>با سختگیری زیاد — فقط subdomain‌های همان سازمان</span>
+                        </div>
+                        <div
+                          id="toggle-follow-external"
+                          className={`toggle ${crawlFollowExternal ? 'toggle-on' : 'toggle-off'}`}
+                          onClick={() => setCrawlFollowExternal(p => !p)}
+                        />
+                      </div>
+
+                      <div className="toggle-row">
+                        <span className="toggle-label">رعایت robots.txt سایت هدف</span>
+                        <div
+                          id="toggle-robots"
+                          className={`toggle ${crawlRobots ? 'toggle-on' : 'toggle-off'}`}
+                          onClick={() => setCrawlRobots(p => !p)}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      id="crawl-start-btn"
+                      className="topbar-btn btn-primary"
+                      style={{justifyContent: 'center', padding: '12px 24px', fontSize: '14px', opacity: crawlSubmitting ? 0.7 : 1}}
+                      disabled={crawlSubmitting}
+                    >
+                      {crawlSubmitting ? '⏳ در حال ایجاد job...' : '🕷️ شروع کرال'}
+                    </button>
+                  </form>
+                </div>
+
+                {/* راهنمای API */}
+                <div className="card">
+                  <div className="card-title">📖 فراخوانی مستقیم API کرالر</div>
+                  <div style={{background: 'var(--navy-deep)', padding: '14px', borderRadius: 'var(--radius)', color: '#fff', fontSize: '12px', fontFamily: 'monospace', direction: 'ltr', textAlign: 'left', overflowX: 'auto'}}>
+                    <pre style={{margin: 0}}>{`curl -X POST "http://localhost:8000/v1/crawl/start" \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: YOUR_API_KEY" \\
+  -d '{
+    "url": "https://your-website.com",
+    "max_pages": 100,
+    "max_depth": 4,
+    "js_render": false,
+    "follow_external_domains": false
+  }'`}</pre>
+                  </div>
+                </div>
+              </div>
+
+              {/* لیست job‌ها */}
+              <div className="card">
+                <div className="card-title" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                  <span>📋 لیست job‌های کرال</span>
+                  <div style={{display: 'flex', gap: '8px'}}>
+                    {['', 'queued', 'running', 'completed', 'failed'].map(s => (
+                      <button
+                        key={s}
+                        onClick={() => setCrawlStatusFilter(s)}
+                        style={{
+                          fontSize: '11px',
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          border: '1px solid',
+                          cursor: 'pointer',
+                          fontWeight: crawlStatusFilter === s ? '700' : '400',
+                          background: crawlStatusFilter === s ? 'var(--navy)' : 'transparent',
+                          color: crawlStatusFilter === s ? '#fff' : 'var(--text-muted)',
+                          borderColor: crawlStatusFilter === s ? 'var(--navy)' : 'var(--gray-100)',
+                        }}
+                      >
+                        {s === '' ? 'همه' : s === 'queued' ? 'صف' : s === 'running' ? 'در حال اجرا' : s === 'completed' ? 'تکمیل' : 'خطا'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px'}}>
+                  {crawlJobs
+                    .filter(j => !crawlStatusFilter || j.status === crawlStatusFilter)
+                    .map(job => {
+                      const statusColor = {
+                        queued: 'var(--text-muted)',
+                        running: 'var(--copper)',
+                        completed: 'var(--color-success)',
+                        failed: '#c62828',
+                        cancelled: 'var(--text-muted)',
+                      }[job.status] || 'var(--text-muted)';
+
+                      const statusLabel = {
+                        queued: '⏳ در صف',
+                        running: '⚡ در حال کرال',
+                        completed: '✅ تکمیل',
+                        failed: '❌ خطا',
+                        cancelled: '🚫 لغو شد',
+                      }[job.status] || job.status;
+
+                      const progress = job.max_pages > 0 ? Math.round((job.pages_crawled / job.max_pages) * 100) : 0;
+
+                      return (
+                        <div key={job.job_id} style={{border: '1px solid var(--gray-100)', borderRadius: 'var(--radius)', padding: '14px', background: 'var(--gray-50)'}}>
+                          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px'}}>
+                            <div style={{flex: 1, minWidth: 0}}>
+                              <div style={{fontWeight: '600', fontSize: '13px', color: 'var(--navy)', direction: 'ltr', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                                {job.url}
+                              </div>
+                              <div style={{fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px', direction: 'ltr'}}>
+                                {job.job_id.substring(0, 20)}...
+                              </div>
+                            </div>
+                            <div style={{display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, marginRight: '10px'}}>
+                              <span style={{fontSize: '12px', fontWeight: '700', color: statusColor}}>{statusLabel}</span>
+                              {(job.status === 'queued' || job.status === 'running') && (
+                                <button
+                                  onClick={async () => {
+                                    if (MOCK_MODE) {
+                                      setCrawlJobs(prev => prev.map(j => j.job_id === job.job_id ? {...j, status: 'cancelled'} : j));
+                                    } else {
+                                      const res = await fetch(`http://localhost:8000/v1/crawl/${job.job_id}`, {method: 'DELETE'});
+                                      if (res.ok) {
+                                        setCrawlJobs(prev => prev.map(j => j.job_id === job.job_id ? {...j, status: 'cancelled'} : j));
+                                      }
+                                    }
+                                  }}
+                                  style={{background: '#ffebee', color: '#c62828', border: 'none', borderRadius: '4px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'}}
+                                >
+                                  لغو
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* نوار پیشرفت */}
+                          {(job.status === 'running' || job.status === 'completed') && (
+                            <div style={{marginBottom: '10px'}}>
+                              <div className="prog-bar-wrap" style={{width: '100%'}}>
+                                <div className="prog-bar" style={{width: `${Math.min(progress, 100)}%`, background: job.status === 'completed' ? 'var(--color-success)' : 'linear-gradient(90deg, var(--copper), var(--copper-light))'}} />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* آمار */}
+                          <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', fontSize: '11.5px'}}>
+                            <div style={{textAlign: 'center', background: '#fff', borderRadius: '4px', padding: '6px'}}>
+                              <div style={{fontWeight: '700', color: 'var(--navy)'}}>{job.pages_crawled}</div>
+                              <div style={{color: 'var(--text-muted)'}}>صفحه کرال شد</div>
+                            </div>
+                            <div style={{textAlign: 'center', background: '#fff', borderRadius: '4px', padding: '6px'}}>
+                              <div style={{fontWeight: '700', color: 'var(--copper)'}}>{job.chunks_indexed}</div>
+                              <div style={{color: 'var(--text-muted)'}}>chunk ایندکس</div>
+                            </div>
+                            <div style={{textAlign: 'center', background: '#fff', borderRadius: '4px', padding: '6px'}}>
+                              <div style={{fontWeight: '700', color: job.pages_failed > 0 ? '#c62828' : 'var(--color-success)'}}>{job.pages_failed}</div>
+                              <div style={{color: 'var(--text-muted)'}}>صفحه ناموفق</div>
+                            </div>
+                          </div>
+
+                          {/* تگ‌های تنظیمات */}
+                          <div style={{display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap'}}>
+                            <span style={{fontSize: '10.5px', background: 'var(--gray-100)', padding: '2px 8px', borderRadius: '8px', color: 'var(--text-muted)'}}>عمق: {job.max_depth}</span>
+                            {job.js_render && <span style={{fontSize: '10.5px', background: 'rgba(196, 137, 74, 0.15)', padding: '2px 8px', borderRadius: '8px', color: 'var(--copper-dark)'}}>JS Render</span>}
+                            {job.follow_external_domains && <span style={{fontSize: '10.5px', background: 'rgba(13, 71, 161, 0.1)', padding: '2px 8px', borderRadius: '8px', color: 'var(--navy)'}}>دامنه خارجی</span>}
+                            {job.label && <span style={{fontSize: '10.5px', background: 'var(--gray-100)', padding: '2px 8px', borderRadius: '8px', color: 'var(--text-muted)', fontFamily: 'monospace', direction: 'ltr'}}>{job.label}</span>}
+                          </div>
+
+                          {job.error_message && (
+                            <div style={{marginTop: '8px', fontSize: '11.5px', color: '#c62828', background: '#ffebee', padding: '6px 10px', borderRadius: '4px'}}>
+                              ⚠️ {job.error_message}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                  {crawlJobs.filter(j => !crawlStatusFilter || j.status === crawlStatusFilter).length === 0 && (
+                    <div style={{textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: '13px'}}>
+                      🕷️ هیچ job کرالی یافت نشد. یک URL را کرال کنید تا اینجا نمایش داده شود.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
