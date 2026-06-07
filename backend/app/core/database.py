@@ -120,6 +120,10 @@ def init_db() -> None:
             last_used_at TIMESTAMP
         );
         """,
+        # جدول حذف موقت برای بازسازی اسکیما در فاز توسعه
+        "DROP TABLE IF EXISTS extracted_rules CASCADE;",
+        "DROP TABLE IF EXISTS extracted_relationships CASCADE;",
+        "DROP TABLE IF EXISTS extracted_entities CASCADE;",
         # ۷. جدول موجودیت‌های استخراج شده برای گراف دانش (Extracted Entities)
         """
         CREATE TABLE IF NOT EXISTS extracted_entities (
@@ -128,7 +132,8 @@ def init_db() -> None:
             type VARCHAR(100),
             description TEXT,
             file_id INT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (file_id, name)
         );
         """,
         # ۸. جدول روابط بین موجودیت‌ها برای گراف دانش (Extracted Relationships)
@@ -140,7 +145,8 @@ def init_db() -> None:
             relationship VARCHAR(255),
             description TEXT,
             file_id INT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (file_id, source, target, relationship)
         );
         """,
         # ۹. جدول قوانین و آیین‌نامه‌های استخراج شده (Extracted Compliance Rules)
@@ -152,7 +158,8 @@ def init_db() -> None:
             type VARCHAR(100),
             description TEXT,
             file_id INT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (file_id, rule_code)
         );
         """
     ]
