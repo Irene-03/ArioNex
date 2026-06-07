@@ -22,6 +22,32 @@ from app.services.safety.pii_redactor import redact_text
 
 logger = logging.getLogger("arionex.unstructured_processor")
 
+
+def split_into_semantic_windows(text: str, window_size: int = 3000, overlap: int = 500) -> list:
+    """
+    /// <summary>
+    /// تقسیم متون بزرگ به پنجره‌های معنایی با اندازه و همپوشانی مشخص
+    /// </summary>
+    """
+    if len(text) <= window_size:
+        return [text]
+        
+    windows = []
+    start = 0
+    while start < len(text):
+        end = start + window_size
+        chunk = text[start:end]
+        windows.append(chunk)
+        start += (window_size - overlap)
+        if start >= len(text) - overlap:
+            break
+            
+    if start < len(text):
+        windows.append(text[start:])
+        
+    return windows
+
+
 class UnstructuredDocumentProcessor:
     """
     /// <summary>
@@ -162,6 +188,22 @@ class UnstructuredDocumentProcessor:
                 
                 conn.commit()
             logger.info(f"Successfully processed and indexed {chunks_indexed} chunks for file '{original_filename}'.")
+            
+            # ۷. راه‌اندازی فرآیند استخراج دانش (موجودیت‌ها و قوانین) به صورت ناهمزمان در پس‌زمینه (Celery Tasks)
+            if settings.services.entity_extractor or settings.services.rule_extractor:
+                logger.info(f"Splitting document text into semantic windows for background extraction. File ID: {file_id}")
+                text_windows = split_into_semantic_windows(redacted_text, window_size=3000, overlap=500)
+                logger.info(f"Dispatched {len(text_windows)} semantic windows for file_id={file_id}.")
+                
+                for window in text_windows:
+                    if settings.services.entity_extractor:
+                        from app.tasks.extractor_tasks import run_extract_entities_task
+                        run_extract_entities_task.delay(window, file_id)
+                        
+                    if settings.services.rule_extractor:
+                        from app.tasks.extractor_tasks import run_extract_rules_task
+                        run_extract_rules_task.delay(window, file_id)
+            
             return {
                 "status": "success",
                 "chunks_count": chunks_indexed,
