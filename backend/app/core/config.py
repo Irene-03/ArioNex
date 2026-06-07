@@ -82,6 +82,7 @@ class CrawlerSettings(BaseSettings):
     default_max_depth: int = 3
     default_concurrency: int = 5
     request_delay_ms: int = 300
+    proxy_pool: list[str] = []
 
 class SecuritySettings(BaseSettings):
     """
@@ -140,6 +141,8 @@ class Settings(BaseSettings):
     minio_bucket_name: str = Field(default="arionex-raw-files", validation_alias="MINIO_BUCKET_NAME")
     
     telegram_bot_token: str = Field(default="", validation_alias="TELEGRAM_BOT_TOKEN")
+    
+    redis_url: str = Field(default="redis://localhost:6379/0", validation_alias="REDIS_URL")
     
     # تنظیمات داینامیک لود شده از config.yaml
     services: ServiceToggles = ServiceToggles()

@@ -23,7 +23,7 @@ from fastapi import BackgroundTasks, HTTPException
 from app.core.config import settings
 from app.core.database import get_db_connection
 from app.schemas.crawler_schemas import CrawlStartRequest, CrawlStartResponse, CrawlJobResponse
-from app.services.workers.crawler_service import crawler_service
+from app.tasks.crawler_task import run_crawler_task
 
 logger = logging.getLogger("arionex.crawler_logic")
 
@@ -52,7 +52,7 @@ def _create_job_in_db(
                 """
                 INSERT INTO crawler_jobs
                     (job_id, url, status, max_pages, max_depth, concurrency,
-                     js_render, follow_external_domains, label, widget_id)
+                     js_render, follow_external, label, widget_id)
                 VALUES (%s, %s, 'queued', %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (job_id, url, max_pages, max_depth, concurrency,
@@ -85,7 +85,7 @@ def _row_to_job_response(row: dict) -> CrawlJobResponse:
         max_pages=row["max_pages"],
         max_depth=row["max_depth"],
         js_render=row["js_render"],
-        follow_external_domains=row["follow_external_domains"],
+        follow_external_domains=row["follow_external"],
         label=row.get("label"),
         widget_id=row.get("widget_id"),
         error_message=row.get("error_message"),
@@ -96,14 +96,12 @@ def _row_to_job_response(row: dict) -> CrawlJobResponse:
 
 async def execute_start_crawl(
     request: CrawlStartRequest,
-    background_tasks: BackgroundTasks
 ) -> CrawlStartResponse:
     """
     /// <summary>
     /// اجرای منطق شروع job کرال: ایجاد رکورد در DB و راه‌اندازی task پس‌زمینه
     /// </summary>
     /// <param name="request">درخواست شروع کرال از کاربر</param>
-    /// <param name="background_tasks">مدیر task‌های پس‌زمینه FastAPI</param>
     /// <returns>job_id و وضعیت اولیه</returns>
     """
     if not settings.services.web_crawler:
@@ -145,9 +143,8 @@ async def execute_start_crawl(
         widget_id=request.widget_id,
     )
 
-    # شروع task پس‌زمینه — بک‌اند را بلاک نمی‌کند
-    background_tasks.add_task(
-        crawler_service.run_crawl_job,
+    # شروع Celery Task در پس‌زمینه
+    run_crawler_task.delay(
         job_id=job_id,
         url=url,
         max_pages=max_pages,
@@ -156,9 +153,10 @@ async def execute_start_crawl(
         js_render=js_render,
         follow_external=follow_external,
         respect_robots=request.respect_robots,
-        label=request.label,
-        widget_id=request.widget_id,
+        label=request.label or "",
+        widget_id=request.widget_id or 0
     )
+
 
     return CrawlStartResponse(
         job_id=job_id,

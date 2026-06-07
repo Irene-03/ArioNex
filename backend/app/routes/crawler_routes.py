@@ -16,7 +16,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Query
+from fastapi import APIRouter, Query
 
 from app.logics.crawler_logic import (
     execute_cancel_crawl_job,
@@ -45,14 +45,13 @@ router = APIRouter(prefix="/v1/crawl", tags=["Crawler — Website Knowledge Inge
 )
 async def start_crawl_job(
     request: CrawlStartRequest,
-    background_tasks: BackgroundTasks,
 ) -> CrawlStartResponse:
     """
     /// <summary>
     /// اندپوینت شروع یک job کرال — فوری پاسخ می‌دهد و کرال را در پس‌زمینه اجرا می‌کند
     /// </summary>
     """
-    return await execute_start_crawl(request, background_tasks)
+    return await execute_start_crawl(request)
 
 
 @router.get(

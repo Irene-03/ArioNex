@@ -26,3 +26,5 @@ beautifulsoup4>=4.12.3
 lxml>=5.2.2
 playwright>=1.44.0
 robotexclusionrulesparser>=1.7.1
+celery[redis]>=5.3.6
+redis>=5.0.1
