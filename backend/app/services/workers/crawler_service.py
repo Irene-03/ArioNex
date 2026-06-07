@@ -390,12 +390,56 @@ def _index_chunks_in_db(chunks: list, label: str, source_url: str, job_id: str) 
     return indexed
 
 
+def _is_job_cancelled(job_id: str) -> bool:
+    """
+    /// <summary>
+    /// بررسی وضعیت لغو کار از دیتابیس
+    /// </summary>
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT status FROM crawler_jobs WHERE job_id = %s", (job_id,))
+            row = cur.fetchone()
+            if row and row["status"] == "cancelled":
+                return True
+    except Exception as e:
+        logger.error(f"Failed to check job cancellation for {job_id}: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+    return False
+
+
+def _get_embedding_with_retry(text: str, max_retries: int = 5, backoff_factor: float = 2.0) -> list:
+    """
+    /// <summary>
+    /// محاسبه امبدینگ متن با سیستم تلاش مجدد با تاخیر افزایشی (Exponential Backoff Retry) برای مقابله با خطای انقضا/محدودیت API
+    /// </summary>
+    """
+    import time
+    delay = 1.0
+    for attempt in range(max_retries):
+        try:
+            return get_embedding(text)
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise e
+            logger.warning(
+                f"Embedding API call failed (attempt {attempt + 1}/{max_retries}). "
+                f"Retrying in {delay:.1f}s... Error: {str(e)}"
+            )
+            time.sleep(delay)
+            delay *= backoff_factor
+
+
 def _commit_staged_data(job_id: str, label: str) -> int:
     """
     /// <summary>
-    /// تراکنش نهایی انتقال داده‌های موقت کرال شده از MinIO به جدول نهایی در Postgres
+    /// انتقال اتمیک داده‌های موقت کرالر از MinIO به Postgres به روش Blue-Green Indexing در قالب میکروبچ‌های بهینه
     /// </summary>
-    /// <returns>تعداد چانک‌های با موفقیت ایندکس شده</returns>
+    /// <returns>تعداد کل چانک‌های با موفقیت ایندکس شده</returns>
     """
     prefix = f"crawl-staging/{job_id}/"
     staged_files = storage_manager.list_objects(prefix)
@@ -403,67 +447,103 @@ def _commit_staged_data(job_id: str, label: str) -> int:
         logger.warning(f"[CrawlerJob:{job_id}] No staged files found to commit.")
         return 0
 
-    logger.info(f"[CrawlerJob:{job_id}] Found {len(staged_files)} staged files. Beginning bulk commit...")
+    logger.info(f"[CrawlerJob:{job_id}] Found {len(staged_files)} staged files. Committing via Blue-Green Micro-batches...")
 
-    chunks_to_insert = []
+    temp_label = f"crawled_temp:{job_id}"
+    batch_size = 20
+    total_indexed = 0
 
-    # خواندن تمام داده‌ها از MinIO/Local
-    for file_path in staged_files:
-        try:
-            content_bytes = storage_manager.get_object_data(file_path)
-            data = json.loads(content_bytes.decode("utf-8"))
-            for idx, chunk in enumerate(data.get("chunks", [])):
-                chunks_to_insert.append({
-                    "content": chunk,
-                    "url": data.get("url"),
-                    "sequence_id": idx + 1
-                })
-        except Exception as e:
-            logger.error(f"[CrawlerJob:{job_id}] Failed to read staging file {file_path}: {str(e)}")
-            raise e
-
-    if not chunks_to_insert:
-        logger.warning(f"[CrawlerJob:{job_id}] No chunks found in staged files.")
-        return 0
-
-    logger.info(f"[CrawlerJob:{job_id}] Generating embeddings for {len(chunks_to_insert)} chunks...")
-
-    # محاسبه امبدینگ‌ها خارج از تراکنش دیتابیس جهت ممانعت از ایجاد قفل طولانی‌مدت
-    embeddings_data = []
-    for item in chunks_to_insert:
-        try:
-            emb = get_embedding(item["content"])
-            embeddings_data.append((item["content"], emb, label, 0, item["sequence_id"]))
-        except Exception as e:
-            logger.error(f"[CrawlerJob:{job_id}] Embedding generation failed for chunk: {str(e)}")
-            raise e
-
-    # درج اتمیک و اتمیک حذف داده‌های قدیمی
-    conn = None
     try:
-        conn = get_db_connection()
-        with conn.cursor() as cur:
-            logger.info(f"[CrawlerJob:{job_id}] Deleting old chunks with label '{label}'")
-            cur.execute("DELETE FROM pg_supervisor WHERE label = %s", (label,))
+        # پردازش دسته‌ای فایل‌ها برای جلوگیری از مصرف زیاد RAM (OOM) و قفل طولانی مدت دیتابیس
+        for i in range(0, len(staged_files), batch_size):
+            # بررسی اینکه آیا حین فرآیند کامیت طولانی، دستور لغو صادر شده است
+            if _is_job_cancelled(job_id):
+                logger.info(f"[CrawlerJob:{job_id}] Cancellation detected during commit batches. Aborting commit.")
+                raise InterruptedError("Job was cancelled by the user during database commit.")
 
-            logger.info(f"[CrawlerJob:{job_id}] Bulk inserting {len(embeddings_data)} new chunks...")
-            cur.executemany(
-                """
-                INSERT INTO pg_supervisor (content, embedding, label, file_id, sequence_id)
-                VALUES (%s, %s::vector, %s, %s, %s)
-                """,
-                embeddings_data
-            )
-            conn.commit()
-            logger.info(f"[CrawlerJob:{job_id}] Successfully committed all chunks to Postgres.")
-    except Exception as e:
-        logger.error(f"[CrawlerJob:{job_id}] Database transaction failed, rolling back. Error: {str(e)}")
-        if conn:
-            conn.rollback()
-        raise e
-    finally:
-        if conn:
-            conn.close()
+            batch_files = staged_files[i:i + batch_size]
+            chunks_to_insert = []
+
+            for file_path in batch_files:
+                try:
+                    content_bytes = storage_manager.get_object_data(file_path)
+                    data = json.loads(content_bytes.decode("utf-8"))
+                    for idx, chunk in enumerate(data.get("chunks", [])):
+                        chunks_to_insert.append({
+                            "content": chunk,
+                            "sequence_id": idx + 1
+                        })
+                except Exception as e:
+                    logger.error(f"[CrawlerJob:{job_id}] Failed to read/parse staging file {file_path}: {str(e)}")
+                    raise e
+
+            if not chunks_to_insert:
+                continue
+
+            # تولید امبدینگ با مکانیزم ارتجاعی Retry
+            embeddings_data = []
+            for item in chunks_to_insert:
+                emb = _get_embedding_with_retry(item["content"])
+                embeddings_data.append((item["content"], emb, temp_label, 0, item["sequence_id"]))
+
+            # درج دسته‌ای موقت با باز و بسته کردن سریع تراکنش برای ممانعت از قفل دیتابیس
+            conn = None
+            try:
+                conn = get_db_connection()
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        """
+                        INSERT INTO pg_supervisor (content, embedding, label, file_id, sequence_id)
+                        VALUES (%s, %s::vector, %s, %s, %s)
+                        """,
+                        embeddings_data
+                    )
+                    conn.commit()
+                total_indexed += len(embeddings_data)
+            except Exception as db_err:
+                logger.error(f"[CrawlerJob:{job_id}] Staging insert failed in micro-batch: {str(db_err)}")
+                if conn:
+                    conn.rollback()
+                raise db_err
+            finally:
+                if conn:
+                    conn.close()
+
+        # مرحله نهایی سوئیچ Blue-Green: حذف چانک‌های قدیمی و تبدیل چانک‌های موقت به چانک‌های اصلی در تراکنش اتمیک فوق‌العاده سریع
+        conn = None
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                logger.info(f"[CrawlerJob:{job_id}] Performing Blue-Green index switch for label '{label}'")
+                cur.execute("DELETE FROM pg_supervisor WHERE label = %s", (label,))
+                cur.execute("UPDATE pg_supervisor SET label = %s WHERE label = %s", (label, temp_label))
+                conn.commit()
+            logger.info(f"[CrawlerJob:{job_id}] Successfully performed Blue-Green switch. Committed {total_indexed} chunks.")
+        except Exception as switch_err:
+            logger.error(f"[CrawlerJob:{job_id}] Blue-Green switch transaction failed: {str(switch_err)}")
+            if conn:
+                conn.rollback()
+            raise switch_err
+        finally:
+            if conn:
+                conn.close()
+
+    except Exception as commit_err:
+        logger.error(f"[CrawlerJob:{job_id}] Commit failed. Cleaning up temporary chunks... Error: {str(commit_err)}")
+        # تمیز کردن تمام داده‌های موقت ثبت شده با برچسب temp_label در صورت شکست کل فرآیند
+        conn = None
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM pg_supervisor WHERE label = %s", (temp_label,))
+                conn.commit()
+            logger.info(f"[CrawlerJob:{job_id}] Cleaned up temporary database records for '{temp_label}'")
+        except Exception as clean_err:
+            logger.error(f"[CrawlerJob:{job_id}] Database cleanup failed for '{temp_label}': {str(clean_err)}")
+        finally:
+            if conn:
+                conn.close()
+        raise commit_err
 
     # پاکسازی فایل‌های موقت در MinIO
     try:
@@ -472,7 +552,7 @@ def _commit_staged_data(job_id: str, label: str) -> int:
     except Exception as e:
         logger.warning(f"[CrawlerJob:{job_id}] Staging cleanup failed: {str(e)}")
 
-    return len(embeddings_data)
+    return total_indexed
 
 
 class CrawlerService:
@@ -513,6 +593,11 @@ class CrawlerService:
         base_domain = urlparse(url).netloc.lower().lstrip("www.")
         effective_label = label or f"crawled:{base_domain}"
 
+        # بررسی سیگنال لغو کار
+        if _is_job_cancelled(job_id):
+            logger.info(f"[CrawlerJob:{job_id}] Job cancelled before starting BFS.")
+            return
+
         # بررسی robots.txt ریشه با پروکسی تصادفی اولیه
         initial_proxy = _proxy_provider.get_proxy()
         if respect_robots and not _check_robots_txt_sync(url, url, proxy=initial_proxy):
@@ -535,6 +620,15 @@ class CrawlerService:
         delay_s = settings.crawler.request_delay_ms / 1000.0
 
         while queue and pages_crawled < max_pages:
+            # بررسی سیگنال لغو در آغاز هر لوپ BFS
+            if _is_job_cancelled(job_id):
+                logger.info(f"[CrawlerJob:{job_id}] Cancellation signal detected in BFS loop. Terminating gracefully...")
+                try:
+                    storage_manager.delete_objects_in_prefix(f"crawl-staging/{job_id}/")
+                except Exception as clean_err:
+                    logger.warning(f"[CrawlerJob:{job_id}] Failed to clean up staged files: {str(clean_err)}")
+                return
+
             batch = []
             while queue and len(batch) < concurrency:
                 batch.append(queue.popleft())
@@ -543,9 +637,12 @@ class CrawlerService:
                 nonlocal pages_crawled, chunks_total, pages_failed
 
                 async with semaphore:
+                    # بررسی سیگنال لغو قبل از اجرای هر تسک صفحه‌ای
+                    if _is_job_cancelled(job_id):
+                        return
+
                     await asyncio.sleep(delay_s)
 
-                    # انتخاب تصادفی User-Agent و پروکسی مجزا برای این درخواست
                     ua = random.choice(_USER_AGENTS)
                     prx = _proxy_provider.get_proxy()
 
@@ -576,7 +673,6 @@ class CrawlerService:
                         pages_failed += 1
                         return
 
-                    # نرمال‌سازی و فیلتر اطلاعات شخصی
                     normalized = normalize_text(raw_text)
                     if settings.security.pii_redaction:
                         normalized = redact_text(normalized)
@@ -587,7 +683,7 @@ class CrawlerService:
                         pages_failed += 1
                         return
 
-                    # ذخیره داده‌های صفحه و قطعات به صورت موقت در MinIO (Transactional Staging)
+                    # ذخیره موقت در MinIO
                     page_hash = hashlib.md5(page_url.encode()).hexdigest()
                     object_name = f"crawl-staging/{job_id}/{page_hash}.json"
                     payload = {
@@ -609,7 +705,6 @@ class CrawlerService:
                     pages_crawled += 1
                     chunks_total += len(chunks)
 
-                    # آپدیت موقت پیشرفت کار برای اطلاع فرانت‌اند
                     _update_job_in_db(
                         job_id,
                         pages_crawled=pages_crawled,
@@ -622,7 +717,7 @@ class CrawlerService:
                         f"(total pages={pages_crawled}, chunks={chunks_total})"
                     )
 
-                    # کشف لینک‌های جدید برای BFS
+                    # کشف لینک‌های جدید
                     if depth < max_depth and pages_crawled < max_pages:
                         for link in page_data["outgoing_links"]:
                             normalized_link = _normalize_url(link)
@@ -638,17 +733,23 @@ class CrawlerService:
                                 if score < 0.85:
                                     continue
 
-                            # بررسی robots.txt با پروکسی چرخشی
                             if respect_robots and not _check_robots_txt_sync(url, normalized_link, proxy=prx):
                                 continue
 
                             visited.add(normalized_link)
                             queue.append((normalized_link, depth + 1))
 
-            # اجرای همزمان بچ
             await asyncio.gather(*[process_page(pu, d) for pu, d in batch])
 
-        # انجام تراکنش نهایی انتقال اطلاعات از MinIO به Postgres
+        # پس از BFS بررسی سیگنال لغو
+        if _is_job_cancelled(job_id):
+            logger.info(f"[CrawlerJob:{job_id}] Cancellation detected post-BFS. Skipping commit.")
+            try:
+                storage_manager.delete_objects_in_prefix(f"crawl-staging/{job_id}/")
+            except Exception as clean_err:
+                logger.warning(f"[CrawlerJob:{job_id}] Failed to clean up staged files: {str(clean_err)}")
+            return
+
         committed_chunks = 0
         if pages_crawled > 0:
             try:
@@ -667,7 +768,6 @@ class CrawlerService:
         else:
             final_status = "failed"
 
-        # به‌روزرسانی نهایی وضعیت کار در دیتابیس
         _update_job_in_db(
             job_id,
             status=final_status,
