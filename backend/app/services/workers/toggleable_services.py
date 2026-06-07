@@ -23,7 +23,7 @@ logger = logging.getLogger("arionex.toggleable_services")
 def _clean_and_parse_json(text: str) -> dict:
     """
     /// <summary>
-    /// پاکسازی و پارس امن خروجی مدل زبانی به صورت JSON معتبر
+    /// پاکسازی و پارس امن خروجی مدل زبانی به صورت JSON معتبر با قابلیت بازیابی جیسان‌های شکسته
     /// </summary>
     """
     cleaned = text.strip()
@@ -32,7 +32,18 @@ def _clean_and_parse_json(text: str) -> dict:
         cleaned = re.sub(r"^```[a-zA-Z]*\n", "", cleaned)
         cleaned = re.sub(r"\n```$", "", cleaned)
     cleaned = cleaned.strip()
-    return json.loads(cleaned)
+    
+    try:
+        return json.loads(cleaned)
+    except Exception as std_json_err:
+        try:
+            from json_repair import repair_json
+            repaired = repair_json(cleaned)
+            return json.loads(repaired)
+        except Exception as repair_err:
+            logger.error(f"Failed to parse and repair JSON. Standard error: {str(std_json_err)}. Repair error: {str(repair_err)}")
+            raise repair_err
+
 
 
 class EntityExtractorWorker:
@@ -137,6 +148,9 @@ class EntityExtractorWorker:
                         """
                         INSERT INTO extracted_entities (name, type, description, file_id)
                         VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (file_id, name) DO UPDATE SET
+                            type = EXCLUDED.type,
+                            description = EXCLUDED.description
                         """,
                         (ent.get("name"), ent.get("type"), ent.get("description"), file_id)
                     )
@@ -146,6 +160,8 @@ class EntityExtractorWorker:
                         """
                         INSERT INTO extracted_relationships (source, target, relationship, description, file_id)
                         VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (file_id, source, target, relationship) DO UPDATE SET
+                            description = EXCLUDED.description
                         """,
                         (rel.get("source"), rel.get("target"), rel.get("relationship"), rel.get("description"), file_id)
                     )
@@ -278,6 +294,10 @@ class RuleExtractorWorker:
                         """
                         INSERT INTO extracted_rules (rule_code, clause, type, description, file_id)
                         VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (file_id, rule_code) DO UPDATE SET
+                            clause = EXCLUDED.clause,
+                            type = EXCLUDED.type,
+                            description = EXCLUDED.description
                         """,
                         (rule.get("rule_code"), rule.get("clause"), rule.get("type"), rule.get("description"), file_id)
                     )
