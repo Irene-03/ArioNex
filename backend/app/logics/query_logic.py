@@ -46,7 +46,8 @@ async def execute_query_logic(request: QueryRequest) -> QueryResponse:
             user_input=request.query,
             chat_history=chat_history,
             threshold=0.4,
-            k=4
+            k=4,
+            file_ids=request.file_ids
         )
 
         # ثبت در سیستم ممیزی مرکزی (خطا باعث قطع پاسخ نمی‌شود)
