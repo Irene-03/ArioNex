@@ -16,7 +16,7 @@ from telegram import Update
 from telegram.ext import Application, ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 from app.core.config import settings
-from app.services.retrieval.synthesizer import synthesize_rag_response
+from app.services.retrieval import synthesize_rag_response
 
 logger = logging.getLogger("arionex.telegram_bot")
 

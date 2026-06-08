@@ -55,7 +55,7 @@ class EntityExtractorWorker:
     def __init__(self):
         self.is_enabled = settings.services.entity_extractor
 
-    def extract_entities(self, text: str, file_id: int) -> dict:
+    def extract_entities(self, text: str, file_id: Optional[int] = None) -> dict:
         """
         /// <summary>
         /// استخراج خودکار موجودیت‌ها و روابط بین آن‌ها از متن با استفاده از LLM یا Fallback Mock
@@ -196,7 +196,7 @@ class RuleExtractorWorker:
     def __init__(self):
         self.is_enabled = settings.services.rule_extractor
 
-    def extract_rules(self, text: str, file_id: int) -> list:
+    def extract_rules(self, text: str, file_id: Optional[int] = None) -> list:
         """
         /// <summary>
         /// شناسایی و استخراج بندهای قانونی و شروط انطباق با استفاده از LLM یا Fallback Mock
@@ -290,6 +290,24 @@ class RuleExtractorWorker:
             conn = get_db_connection()
             with conn.cursor() as cur:
                 for rule in extracted_rules:
+                    rule_code = rule.get("rule_code")
+                    clause = rule.get("clause") or ""
+                    
+                    # پاکسازی و هندل کردن کدهای تکراری/جنریک برای جلوگیری از Overwrite بندهای متفاوت
+                    if not rule_code or rule_code.strip() == "":
+                        import hashlib
+                        clause_hash = hashlib.md5(clause.encode('utf-8')).hexdigest()[:8]
+                        rule_code = f"RULE-{clause_hash.upper()}"
+                    else:
+                        rule_code = rule_code.strip()
+                        # اگر کد قانون خیلی جنریک بود (مثل RULE-1 یا POLICY-2)، هش بند را به آن اضافه می‌کنیم تا با بندهای دیگر تداخل نکند
+                        generic_patterns = [r"^rule-?\d+$", r"^policy-?\d+$", r"^clause-?\d+$", r"^قانون-?\d+$", r"^بند-?\d+$"]
+                        is_generic = any(re.match(pattern, rule_code.lower()) for pattern in generic_patterns)
+                        if is_generic:
+                            import hashlib
+                            clause_hash = hashlib.md5(clause.encode('utf-8')).hexdigest()[:8]
+                            rule_code = f"{rule_code}-{clause_hash.upper()}"
+
                     cur.execute(
                         """
                         INSERT INTO extracted_rules (rule_code, clause, type, description, file_id)
@@ -299,7 +317,7 @@ class RuleExtractorWorker:
                             type = EXCLUDED.type,
                             description = EXCLUDED.description
                         """,
-                        (rule.get("rule_code"), rule.get("clause"), rule.get("type"), rule.get("description"), file_id)
+                        (rule_code, clause, rule.get("type"), rule.get("description"), file_id)
                     )
                 conn.commit()
                 logger.info(f"[Toggleable Service] Successfully saved {len(extracted_rules)} rules to Postgres for file_id={file_id}.")

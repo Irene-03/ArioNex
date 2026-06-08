@@ -10,11 +10,12 @@ import os
 # اضافه کردن مسیر پروژه جهت شناسایی پکیج app
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
-from app.services.retrieval.synthesizer import route_query_intent, synthesize_rag_response, STANDARD_REFUSAL_MESSAGE
+from app.services.retrieval.query_router import route_query_intent, synthesize_rag_response
+from app.prompts.rag_prompts import STANDARD_REFUSAL_MESSAGE
 from app.services.retrieval.query_rewriter import rewrite_query
 from app.services.retrieval.analyst import analyst_agent
-from app.services.retrieval.librarian import librarian_agent
-from app.services.retrieval.support_lead import support_lead_agent
+from app.services.retrieval.vector_search import vector_search_agent as librarian_agent
+from app.services.retrieval.qna import qna_agent as support_lead_agent
 
 def test_query_intent_routing():
     print("Testing Query Intent Routing...")
@@ -58,7 +59,7 @@ def test_analyst_graph_execution():
     response = analyst_agent.execute_analysis(query)
     print(f"Query: {query} -> Response: {response}")
     
-    assert "۶۲۳,۳۴۶ ریال" in response, "Mock solver did not return correct sum!"
+    assert "۶۲۳,۳۴۶ ریال" in response or "۶۲۳،۳۴۶ ریال" in response, "Mock solver did not return correct sum!"
     print(" Analyst Agent checks PASSED.\n")
 
 def test_golden_hallucination_guardrail():

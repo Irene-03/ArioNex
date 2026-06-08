@@ -191,18 +191,14 @@ class UnstructuredDocumentProcessor:
             
             # ۷. راه‌اندازی فرآیند استخراج دانش (موجودیت‌ها و قوانین) به صورت ناهمزمان در پس‌زمینه (Celery Tasks)
             if settings.services.entity_extractor or settings.services.rule_extractor:
-                logger.info(f"Splitting document text into semantic windows for background extraction. File ID: {file_id}")
-                text_windows = split_into_semantic_windows(redacted_text, window_size=3000, overlap=500)
-                logger.info(f"Dispatched {len(text_windows)} semantic windows for file_id={file_id}.")
-                
-                for window in text_windows:
-                    if settings.services.entity_extractor:
-                        from app.tasks.extractor_tasks import run_extract_entities_task
-                        run_extract_entities_task.delay(window, file_id)
-                        
-                    if settings.services.rule_extractor:
-                        from app.tasks.extractor_tasks import run_extract_rules_task
-                        run_extract_rules_task.delay(window, file_id)
+                logger.info(f"Dispatching background consolidated knowledge extraction task for file_id={file_id}...")
+                from app.tasks.extractor_tasks import run_knowledge_extraction_pipeline_task
+                run_knowledge_extraction_pipeline_task.delay(
+                    text=redacted_text,
+                    file_id=file_id,
+                    run_entities=settings.services.entity_extractor,
+                    run_rules=settings.services.rule_extractor
+                )
             
             return {
                 "status": "success",

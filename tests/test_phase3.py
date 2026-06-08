@@ -77,7 +77,8 @@ def test_toggleable_services():
     print(f"Mock Neo4j Insert returns: {neo_inserted}")
     print(f"Mock Local Gemma audit returns: Query: {query_audited}, Response: {response_audited}")
     
-    assert len(entities) == 0
+    assert len(entities.get("entities", [])) == 0
+    assert len(entities.get("relationships", [])) == 0
     assert len(rules) == 0
     assert neo_inserted == False
     assert query_audited == True
