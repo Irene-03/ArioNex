@@ -120,7 +120,6 @@ def init_db() -> None:
             last_used_at TIMESTAMP
         );
         """,
-
         # ۷. جدول ردیابی Job‌های کرالر وب (Web Crawler Jobs)
         """
         CREATE TABLE IF NOT EXISTS crawler_jobs (
@@ -169,6 +168,57 @@ def init_db() -> None:
             key VARCHAR(100) PRIMARY KEY,
             prompt TEXT NOT NULL,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """,
+        # ۱۱. جدول موجودیت‌های استخراج شده برای گراف دانش (Extracted Entities)
+        """
+        CREATE TABLE IF NOT EXISTS extracted_entities (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            type VARCHAR(100),
+            description TEXT,
+            file_id INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (file_id, name)
+        );
+        """,
+        # ۱۲. جدول روابط بین موجودیت‌ها برای گراف دانش (Extracted Relationships)
+        """
+        CREATE TABLE IF NOT EXISTS extracted_relationships (
+            id SERIAL PRIMARY KEY,
+            source VARCHAR(255) NOT NULL,
+            target VARCHAR(255) NOT NULL,
+            relationship VARCHAR(255),
+            description TEXT,
+            file_id INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (file_id, source, target, relationship)
+        );
+        """,
+        # ۱۳. جدول قوانین و آیین‌نامه‌های استخراج شده (Extracted Compliance Rules)
+        """
+        CREATE TABLE IF NOT EXISTS extracted_rules (
+            id SERIAL PRIMARY KEY,
+            rule_code VARCHAR(100),
+            clause TEXT NOT NULL,
+            type VARCHAR(100),
+            description TEXT,
+            file_id INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (file_id, rule_code)
+        );
+        """,
+        # ۱۴. جدول گزارش‌های ممیزی انطباق قوانین (Compliance Audit Logs)
+        """
+        CREATE TABLE IF NOT EXISTS compliance_audit_logs (
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            file_id INT,
+            query_text TEXT,
+            response_text TEXT,
+            is_compliant BOOLEAN NOT NULL,
+            violations TEXT,
+            audit_report TEXT
         );
         """
     ]

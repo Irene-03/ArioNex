@@ -12,7 +12,7 @@ celery_app = Celery(
     "arionex",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.crawler_task"]
+    include=["app.tasks.crawler_task", "app.tasks.extractor_tasks"]
 )
 
 # تنظیمات اضافی برای پایداری و بهبود کارایی

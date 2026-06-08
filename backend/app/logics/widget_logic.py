@@ -61,7 +61,8 @@ async def execute_widget_logic(request: QueryRequest) -> QueryResponse:
             user_input=request.query,
             chat_history=history,
             threshold=0.4,
-            k=4
+            k=4,
+            file_ids=request.file_ids
         )
 
         # ۳. به‌روزرسانی تاریخچه نشست

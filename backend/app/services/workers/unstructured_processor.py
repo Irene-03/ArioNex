@@ -22,6 +22,32 @@ from app.services.safety.pii_redactor import redact_text
 
 logger = logging.getLogger("arionex.unstructured_processor")
 
+
+def split_into_semantic_windows(text: str, window_size: int = 3000, overlap: int = 500) -> list:
+    """
+    /// <summary>
+    /// تقسیم متون بزرگ به پنجره‌های معنایی با اندازه و همپوشانی مشخص
+    /// </summary>
+    """
+    if len(text) <= window_size:
+        return [text]
+        
+    windows = []
+    start = 0
+    while start < len(text):
+        end = start + window_size
+        chunk = text[start:end]
+        windows.append(chunk)
+        start += (window_size - overlap)
+        if start >= len(text) - overlap:
+            break
+            
+    if start < len(text):
+        windows.append(text[start:])
+        
+    return windows
+
+
 class UnstructuredDocumentProcessor:
     """
     /// <summary>
@@ -162,6 +188,18 @@ class UnstructuredDocumentProcessor:
                 
                 conn.commit()
             logger.info(f"Successfully processed and indexed {chunks_indexed} chunks for file '{original_filename}'.")
+            
+            # ۷. راه‌اندازی فرآیند استخراج دانش (موجودیت‌ها و قوانین) به صورت ناهمزمان در پس‌زمینه (Celery Tasks)
+            if settings.services.entity_extractor or settings.services.rule_extractor:
+                logger.info(f"Dispatching background consolidated knowledge extraction task for file_id={file_id}...")
+                from app.tasks.extractor_tasks import run_knowledge_extraction_pipeline_task
+                run_knowledge_extraction_pipeline_task.delay(
+                    text=redacted_text,
+                    file_id=file_id,
+                    run_entities=settings.services.entity_extractor,
+                    run_rules=settings.services.rule_extractor
+                )
+            
             return {
                 "status": "success",
                 "chunks_count": chunks_indexed,

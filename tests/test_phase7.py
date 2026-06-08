@@ -57,12 +57,13 @@ def main():
     print("STARTING ARIOPLEX GLOBAL INTEGRATION TESTS")
     print("=========================================")
     
-    # لیست سناریوهای تستی فازهای ۲ تا ۵
+    # لیست سناریوهای تستی فازهای ۲ تا ۵ و فاز ۸
     test_suites = [
         "test_phase2.py",
         "test_phase3.py",
         "test_phase4.py",
-        "test_phase5.py"
+        "test_phase5.py",
+        "test_phase8.py"
     ]
     
     success_count = 0

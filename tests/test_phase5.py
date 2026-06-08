@@ -37,72 +37,77 @@ def test_fastapi_endpoints(mock_get_db):
     mock_get_db.return_value = mock_conn
 
     print("Testing REST API Endpoints...")
+    from app.helpers.auth import verify_api_key
+    app.dependency_overrides[verify_api_key] = lambda: "test_user"
     
-    # ۱. تست اندپوینت سلامت سیستم
-    response = client.get("/health")
-    print(f"GET /health: {response.status_code}")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "online"
-    assert "telegram_bot" in data["active_features"]
-    
-    # ۲. تست دریافت فیچر تاگل‌ها
-    response = client.get("/v1/config")
-    print(f"GET /v1/config: {response.status_code}")
-    assert response.status_code == 200
-    config_data = response.json()
-    assert "services" in config_data
-    assert "integrations" in config_data
-    
-    # ۳. تست تغییر پویای تنظیمات
-    update_payload = {
-        "services": {"entity_extractor": True},
-        "integrations": {"telegram_bot": False}
-    }
-    response = client.post("/v1/config", json=update_payload)
-    print(f"POST /v1/config: {response.status_code}")
-    assert response.status_code == 200
-    res_json = response.json()
-    assert res_json["status"] == "success"
-    
-    # بازیابی تنظیمات به حالت اولیه
-    restore_payload = {
-        "services": {"entity_extractor": False},
-        "integrations": {"telegram_bot": True}
-    }
-    client.post("/v1/config", json=restore_payload)
-    
-    # ۴. تست دریافت اسکریپت ابزارک چت وب‌سایت
-    response = client.get("/v1/widget.js")
-    print(f"GET /v1/widget.js: {response.status_code}")
-    assert response.status_code == 200
-    assert "arionex-widget-bubble" in response.text
-    assert "application/javascript" in response.headers["content-type"]
-    
-    # ۵. تست اندپوینت ثبت پیام ابزارک چت
-    chat_payload = {
-        "query": "مجموع بدهکاری اسناد نوع چک چقدر است؟",
-        "session_id": "test_widget_session"
-    }
-    response = client.post("/v1/widget/chat", json=chat_payload)
-    print(f"POST /v1/widget/chat: {response.status_code}")
-    assert response.status_code == 200
-    chat_response = response.json()
-    assert "answer" in chat_response
-    assert "sources" in chat_response
-    
-    # ۶. تست اندپوینت ثبت پرسش عمومی RAG
-    query_payload = {
-        "query": "قوانین استخدام شرکت چیست؟",
-        "session_id": "test_rest_session"
-    }
-    response = client.post("/v1/query", json=query_payload)
-    print(f"POST /v1/query: {response.status_code}")
-    assert response.status_code == 200
-    query_response = response.json()
-    assert "answer" in query_response
-    
-    print(" REST API Endpoints checks PASSED.\n")
+    try:
+        # ۱. تست اندپوینت سلامت سیستم
+        response = client.get("/health")
+        print(f"GET /health: {response.status_code}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "online"
+        assert "telegram_bot" in data["active_features"]
+        
+        # ۲. تست دریافت فیچر تاگل‌ها
+        response = client.get("/v1/config")
+        print(f"GET /v1/config: {response.status_code}")
+        assert response.status_code == 200
+        config_data = response.json()
+        assert "services" in config_data
+        assert "integrations" in config_data
+        
+        # ۳. تست تغییر پویای تنظیمات
+        update_payload = {
+            "services": {"entity_extractor": True},
+            "integrations": {"telegram_bot": False}
+        }
+        response = client.post("/v1/config", json=update_payload)
+        print(f"POST /v1/config: {response.status_code}")
+        assert response.status_code == 200
+        res_json = response.json()
+        assert res_json["status"] == "success"
+        
+        # بازیابی تنظیمات به حالت اولیه
+        restore_payload = {
+            "services": {"entity_extractor": False},
+            "integrations": {"telegram_bot": True}
+        }
+        client.post("/v1/config", json=restore_payload)
+        
+        # ۴. تست دریافت اسکریپت ابزارک چت وب‌سایت
+        response = client.get("/v1/widget.js")
+        print(f"GET /v1/widget.js: {response.status_code}")
+        assert response.status_code == 200
+        assert "arionex-widget-bubble" in response.text
+        assert "application/javascript" in response.headers["content-type"]
+        
+        # ۵. تست اندپوینت ثبت پیام ابزارک چت
+        chat_payload = {
+            "query": "مجموع بدهکاری اسناد نوع چک چقدر است؟",
+            "session_id": "test_widget_session"
+        }
+        response = client.post("/v1/widget/chat", json=chat_payload)
+        print(f"POST /v1/widget/chat: {response.status_code}")
+        assert response.status_code == 200
+        chat_response = response.json()
+        assert "answer" in chat_response
+        assert "sources" in chat_response
+        
+        # ۶. تست اندپوینت ثبت پرسش عمومی RAG
+        query_payload = {
+            "query": "قوانین استخدام شرکت چیست؟",
+            "session_id": "test_rest_session"
+        }
+        response = client.post("/v1/query", json=query_payload)
+        print(f"POST /v1/query: {response.status_code}")
+        assert response.status_code == 200
+        query_response = response.json()
+        assert "answer" in query_response
+        
+        print(" REST API Endpoints checks PASSED.\n")
+    finally:
+        app.dependency_overrides.clear()
 
 def test_telegram_bot_session_manager():
     print("Testing Telegram Bot Session Manager...")

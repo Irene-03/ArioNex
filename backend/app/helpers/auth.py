@@ -11,7 +11,7 @@
 import logging
 from typing import Optional
 from fastapi import Header, Security, HTTPException, status
-from fastapi.security import APIKeyHeader, HTTPBearer
+from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
 
 from app.core.database import get_db_connection
 
@@ -24,7 +24,7 @@ api_key_bearer_scheme = HTTPBearer(auto_error=False)
 
 async def verify_api_key(
     api_key_header: Optional[str] = Security(api_key_header_scheme),
-    api_key_bearer = Security(api_key_bearer_scheme),
+    api_key_bearer: Optional[HTTPAuthorizationCredentials] = Security(api_key_bearer_scheme),
 ) -> Optional[str]:
     """
     /// <summary>
@@ -36,9 +36,7 @@ async def verify_api_key(
     /// <exception cref="HTTPException">در صورت نامعتبر بودن یا فعال نبودن کلید</exception>
     """
     # استخراج کلید نهایی از یکی از دو روش مجاز
-    token = api_key_header
-    if not token and api_key_bearer:
-        token = api_key_bearer.credentials
+    token = api_key_header or (api_key_bearer.credentials if api_key_bearer else None)
 
     conn = None
     try:
