@@ -32,6 +32,7 @@ class ServiceToggles(BaseSettings):
     log_processor: bool = True
     structured_data_analytics: bool = True
     web_search: bool = True
+    web_crawler: bool = True
     entity_extractor: bool = False
     rule_extractor: bool = False
     neo4j: bool = False
@@ -61,6 +62,28 @@ class IntegrationToggles(BaseSettings):
     telegram_bot: bool = True
     popup_widget: bool = True
     rest_api: bool = True
+
+class CrawlerSettings(BaseSettings):
+    """
+    /// <summary>
+    /// تنظیمات رفتاری موتور کرالر وب آریونکس
+    /// </summary>
+    /// <remarks>
+    /// این کلاس تنظیمات قابل‌تنظیم کرالر را نگه می‌دارد:
+    ///   - js_render: آیا صفحات JavaScript-rendered (React/Vue) رندر شوند؟
+    ///   - follow_external_domains: آیا لینک‌های خارجی (خارج از دامنه اصلی) دنبال شوند؟
+    ///   - default_max_pages: حداکثر صفحات پیش‌فرض برای هر job
+    ///   - default_max_depth: حداکثر عمق پیش‌فرض برای هر job
+    ///   - request_delay_ms: تاخیر بین هر درخواست HTTP (میلی‌ثانیه)
+    /// </remarks>
+    """
+    js_render: bool = False
+    follow_external_domains: bool = False
+    default_max_pages: int = 50
+    default_max_depth: int = 3
+    default_concurrency: int = 5
+    request_delay_ms: int = 300
+    proxy_pool: list[str] = []
 
 class SecuritySettings(BaseSettings):
     """
@@ -121,11 +144,14 @@ class Settings(BaseSettings):
     
     telegram_bot_token: str = Field(default="", validation_alias="TELEGRAM_BOT_TOKEN")
     
+    redis_url: str = Field(default="redis://localhost:6379/0", validation_alias="REDIS_URL")
+    
     # تنظیمات داینامیک لود شده از config.yaml
     services: ServiceToggles = ServiceToggles()
     providers: ProviderToggles = ProviderToggles()
     integrations: IntegrationToggles = IntegrationToggles()
     security: SecuritySettings = SecuritySettings()
+    crawler: CrawlerSettings = CrawlerSettings()
 
     model_config = SettingsConfigDict(
         env_file=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"),
@@ -183,6 +209,18 @@ def load_settings() -> Settings:
                         for k, v in yaml_data["security"].items()
                     }
                     settings_obj.security = SecuritySettings(**security_data)
+
+                # ادغام تنظیمات موتور کرالر وب
+                if "crawler" in yaml_data:
+                    crawler_raw = yaml_data["crawler"]
+                    crawler_data = {}
+                    for k, v in crawler_raw.items():
+                        if isinstance(v, dict):
+                            # پشتیبانی از فرمت {enabled: true} یا {value: 300}
+                            crawler_data[k] = v.get("value", v.get("enabled", True))
+                        else:
+                            crawler_data[k] = v
+                    settings_obj.crawler = CrawlerSettings(**crawler_data)
                     
             logger.info("Successfully loaded dynamic feature toggles from config.yaml")
         except Exception as e:

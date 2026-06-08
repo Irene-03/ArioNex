@@ -165,6 +165,141 @@ class MinioStorageManager:
                 logger.error(f"Failed to download from MinIO: {str(e)}")
                 raise e
 
+    def put_object_data(
+        self,
+        object_name: str,
+        data: bytes,
+        content_type: str = "application/octet-stream"
+    ) -> str:
+        """
+        /// <summary>
+        /// ذخیره مستقیم داده باینری (Bytes) در MinIO یا فایل سیستم محلی
+        /// </summary>
+        """
+        if self.is_fallback:
+            dest_path = os.path.join(LOCAL_FALLBACK_DIR, object_name)
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            with open(dest_path, "wb") as f:
+                f.write(data)
+            mode = "local-data-dir" if _USE_LOCAL else "local-fallback"
+            logger.info(f"[{mode}] Saved object bytes: {object_name}")
+            return f"local://{object_name}"
+        else:
+            import io
+            try:
+                data_stream = io.BytesIO(data)
+                self.client.put_object(
+                    settings.minio_bucket_name,
+                    object_name,
+                    data_stream,
+                    len(data),
+                    content_type=content_type
+                )
+                logger.info(f"[MinIO Storage] Successfully uploaded object: {object_name}")
+                return f"minio://{settings.minio_bucket_name}/{object_name}"
+            except Exception as e:
+                logger.error(f"Failed to upload bytes to MinIO: {str(e)}. Falling back to local.")
+                dest_path = os.path.join(LOCAL_FALLBACK_DIR, object_name)
+                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                with open(dest_path, "wb") as f:
+                    f.write(data)
+                return f"local_emergency://{object_name}"
+
+    def get_object_data(self, object_name: str) -> bytes:
+        """
+        /// <summary>
+        /// دریافت داده باینری (Bytes) یک آبجکت از MinIO یا فایل سیستم محلی
+        /// </summary>
+        """
+        if self.is_fallback:
+            src_path = os.path.join(LOCAL_FALLBACK_DIR, object_name)
+            if os.path.exists(src_path):
+                with open(src_path, "rb") as f:
+                    return f.read()
+            else:
+                raise FileNotFoundError(f"Object not found in local fallback: {object_name}")
+        else:
+            try:
+                response = self.client.get_object(settings.minio_bucket_name, object_name)
+                try:
+                    return response.read()
+                finally:
+                    response.close()
+                    response.release_conn()
+            except Exception as e:
+                logger.error(f"Failed to read from MinIO: {str(e)}. Trying local fallback.")
+                src_path = os.path.join(LOCAL_FALLBACK_DIR, object_name)
+                if os.path.exists(src_path):
+                    with open(src_path, "rb") as f:
+                        return f.read()
+                raise e
+
+    def list_objects(self, prefix: str) -> list[str]:
+        """
+        /// <summary>
+        /// لیست کردن نام تمامی آبجکت‌ها تحت یک پیشوند (Prefix) مشخص
+        /// </summary>
+        """
+        if self.is_fallback:
+            prefix_dir = os.path.join(LOCAL_FALLBACK_DIR, prefix)
+            if not os.path.exists(prefix_dir):
+                return []
+            
+            found = []
+            for root, _, files in os.walk(prefix_dir):
+                for file in files:
+                    full_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(full_path, LOCAL_FALLBACK_DIR)
+                    found.append(rel_path.replace("\\", "/"))
+            return found
+        else:
+            try:
+                objects = self.client.list_objects(
+                    settings.minio_bucket_name,
+                    prefix=prefix,
+                    recursive=True
+                )
+                return [obj.object_name for obj in objects]
+            except Exception as e:
+                logger.error(f"Failed to list objects in MinIO for prefix {prefix}: {str(e)}")
+                # تلاش در فولدر لوکال
+                prefix_dir = os.path.join(LOCAL_FALLBACK_DIR, prefix)
+                if os.path.exists(prefix_dir):
+                    found = []
+                    for root, _, files in os.walk(prefix_dir):
+                        for file in files:
+                            full_path = os.path.join(root, file)
+                            rel_path = os.path.relpath(full_path, LOCAL_FALLBACK_DIR)
+                            found.append(rel_path.replace("\\", "/"))
+                    return found
+                return []
+
+    def delete_objects_in_prefix(self, prefix: str) -> None:
+        """
+        /// <summary>
+        /// حذف تمامی آبجکت‌های تحت یک پیشوند (Prefix) مشخص
+        /// </summary>
+        """
+        if self.is_fallback:
+            import shutil
+            prefix_dir = os.path.join(LOCAL_FALLBACK_DIR, prefix)
+            if os.path.exists(prefix_dir):
+                shutil.rmtree(prefix_dir)
+                logger.info(f"[Local Fallback] Deleted folder prefix: {prefix}")
+        else:
+            try:
+                objects = self.list_objects(prefix)
+                for obj_name in objects:
+                    self.client.remove_object(settings.minio_bucket_name, obj_name)
+                logger.info(f"[MinIO Storage] Deleted all objects under prefix: {prefix}")
+            except Exception as e:
+                logger.error(f"Failed to delete prefix {prefix} from MinIO: {str(e)}")
+                import shutil
+                prefix_dir = os.path.join(LOCAL_FALLBACK_DIR, prefix)
+                if os.path.exists(prefix_dir):
+                    shutil.rmtree(prefix_dir)
+
+
 
 # آبجکت سراسری مدیریت فیزیکی اسناد خام
 storage_manager = MinioStorageManager()

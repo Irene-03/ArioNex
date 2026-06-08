@@ -119,6 +119,29 @@ def init_db() -> None:
             is_active BOOLEAN DEFAULT TRUE,
             last_used_at TIMESTAMP
         );
+        """,
+
+        # ۷. جدول ردیابی Job‌های کرالر وب (Web Crawler Jobs)
+        """
+        CREATE TABLE IF NOT EXISTS crawler_jobs (
+            id SERIAL PRIMARY KEY,
+            job_id VARCHAR(64) UNIQUE NOT NULL,
+            url VARCHAR(2048) NOT NULL,
+            status VARCHAR(30) DEFAULT 'queued',
+            pages_crawled INT DEFAULT 0,
+            chunks_indexed INT DEFAULT 0,
+            pages_failed INT DEFAULT 0,
+            max_pages INT DEFAULT 50,
+            max_depth INT DEFAULT 3,
+            concurrency INT DEFAULT 5,
+            js_render BOOLEAN DEFAULT FALSE,
+            follow_external BOOLEAN DEFAULT FALSE,
+            label VARCHAR(255),
+            error_message TEXT,
+            widget_id INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         """
     ]
     

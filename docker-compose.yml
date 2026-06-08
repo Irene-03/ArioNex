@@ -45,6 +45,19 @@ services:
       timeout: 5s
       retries: 5
 
+  # صف پیام‌ها و حافظه موقت سلری (Redis Broker)
+  redis:
+    image: redis:7-alpine
+    container_name: arionex-redis
+    ports:
+      - "6379:6379"
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # وب‌سرور و موتور هوش مصنوعی بک‌اند (FastAPI Backend)
   backend:
     build: ./backend
@@ -59,6 +72,7 @@ services:
       - MINIO_ROOT_USER=admin
       - MINIO_ROOT_PASSWORD=admin123
       - MINIO_BUCKET_NAME=arionex-raw-files
+      - REDIS_URL=redis://redis:6379/0
       - OPENAI_API_KEY=mock_key
       - MODEL_NAME=gpt-4o-mini
       - TAVILY_API_KEY=
@@ -70,7 +84,37 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: always
+
+  # پردازشگر پس‌زمینه تسک‌های غیرهمزمان کرالر (Celery Worker)
+  celery_worker:
+    build: ./backend
+    container_name: arionex-celery-worker
+    command: celery -A app.core.celery_app worker --loglevel=info
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=admin123
+      - MINIO_BUCKET_NAME=arionex-raw-files
+      - REDIS_URL=redis://redis:6379/0
+      - OPENAI_API_KEY=mock_key
+      - MODEL_NAME=gpt-4o-mini
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+
 
   # کلاینت داشبورد مدیریتی فرانت‌اند (Nginx Served React Application)
   frontend:

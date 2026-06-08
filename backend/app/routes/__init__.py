@@ -8,3 +8,4 @@ from .upload_routes import router as upload_router
 from .config_routes import router as config_router
 from .widget_routes import router as widget_router
 from .integration_routes import router as integration_router
+from .crawler_routes import router as crawler_router
