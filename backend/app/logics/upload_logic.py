@@ -87,6 +87,31 @@ async def execute_upload_logic(file: UploadFile) -> dict:
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported file format: {ext}")
 
+        # ثبت فایل در دیتابیس برای سیستم ACL/RBAC
+        from app.core.database import get_db_connection
+        conn = None
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO documents (id, filename, file_type, min_role_required)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (id) DO UPDATE SET
+                        filename = EXCLUDED.filename,
+                        file_type = EXCLUDED.file_type
+                    """,
+                    (file_id, filename, ext[1:] if ext.startswith('.') else ext, "Analyst")
+                )
+                conn.commit()
+        except Exception as db_err:
+            logger.error(f"Failed to record document metadata in database: {str(db_err)}")
+            if conn:
+                conn.rollback()
+        finally:
+            if conn:
+                conn.close()
+
         # ۴. بازگرداندن نتایج نهایی
         return {
             "file_id": file_id,

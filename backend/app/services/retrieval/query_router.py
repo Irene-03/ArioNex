@@ -161,7 +161,7 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
     # سناریو ب: موتور بازیابی RAG برداری اسناد
     # بازیابی نتایج از عامل جستجوی برداری اسناد (vector_search) و عامل پرسش‌وپاسخ (qna)
     vector_results = vector_search_agent.retrieve_context(standalone_query, threshold=threshold, k=k, file_ids=file_ids)
-    qna_results = qna_agent.retrieve_context(standalone_query, threshold=threshold, k=k)
+    qna_results = qna_agent.retrieve_context(standalone_query, threshold=threshold, k=k, file_ids=file_ids)
     
     # تجمیع نتایج محلی
     all_results = vector_results + qna_results
@@ -246,13 +246,34 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
         rules_formatted = "\n    ".join(rules_list)
         compliance_constraints = f"\n    5. Follow these strict corporate COMPLIANCE RULES when answering:\n    {rules_formatted}\n"
     
+    # بارگذاری پرامپت داینامیک از دیتابیس
+    system_instruction = None
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT prompt FROM system_prompts WHERE key = 'default_system_instruction'")
+            row = cur.fetchone()
+            if row:
+                system_instruction = row[0]
+    except Exception as e:
+        logger.error(f"Failed to fetch system instruction from DB: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+    if not system_instruction:
+        system_instruction = (
+            "شما یک دستیار دانش حرفه‌ای برای آریونکس هستید. همیشه منابع را دقیق استناد دهید. "
+            "هیچ‌گاه فراتر از اسناد ارائه‌شده گمانه‌زنی نکنید. اگر سند مرتبطی یافت نشد، صادقانه بگویید."
+        )
+
     # بررسی mock mode: در صورت عدم وجود کلید واقعی برای provider فعال
     active_provider = settings.llm_provider
     active_key = _get_active_api_key(active_provider)
     if not active_key or active_key in ("mock_key", "") or "your-" in active_key:
         logger.warning("Mock mode active in Query Router. Simulating LLM response based on context.")
-        # بازگرداندن چانک بازیابی شده اول به عنوان پاسخ شبیه‌سازی شده
-        mock_response = f"بر اساس گزارش موجود در {sources[0]['name']}: \n{sorted_results[0]['content'][:150]}..."
+        mock_response = f"بر اساس مستندات موجود در {sources[0]['name']}: \n{formatted_context_list[0][:150]}..."
         
         # اجرای ممیزی انطباق قوانین توسط عامل Lawyer
         audit_result = lawyer_agent.audit_compliance(standalone_query, mock_response, active_file_id)
@@ -288,7 +309,8 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
             "reranked_text": context_str,
             "chat_history": formatted_history,
             "user_input": user_input,
-            "compliance_constraints": compliance_constraints
+            "compliance_constraints": compliance_constraints,
+            "system_instruction": system_instruction
         })
         
         final_answer = response.content.strip()
@@ -336,23 +358,12 @@ async def synthesize_rag_response_stream(
     chat_history: list,
     threshold: float = 0.4,
     k: int = 4,
+    file_ids: Optional[list[int]] = None,
 ) -> AsyncGenerator[dict, None]:
     """
     /// <summary>
     /// نسخه streaming موتور RAG — نتایج را به صورت توکن به توکن (SSE) برمی‌گرداند
     /// </summary>
-    /// <param name="user_input">پرسش جدید کاربر</param>
-    /// <param name="chat_history">تاریخچه چت نشست جاری</param>
-    /// <param name="threshold">آستانه شباهت بردارها</param>
-    /// <param name="k">تعداد چانک‌های نهایی استنادی</param>
-    /// <returns>async generator که رویدادهای دیکشنری شکل {"event": "...", "data": ...} تولید می‌کند</returns>
-    /// <remarks>
-    /// انواع رویدادهای منتشرشده:
-    ///   - {"event": "sources", "data": [...]}  — منابع استنادی پیش از شروع تولید پاسخ
-    ///   - {"event": "token",   "data": "..."}  — هر توکن جدید مدل
-    ///   - {"event": "done",    "data": {"is_safe": true}}  — پایان پاسخ
-    ///   - {"event": "error",   "data": "..."}  — در صورت بروز خطا
-    /// </remarks>
     """
     logger.info("Synthesizer (stream) received query from chat session.")
 
@@ -382,8 +393,8 @@ async def synthesize_rag_response_stream(
         logger.warning("Analyst Agent fallback to vector search in stream mode.")
 
     # سناریو ب: بازیابی برداری اسناد + Q&A
-    vector_results = vector_search_agent.retrieve_context(standalone_query, threshold=threshold, k=k)
-    qna_results = qna_agent.retrieve_context(standalone_query, threshold=threshold, k=k)
+    vector_results = vector_search_agent.retrieve_context(standalone_query, threshold=threshold, k=k, file_ids=file_ids)
+    qna_results = qna_agent.retrieve_context(standalone_query, threshold=threshold, k=k, file_ids=file_ids)
     all_results = vector_results + qna_results
     sorted_results = sorted(all_results, key=lambda x: x.get("similarity", 0), reverse=True)[:k]
 
@@ -404,6 +415,15 @@ async def synthesize_rag_response_stream(
     # ۵. قالب‌بندی منابع و کانتکست
     formatted_context_list = []
     sources = []
+    
+    active_file_id = None
+    if file_ids:
+        active_file_id = file_ids[0]
+    elif sorted_results:
+        active_file_id = sorted_results[0].get("file_id")
+        if active_file_id == 0:
+            active_file_id = None
+
     for item in sorted_results:
         clean_content = item["content"].replace(", Answer:", "\nAnswer:")
         formatted_context_list.append(clean_content)
@@ -414,6 +434,53 @@ async def synthesize_rag_response_stream(
 
     # ارسال منابع پیش از شروع streaming
     yield {"event": "sources", "data": sources[:3]}
+
+    # استخراج قوانین به پرامپت جهت هدایت همزمان مدل اصلی در استریم
+    rules_list = []
+    if settings.services.rule_extractor and active_file_id:
+        conn = None
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT rule_code, clause FROM extracted_rules WHERE file_id = %s",
+                    (active_file_id,)
+                )
+                rows = cur.fetchall()
+                for row in rows:
+                    rules_list.append(f"- {row[0]}: {row[1]}")
+        except Exception as e:
+            logger.error(f"Failed to fetch rules for stream constraints: {str(e)}")
+        finally:
+            if conn:
+                conn.close()
+
+    compliance_constraints = ""
+    if rules_list:
+        rules_formatted = "\n    ".join(rules_list)
+        compliance_constraints = f"\n    5. Follow these strict corporate COMPLIANCE RULES when answering:\n    {rules_formatted}\n"
+
+    # بارگذاری پرامپت داینامیک از دیتابیس
+    system_instruction = None
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT prompt FROM system_prompts WHERE key = 'default_system_instruction'")
+            row = cur.fetchone()
+            if row:
+                system_instruction = row[0]
+    except Exception as e:
+        logger.error(f"Failed to fetch system instruction for stream: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+    if not system_instruction:
+        system_instruction = (
+            "شما یک دستیار دانش حرفه‌ای برای آریونکس هستید. همیشه منابع را دقیق استناد دهید. "
+            "هیچ‌گاه فراتر از اسناد ارائه‌شده گمانه‌زنی نکنید. اگر سند مرتبطی یافت نشد، صادقانه بگویید."
+        )
 
     # بررسی mock mode
     active_provider = settings.llm_provider
@@ -443,6 +510,8 @@ async def synthesize_rag_response_stream(
             "reranked_text": context_str,
             "chat_history": formatted_history,
             "user_input": user_input,
+            "compliance_constraints": compliance_constraints,
+            "system_instruction": system_instruction
         }):
             piece = getattr(chunk, "content", None) or ""
             if not piece:

@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.database import init_db
-from app.routes import query_router, upload_router, config_router, widget_router, integration_router, crawler_router
+from app.routes import query_router, upload_router, config_router, widget_router, integration_router, crawler_router, auth_router, knowledge_router
 from app.services.integrations.telegram_bot import start_telegram_bot_service, stop_telegram_bot_service
 
 # پیکربندی سیستم لاگ‌نویسی متمرکز
@@ -100,6 +100,8 @@ app.include_router(config_router)
 app.include_router(widget_router)
 app.include_router(integration_router)
 app.include_router(crawler_router)
+app.include_router(auth_router)
+app.include_router(knowledge_router)
 
 
 @app.get("/health", tags=["System Status"])

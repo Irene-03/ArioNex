@@ -39,9 +39,252 @@ const OLLAMA_MODELS = [
   { id: 'qwen2.5:3b', label: 'Qwen 2.5 3B' },
 ];
 
+const MOCK_MODE = false;
+const mockDelay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 export default function App() {
   // صفحه فعال جاری در داشبورد
   const [activeScreen, setActiveScreen] = useState('dashboard');
+
+  // ─── Authentication State ──────────────────────────────────────────────────
+  const [currentUser, setCurrentUser] = useState(null);
+  const [token, setToken] = useState(null);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoginLoading, setIsLoginLoading] = useState(false);
+  
+  const [isSignupMode, setIsSignupMode] = useState(false);
+  const [signupUsername, setSignupUsername] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupError, setSignupError] = useState('');
+  const [isSignupLoading, setIsSignupLoading] = useState(false);
+  const [signupSuccess, setSignupSuccess] = useState(false);
+
+  // ─── User Management State ────────────────────────────────────────────────
+  const [usersList, setUsersList] = useState([]);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteUsername, setInviteUsername] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
+  const [inviteRole, setInviteRole] = useState('Analyst');
+  const [inviteError, setInviteError] = useState('');
+
+  // ─── PII Checked State ────────────────────────────────────────────────────
+  const [piiChecked, setPiiChecked] = useState(false);
+
+  // ─── secure API fetch wrapper ──────────────────────────────────────────────
+  const apiFetch = async (url, options = {}) => {
+    const headers = {
+      ...options.headers,
+    };
+    
+    if (options.body && !(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+    
+    const currentToken = token || localStorage.getItem('arionex_token');
+    if (currentToken) {
+      headers['Authorization'] = `Bearer ${currentToken}`;
+    }
+    
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+    
+    if (response.status === 401) {
+      handleLogout();
+      throw new Error('جلسه شما منقضی شده است. لطفاً مجدداً وارد شوید.');
+    }
+    
+    return response;
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    if (!loginUsername.trim() || !loginPassword.trim()) {
+      setLoginError('لطفاً نام کاربری و رمز عبور را وارد کنید.');
+      return;
+    }
+    
+    setLoginError('');
+    setIsLoginLoading(true);
+    
+    try {
+      const res = await fetch('http://localhost:8000/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: loginUsername,
+          password: loginPassword
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        setToken(data.access_token);
+        setCurrentUser(data.user);
+        localStorage.setItem('arionex_token', data.access_token);
+        localStorage.setItem('arionex_user', JSON.stringify(data.user));
+        
+        // Refresh configurations and documents
+        fetchDocuments();
+        fetchIntegrations();
+        fetchSystemInstruction();
+      } else {
+        setLoginError(data.detail || 'نام کاربری یا رمز عبور اشتباه است.');
+      }
+    } catch (err) {
+      console.error('Login failed:', err);
+      setLoginError('خطا در اتصال به سرور احراز هویت آریونکس.');
+    } finally {
+      setIsLoginLoading(false);
+    }
+  };
+
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    if (!signupUsername.trim() || !signupPassword.trim()) {
+      setSignupError('لطفاً نام کاربری و رمز عبور را وارد کنید.');
+      return;
+    }
+    if (signupUsername.length < 3) {
+      setSignupError('نام کاربری باید حداقل ۳ کاراکتر باشد.');
+      return;
+    }
+    if (signupPassword.length < 6) {
+      setSignupError('رمز عبور باید حداقل ۶ کاراکتر باشد.');
+      return;
+    }
+
+    setSignupError('');
+    setSignupSuccess(false);
+    setIsSignupLoading(true);
+
+    try {
+      const res = await fetch('http://localhost:8000/v1/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: signupUsername,
+          password: signupPassword
+        })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setSignupSuccess(true);
+        setLoginUsername(signupUsername);
+        setLoginPassword(signupPassword);
+        alert('ثبت‌نام با موفقیت انجام شد. می‌توانید اکنون وارد شوید.');
+        setIsSignupMode(false);
+        setSignupUsername('');
+        setSignupPassword('');
+      } else {
+        setSignupError(data.detail || 'خطا در ثبت‌نام کاربر.');
+      }
+    } catch (err) {
+      console.error('Signup failed:', err);
+      setSignupError('خطا در اتصال به سرور احراز هویت آریونکس.');
+    } finally {
+      setIsSignupLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setToken(null);
+    localStorage.removeItem('arionex_token');
+    localStorage.removeItem('arionex_user');
+    setActiveScreen('dashboard');
+    setLoginUsername('');
+    setLoginPassword('');
+    setLoginError('');
+  };
+
+  const fetchUsersList = async () => {
+    try {
+      const res = await apiFetch('http://localhost:8000/v1/auth/users');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) setUsersList(data);
+      }
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    }
+  };
+
+  const handleInviteUser = async (e) => {
+    e.preventDefault();
+    if (!inviteUsername.trim() || !invitePassword.trim()) {
+      setInviteError('لطفاً نام کاربری و رمز عبور را وارد نمایید.');
+      return;
+    }
+    setInviteError('');
+    try {
+      const res = await apiFetch('http://localhost:8000/v1/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          username: inviteUsername,
+          password: invitePassword,
+          role: inviteRole
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`کاربر "${data.username}" با موفقیت ثبت شد.`);
+        setShowInviteModal(false);
+        setInviteUsername('');
+        setInvitePassword('');
+        setInviteRole('Analyst');
+        fetchUsersList();
+      } else {
+        setInviteError(data.detail || 'خطا در ثبت کاربر');
+      }
+    } catch (err) {
+      console.error(err);
+      setInviteError('خطا در ارتباط با سرور.');
+    }
+  };
+
+  const fetchSystemInstruction = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/v1/config/prompts');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.prompt) {
+          setSystemInstruction(data.prompt);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching system instruction:', err);
+    }
+  };
+
+  const saveSystemInstruction = async () => {
+    try {
+      const res = await apiFetch('http://localhost:8000/v1/config/prompts', {
+        method: 'POST',
+        body: JSON.stringify({ prompt: systemInstruction })
+      });
+      if (res.ok) {
+        alert('دستورالعمل سیستم با موفقیت به‌روزرسانی شد.');
+      } else {
+        const data = await res.json();
+        alert(data.detail || 'خطا در به‌روزرسانی دستورالعمل سیستم');
+      }
+    } catch (err) {
+      console.error('Error saving system instruction:', err);
+      alert('خطا در ارتباط با سرور');
+    }
+  };
+
+  const resetSystemInstruction = () => {
+    const defaultPrompt = "شما یک دستیار دانش حرفه‌ای برای آریونکس هستید. همیشه منابع را دقیق استناد دهید. هیچ‌گاه فراتر از اسناد ارائه‌شده گمانه‌زنی نکنید. اگر سند مرتبطی یافت نشد، صادقانه بگویید.";
+    setSystemInstruction(defaultPrompt);
+  };
   
   // تنظیمات فیچر تاگل سیستم (ادمینی)
   const [features, setFeatures] = useState({
@@ -116,10 +359,23 @@ export default function App() {
   // بارگذاری اولیه اسناد از بک‌اند
   const fetchDocuments = async () => {
     try {
-      const res = await fetch('http://localhost:8000/v1/knowledge/documents');
+      const res = await apiFetch('http://localhost:8000/v1/knowledge/documents');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) setDocuments(data);
+        if (Array.isArray(data)) {
+          const mappedDocs = data.map(doc => ({
+            id: doc.id,
+            name: doc.filename,
+            size: 'دیتابیس',
+            chunks: 0,
+            date: doc.created_at ? new Date(doc.created_at).toLocaleDateString('fa-IR') : '—',
+            status: 'ready',
+            progress: 100,
+            ext: doc.file_type ? doc.file_type.toUpperCase() : 'DOC',
+            min_role_required: doc.min_role_required
+          }));
+          setDocuments(mappedDocs);
+        }
       }
     } catch (err) {
       console.info('Documents endpoint not available yet:', err.message);
@@ -133,16 +389,13 @@ export default function App() {
   const [crawlJsRender, setCrawlJsRender] = useState(false);
   const [crawlFollowExternal, setCrawlFollowExternal] = useState(false);
   const [crawlRobots, setCrawlRobots] = useState(true);
-  const [crawlJobs, setCrawlJobs] = useState([
-    { job_id: 'demo-job-1', url: 'https://example.com', status: 'completed', pages_crawled: 42, chunks_indexed: 318, pages_failed: 1, max_pages: 50, max_depth: 3, js_render: false, follow_external_domains: false, label: 'crawled:example.com', widget_id: null, error_message: null, created_at: '2026-06-07T09:00:00Z', updated_at: '2026-06-07T09:04:22Z' },
-    { job_id: 'demo-job-2', url: 'https://docs.company.ir', status: 'running', pages_crawled: 18, chunks_indexed: 94, pages_failed: 0, max_pages: 100, max_depth: 4, js_render: true, follow_external_domains: false, label: 'crawled:docs.company.ir', widget_id: 1, error_message: null, created_at: '2026-06-07T10:15:00Z', updated_at: '2026-06-07T10:18:45Z' },
-  ]);
+  const [crawlJobs, setCrawlJobs] = useState([]);
   const [crawlSubmitting, setCrawlSubmitting] = useState(false);
   const [crawlStatusFilter, setCrawlStatusFilter] = useState('');
 
   const fetchIntegrations = async () => {
     try {
-      const resWidgets = await fetch('http://localhost:8000/v1/integrations/widgets');
+      const resWidgets = await apiFetch('http://localhost:8000/v1/integrations/widgets');
       const dataWidgets = await resWidgets.json();
       setWidgets(dataWidgets);
       if (dataWidgets.length > 0 && !widgetPreviewSelected) {
@@ -151,7 +404,7 @@ export default function App() {
         setWidgetPreviewSelected(null);
       }
 
-      const resKeys = await fetch('http://localhost:8000/v1/integrations/apikeys');
+      const resKeys = await apiFetch('http://localhost:8000/v1/integrations/apikeys');
       const dataKeys = await resKeys.json();
       setApiKeys(dataKeys);
     } catch (err) {
@@ -160,11 +413,36 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!currentUser) return;
     fetchIntegrations();
     if (activeScreen === 'knowledge' || activeScreen === 'upload') {
       fetchDocuments();
     }
-  }, [activeScreen]);
+    if (activeScreen === 'crawler') {
+      fetchCrawlJobs();
+    }
+    if (activeScreen === 'admin' && currentUser.role === 'Admin') {
+      fetchUsersList();
+      fetchSystemInstruction();
+    }
+  }, [activeScreen, currentUser]);
+
+  useEffect(() => {
+    if (!currentUser || activeScreen !== 'crawler') return;
+    const hasRunningOrQueued = crawlJobs.some(j => j.status === 'running' || j.status === 'queued');
+    if (!hasRunningOrQueued) return;
+    const interval = setInterval(() => {
+      fetchCrawlJobs();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [crawlJobs, activeScreen, currentUser]);
+
+  // redirect Analyst away from admin panels
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'Admin' && (activeScreen === 'admin' || activeScreen === 'integrations')) {
+      setActiveScreen('dashboard');
+    }
+  }, [activeScreen, currentUser]);
 
   const handleCreateWidget = async (e) => {
     e.preventDefault();
@@ -180,9 +458,8 @@ export default function App() {
     };
 
     try {
-      const res = await fetch('http://localhost:8000/v1/integrations/widgets', {
+      const res = await apiFetch('http://localhost:8000/v1/integrations/widgets', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(widgetData)
       });
       const data = await res.json();
@@ -202,7 +479,7 @@ export default function App() {
   const handleDeleteWidget = async (id) => {
     if (!confirm('آیا از حذف این ابزارک اطمینان دارید؟')) return;
     try {
-      const res = await fetch(`http://localhost:8000/v1/integrations/widgets/${id}`, {
+      const res = await apiFetch(`http://localhost:8000/v1/integrations/widgets/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -221,9 +498,8 @@ export default function App() {
     if (!newKeyName.trim()) return;
 
     try {
-      const res = await fetch('http://localhost:8000/v1/integrations/apikeys', {
+      const res = await apiFetch('http://localhost:8000/v1/integrations/apikeys', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newKeyName })
       });
       const data = await res.json();
@@ -240,7 +516,7 @@ export default function App() {
   const handleDeleteAPIKey = async (id) => {
     if (!confirm('آیا از ابطال این کلید API اطمینان دارید؟')) return;
     try {
-      const res = await fetch(`http://localhost:8000/v1/integrations/apikeys/${id}`, {
+      const res = await apiFetch(`http://localhost:8000/v1/integrations/apikeys/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -277,6 +553,9 @@ export default function App() {
             providerAvalAI: data.providers?.avalai ?? true,
             providerHormouz: data.providers?.hormouz ?? true,
           });
+          setOllamaEnabled(data.llm_provider === 'ollama');
+          if (data.ollama_model) setOllamaModel(data.ollama_model);
+          if (data.ollama_base_url) setOllamaEndpoint(data.ollama_base_url);
         }
       } catch (err) {
         console.error('Error loading configuration:', err);
@@ -290,12 +569,8 @@ export default function App() {
     const updatedFeatures = { ...features, [key]: !features[key] };
     setFeatures(updatedFeatures);
 
-
-
-    // ثبت زنده تاگل‌ها در وب‌سرور FastAPI
-    fetch('http://localhost:8000/v1/config', {
+    apiFetch('http://localhost:8000/v1/config', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         services: {
           safety_auditor: updatedFeatures.localGemma,
@@ -335,11 +610,8 @@ export default function App() {
     const updatedFeatures = { ...features, [featureKey]: !features[featureKey] };
     setFeatures(updatedFeatures);
 
-
-
-    fetch('http://localhost:8000/v1/config', {
+    apiFetch('http://localhost:8000/v1/config', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         providers: {
           openai: providerKey === 'openai' ? !features.providerOpenAI : features.providerOpenAI,
@@ -368,7 +640,6 @@ export default function App() {
     setInputText('');
     setIsAiLoading(true);
 
-
     const aiMsgId = Date.now() + 1;
     const aiPlaceholder = {
       id: aiMsgId,
@@ -381,9 +652,13 @@ export default function App() {
     setChatMessages(prev => [...prev, aiPlaceholder]);
 
     try {
+      const savedToken = token || localStorage.getItem('arionex_token');
       const res = await fetch('http://localhost:8000/v1/query/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(savedToken ? { 'Authorization': `Bearer ${savedToken}` } : {})
+        },
         body: JSON.stringify({ query: queryText, session_id: 'react_admin_dashboard_chat' })
       });
 
@@ -400,7 +675,6 @@ export default function App() {
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
 
-        // پردازش هر بلوک کامل SSE که با \n\n جدا شده است
         let sepIdx;
         while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {
           const rawEvent = buffer.slice(0, sepIdx);
@@ -413,7 +687,6 @@ export default function App() {
             else if (line.startsWith('data:')) dataLine += line.slice(5).trim();
           });
 
-          // SSE-encoded newlines (\n)
           const decodedData = dataLine.replace(/\\n/g, '\n');
 
           if (eventName === 'token') {
@@ -423,7 +696,7 @@ export default function App() {
             try {
               const parsedSources = JSON.parse(decodedData);
               setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, sources: parsedSources } : m));
-            } catch (_) { /* منابع نامعتبر — نادیده گرفته می‌شود */ }
+            } catch (_) {}
           } else if (eventName === 'done') {
             try {
               const meta = JSON.parse(decodedData);
@@ -431,7 +704,7 @@ export default function App() {
               setChatMessages(prev => prev.map(m => m.id === aiMsgId
                 ? { ...m, isSafe: meta.is_safe ?? true, isRefusal }
                 : m));
-            } catch (_) { /* meta نامعتبر */ }
+            } catch (_) {}
           } else if (eventName === 'error') {
             console.error('Stream RAG error:', decodedData);
           }
@@ -448,79 +721,125 @@ export default function App() {
     }
   };
 
-  // ارسال فایل واقعی به اندپوینت آپلود و دریافت پیش‌نمایش قفل حریم شخصی PII
-  const handleFileUpload = (e) => {
-    e.preventDefault();
-    let file = null;
-
-    if (e.type === 'drop') {
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        file = e.dataTransfer.files[0];
-      }
-    } else {
-      const fileInput = document.createElement('input');
-      fileInput.type = 'file';
-      fileInput.accept = '.pdf,.docx,.doc,.csv,.txt,.json,.xml,.mmd';
-      fileInput.onchange = (event) => {
-        if (event.target.files && event.target.files[0]) {
-          uploadFileToServer(event.target.files[0]);
-        }
-      };
-      fileInput.click();
-      return;
-    }
-
-    if (file) {
-      uploadFileToServer(file);
-    }
-  };
-
-  const uploadFileToServer = async (file) => {
-    const docId = Date.now();
-    const newDoc = {
-      id: docId,
-      name: file.name,
-      size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
-      chunks: 0,
-      date: 'امروز',
-      status: 'processing',
-      progress: 15,
-      ext: file.name.split('.').pop().toUpperCase().substring(0, 3)
-    };
-    setDocuments(prev => [newDoc, ...prev]);
-
-    // میکروانیمیشن پیشرفت نوار بارگذاری
-    const progressInterval = setInterval(() => {
-      setDocuments(prev => prev.map(d => {
-        if (d.id === docId && d.progress < 85) return { ...d, progress: d.progress + 15 };
-        return d;
-      }));
-    }, 250);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('http://localhost:8000/v1/upload', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (data.status !== 'success') throw new Error(data.detail || 'Upload failed');
-
-      clearInterval(progressInterval);
-      setDocuments(prev => prev.map(d =>
-        d.id === docId ? { ...d, status: 'ready', progress: 100, chunks: data.chunks_indexed } : d
-      ));
-      setPiiPreview(data.pii_preview || 'پیش‌نمایش ماسک برای این قالب فایل در دسترس نیست، اما سند با موفقیت ایندکس گردید.');
-      setPiiAuditCounts(data.pii_audit_counts || {});
-
-    } catch (err) {
-      clearInterval(progressInterval);
-      console.error('Smart file ingestion upload failed:', err);
-      setDocuments(prev => prev.map(d =>
-        d.id === docId ? { ...d, status: 'error', progress: 0, name: '⚠️ خطا: ' + d.name } : d
-      ));
-      setPiiPreview('خطا در پردازش سند.');
-      setPiiAuditCounts({});
-    }
-  };
+  if (!currentUser) {
+    return (
+      <div className="login-overlay">
+        <div className="login-card">
+          <div className="login-logo">
+            <svg className="logo-mark" viewBox="0 0 32 32" fill="none" width="40" height="40">
+              <polygon points="16,2 28,26 4,26" fill="none" stroke="#c4894a" strokeWidth="2.5"/>
+              <polygon points="16,9 22,26 10,26" fill="none" stroke="#c4894a" strokeWidth="1.5" opacity="0.5"/>
+            </svg>
+            <span className="logo-text" style={{fontSize: '26px', color: 'white'}}>آریو<span>نکس</span></span>
+          </div>
+          
+          <h2 className="login-title">{isSignupMode ? 'ثبت‌نام در سامانه تجاری آریونکس' : 'ورود به سامانه تجاری آریونکس'}</h2>
+          <p className="login-subtitle">سامانه هوشمند مدیریت دانش، ممیزی حریم خصوصی (PII) و تحلیل قوانین انطباق سازمان</p>
+          
+          {isSignupMode ? (
+            <>
+              {signupError && <div className="login-error">{signupError}</div>}
+              {signupSuccess && <div className="login-success">ثبت‌نام با موفقیت انجام شد!</div>}
+              
+              <form onSubmit={handleSignup}>
+                <div className="login-form-group">
+                  <label className="login-label">نام کاربری</label>
+                  <input 
+                    type="text" 
+                    className="login-input" 
+                    value={signupUsername} 
+                    onChange={e => setSignupUsername(e.target.value)}
+                    placeholder="username"
+                    required
+                  />
+                </div>
+                
+                <div className="login-form-group">
+                  <label className="login-label">رمز عبور</label>
+                  <input 
+                    type="password" 
+                    className="login-input" 
+                    value={signupPassword} 
+                    onChange={e => setSignupPassword(e.target.value)}
+                    placeholder="••••••"
+                    required
+                  />
+                </div>
+                
+                <button type="submit" className="login-btn" disabled={isSignupLoading}>
+                  {isSignupLoading ? '⏳ در حال ثبت‌نام...' : 'ثبت‌نام کاربر جدید'}
+                </button>
+              </form>
+              
+              <div className="login-toggle-mode" style={{marginTop: '15px', fontSize: '13px'}}>
+                قبلاً ثبت‌نام کرده‌اید؟ {' '}
+                <span 
+                  style={{color: '#c4894a', cursor: 'pointer', textDecoration: 'underline'}} 
+                  onClick={() => {
+                    setIsSignupMode(false);
+                    setSignupError('');
+                  }}
+                >
+                  ورود به سیستم
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              {loginError && <div className="login-error">{loginError}</div>}
+              
+              <form onSubmit={handleLogin}>
+                <div className="login-form-group">
+                  <label className="login-label">نام کاربری</label>
+                  <input 
+                    type="text" 
+                    className="login-input" 
+                    value={loginUsername} 
+                    onChange={e => setLoginUsername(e.target.value)}
+                    placeholder="username"
+                    required
+                  />
+                </div>
+                
+                <div className="login-form-group">
+                  <label className="login-label">رمز عبور</label>
+                  <input 
+                    type="password" 
+                    className="login-input" 
+                    value={loginPassword} 
+                    onChange={e => setLoginPassword(e.target.value)}
+                    placeholder="••••••"
+                    required
+                  />
+                </div>
+                
+                <button type="submit" className="login-btn" disabled={isLoginLoading}>
+                  {isLoginLoading ? '⏳ در حال ورود...' : 'ورود به سیستم'}
+                </button>
+              </form>
+              
+              <div className="login-toggle-mode" style={{marginTop: '15px', fontSize: '13px'}}>
+                کاربر جدید هستید؟ {' '}
+                <span 
+                  style={{color: '#c4894a', cursor: 'pointer', textDecoration: 'underline'}} 
+                  onClick={() => {
+                    setIsSignupMode(true);
+                    setLoginError('');
+                  }}
+                >
+                  ایجاد حساب کاربری (تحلیل‌گر)
+                </span>
+              </div>
+            </>
+          )}
+          
+          <div style={{fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '24px'}}>
+            ArioNex Commercial AI Platform · Version 1.0.0
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="device-frame fade-in">
@@ -572,31 +891,53 @@ export default function App() {
         </div>
 
         {/* بخش منوی مدیریتی ادمین */}
-        <div className="sidebar-section">
-          <div className="sidebar-label">مدیریت سیستم</div>
-          <div 
-            className={`nav-item ${activeScreen === 'admin' ? 'active' : ''}`}
-            onClick={() => setActiveScreen('admin')}
-          >
-            <span>⚙️</span> پنل مدیریت
+        {currentUser?.role === 'Admin' && (
+          <div className="sidebar-section">
+            <div className="sidebar-label">مدیریت سیستم</div>
+            <div 
+              className={`nav-item ${activeScreen === 'admin' ? 'active' : ''}`}
+              onClick={() => setActiveScreen('admin')}
+            >
+              <span>⚙️</span> پنل مدیریت
+            </div>
+            <div 
+              className={`nav-item ${activeScreen === 'integrations' ? 'active' : ''}`}
+              onClick={() => setActiveScreen('integrations')}
+            >
+              <span>🔗</span> یکپارچه‌سازی
+              <span className="nav-badge" style={{background: 'var(--navy-light)'}}>3</span>
+            </div>
           </div>
-          <div 
-            className={`nav-item ${activeScreen === 'integrations' ? 'active' : ''}`}
-            onClick={() => setActiveScreen('integrations')}
-          >
-            <span>🔗</span> یکپارچه‌سازی
-            <span className="nav-badge" style={{background: 'var(--navy-light)'}}>3</span>
-          </div>
-        </div>
+        )}
 
         {/* پروفایل کاربر در پایین سایدبار */}
         <div className="sidebar-bottom">
-          <div className="user-card">
-            <div className="user-avatar">AK</div>
-            <div className="user-info">
-              <div className="user-name">علی کریمی</div>
-              <div className="user-role">مدیر ارشد سازمان</div>
+          <div className="user-card" style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%'}}>
+            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+              <div className="user-avatar" style={{textTransform: 'uppercase'}}>{currentUser?.username?.substring(0, 2) || 'UR'}</div>
+              <div className="user-info">
+                <div className="user-name">{currentUser?.username}</div>
+                <div className="user-role">{currentUser?.role === 'Admin' ? 'مدیر سیستم' : 'تحلیلگر'}</div>
+              </div>
             </div>
+            <button 
+              onClick={handleLogout} 
+              style={{
+                background: 'none', 
+                border: 'none', 
+                color: 'var(--copper-dark)', 
+                cursor: 'pointer', 
+                fontSize: '18px', 
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'color var(--transition-fast)'
+              }}
+              title="خروج از حساب"
+            >
+              🚪
+            </button>
           </div>
         </div>
       </div>
@@ -941,33 +1282,111 @@ export default function App() {
               </div>
               
               <div className="files-table">
-                <div className="ft-header">
+                <div className="ft-header" style={{gridTemplateColumns: '2fr 1fr 1fr 1.2fr 1.2fr'}}>
                   <div>نام سند</div>
                   <div>حجم فیزیکی</div>
-                  <div>تعداد چانک‌ها</div>
                   <div>تاریخ پردازش</div>
-                  <div>وضعیت برداری</div>
+                  <div>سطح دسترسی</div>
+                  <div>وضعیت و عملیات</div>
                 </div>
                 
                 {documents.map(doc => (
-                  <div key={doc.id} className="ft-row">
+                  <div key={doc.id} className="ft-row" style={{gridTemplateColumns: '2fr 1fr 1fr 1.2fr 1.2fr'}}>
                     <div className="ft-filename">
                       <span className={`ft-ext ext-${doc.ext.toLowerCase()}`}>{doc.ext}</span>
                       {doc.name}
                     </div>
                     <div style={{color: 'var(--text-secondary)'}}>{doc.size}</div>
-                    <div style={{color: 'var(--text-secondary)'}}>{doc.chunks > 0 ? doc.chunks : '—'}</div>
                     <div style={{color: 'var(--text-muted)'}}>{doc.date}</div>
                     <div>
+                      {currentUser?.role === 'Admin' ? (
+                        <select
+                          value={doc.min_role_required || 'Analyst'}
+                          onChange={async (e) => {
+                            const newRole = e.target.value;
+                            try {
+                              const res = await apiFetch(`http://localhost:8000/v1/knowledge/documents/${doc.id}/role`, {
+                                method: 'PUT',
+                                body: JSON.stringify({ min_role_required: newRole })
+                              });
+                              if (res.ok) {
+                                setDocuments(prev => prev.map(d => d.id === doc.id ? { ...d, min_role_required: newRole } : d));
+                              } else {
+                                const errData = await res.json();
+                                alert(errData.detail || 'خطا در تغییر سطح دسترسی');
+                              }
+                            } catch (err) {
+                              console.error(err);
+                              alert('خطا در تغییر سطح دسترسی');
+                            }
+                          }}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--gray-200)',
+                            fontSize: '12px',
+                            background: 'var(--gray-50)',
+                            color: 'var(--text-primary)',
+                            fontFamily: 'inherit',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <option value="Analyst">تحلیل‌گر (Analyst)</option>
+                          <option value="Admin">مدیر سیستم (Admin)</option>
+                        </select>
+                      ) : (
+                        <span className={`perm-badge ${doc.min_role_required === 'Admin' ? 'p-admin' : 'p-analyst'}`}>
+                          {doc.min_role_required === 'Admin' ? 'مدیر سیستم' : 'تحلیلگر'}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px'}}>
                       {doc.status === 'ready' ? (
                         <span className="q-badge qb-done">✓ ایندکس شده</span>
                       ) : (
-                        <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-                          <div className="prog-bar-wrap">
+                        <div style={{display: 'flex', alignItems: 'center', gap: '8px', flex: 1}}>
+                          <div className="prog-bar-wrap" style={{width: '60px'}}>
                             <div className="prog-bar" style={{width: `${doc.progress}%`}}></div>
                           </div>
                           <span style={{fontSize: '11px', color: 'var(--copper-dark)', fontWeight: 'bold'}}>{doc.progress}%</span>
                         </div>
+                      )}
+                      
+                      {currentUser?.role === 'Admin' && (
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`آیا از حذف سند "${doc.name}" و تمامی بردارهای مرتبط با آن اطمینان دارید؟`)) return;
+                            try {
+                              const res = await apiFetch(`http://localhost:8000/v1/knowledge/documents/${doc.id}`, {
+                                method: 'DELETE'
+                              });
+                              if (res.ok) {
+                                setDocuments(prev => prev.filter(d => d.id !== doc.id));
+                              } else {
+                                const errData = await res.json();
+                                alert(errData.detail || 'خطا در حذف سند');
+                              }
+                            } catch (err) {
+                              console.error(err);
+                              alert('خطا در ارتباط با سرور');
+                            }
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#c62828',
+                            cursor: 'pointer',
+                            fontSize: '15px',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'transform var(--transition-fast)'
+                          }}
+                          title="حذف سند"
+                        >
+                          🗑️
+                        </button>
                       )}
                     </div>
                   </div>
@@ -1054,10 +1473,12 @@ export default function App() {
                           .join(' | ')
                       }
                     </span>
-                  ) : piiPreview ? (
+                  ) : piiChecked ? (
                     <span style={{color: 'var(--color-success)', fontWeight: '600'}}>
                       ✓ هیچ اطلاعات حساسی (مانند کد ملی، تلفن همراه، حساب بانکی و ایمیل) در آخرین سند بارگذاری شده یافت نشد.
                     </span>
+                  ) : piiPreview ? (
+                    <span>{piiPreview}</span>
                   ) : (
                     "پیش‌نمایش زنده اقلام حساس شامل کد ملی، تلفن همراه، ایمیل، کارت بانکی و شبا پیش از ایندکس در پایگاه دانش."
                   )}
@@ -1120,25 +1541,26 @@ export default function App() {
                   <span>👥</span> دسترسی کاربران و مدیریت مجوزها
                 </div>
                 
-                <div className="permission-row">
-                  <div className="perm-user"><div className="perm-av">AK</div> علی کریمی</div>
-                  <span className="perm-badge p-admin">مدیر ارشد سازمان</span>
-                </div>
-                <div className="permission-row">
-                  <div className="perm-user"><div className="perm-av" style={{background: 'var(--color-info)'}}>SM</div> سعید محمدی</div>
-                  <span className="perm-badge p-admin">مدیر سیستم</span>
-                </div>
-                <div className="permission-row">
-                  <div className="perm-user"><div className="perm-av" style={{background: 'var(--color-success)'}}>RH</div> رضا حسینی</div>
-                  <span className="perm-badge p-analyst">تحلیلگر مالی</span>
-                </div>
-                <div className="permission-row">
-                  <div className="perm-user"><div className="perm-av" style={{background: 'var(--gray-600)'}}>MA</div> مهدی احمدی</div>
-                  <span className="perm-badge p-viewer">کاربر بیننده</span>
+                <div style={{display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '200px', overflowY: 'auto', marginBottom: '16px'}}>
+                  {usersList.map((usr, i) => (
+                    <div key={i} className="permission-row">
+                      <div className="perm-user">
+                        <div className="perm-av" style={{textTransform: 'uppercase'}}>{usr.username.substring(0, 2)}</div>
+                        {usr.username}
+                      </div>
+                      <span className={`perm-badge ${usr.role === 'Admin' ? 'p-admin' : 'p-analyst'}`}>
+                        {usr.role === 'Admin' ? 'مدیر سیستم' : 'تحلیلگر'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
 
-                <button className="topbar-btn btn-ghost" style={{width: '100%', justifyContent: 'center', marginTop: '16px'}}>
-                  + دعوت کاربر جدید به سازمان
+                <button 
+                  className="topbar-btn btn-ghost" 
+                  style={{width: '100%', justifyContent: 'center'}}
+                  onClick={() => setShowInviteModal(true)}
+                >
+                  + ثبت کاربر جدید در سازمان
                 </button>
               </div>
 
@@ -1155,8 +1577,8 @@ export default function App() {
                   onChange={(e) => setSystemInstruction(e.target.value)}
                 />
                 <div style={{display: 'flex', gap: '10px', marginTop: '12px'}}>
-                  <button className="topbar-btn btn-primary" style={{flex: 1, justifyContent: 'center'}}>ذخیره دستورالعمل جدید</button>
-                  <button className="topbar-btn btn-ghost" style={{flex: 1, justifyContent: 'center'}} onClick={() => setSystemInstruction('شما یک دستیار دانش حرفه‌ای برای آریونکس هستید...')}>بازنشانی به پیش‌فرض</button>
+                  <button className="topbar-btn btn-primary" style={{flex: 1, justifyContent: 'center'}} onClick={saveSystemInstruction}>ذخیره دستورالعمل جدید</button>
+                  <button className="topbar-btn btn-ghost" style={{flex: 1, justifyContent: 'center'}} onClick={resetSystemInstruction}>بازنشانی به پیش‌فرض</button>
                 </div>
               </div>
 
@@ -1985,6 +2407,78 @@ export default function App() {
         {/* برچسب اصالت و برندینگ در گوشه داشبورد */}
         <div className="wf-tag">ArioNex Commercial AI — v1.0.0</div>
       </div>
+
+      {/* مدال دعوت کاربر جدید */}
+      {showInviteModal && (
+        <div className="login-overlay" style={{background: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(8px)'}}>
+          <div className="login-card" style={{maxWidth: '400px', padding: '30px'}}>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
+              <h3 style={{color: 'white', margin: 0, fontSize: '18px'}}>ثبت کاربر جدید</h3>
+              <button 
+                onClick={() => setShowInviteModal(false)}
+                style={{background: 'none', border: 'none', color: 'white', fontSize: '18px', cursor: 'pointer'}}
+              >
+                ✕
+              </button>
+            </div>
+            
+            {inviteError && <div className="login-error">{inviteError}</div>}
+            
+            <form onSubmit={handleInviteUser}>
+              <div className="login-form-group">
+                <label className="login-label">نام کاربری</label>
+                <input 
+                  type="text" 
+                  className="login-input" 
+                  value={inviteUsername} 
+                  onChange={e => setInviteUsername(e.target.value)}
+                  placeholder="username"
+                  required
+                />
+              </div>
+              
+              <div className="login-form-group">
+                <label className="login-label">رمز عبور</label>
+                <input 
+                  type="password" 
+                  className="login-input" 
+                  value={invitePassword} 
+                  onChange={e => setInvitePassword(e.target.value)}
+                  placeholder="••••••"
+                  required
+                />
+              </div>
+              
+              <div className="login-form-group">
+                <label className="login-label">نقش کاربر</label>
+                <select 
+                  value={inviteRole} 
+                  onChange={e => setInviteRole(e.target.value)}
+                  className="login-input"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    color: 'white',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    fontFamily: 'inherit',
+                    direction: 'rtl',
+                    textAlign: 'right'
+                  }}
+                >
+                  <option value="Analyst" style={{background: '#1a2744'}}>تحلیل‌گر (Analyst)</option>
+                  <option value="Admin" style={{background: '#1a2744'}}>مدیر سیستم (Admin)</option>
+                </select>
+              </div>
+              
+              <button type="submit" className="login-btn" style={{marginTop: '15px'}}>
+                ثبت کاربر
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

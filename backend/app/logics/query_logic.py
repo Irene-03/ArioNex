@@ -21,41 +21,74 @@ from app.core.config import settings
 from app.schemas.query_schemas import QueryRequest, QueryResponse
 from app.services.retrieval.query_router import synthesize_rag_response, synthesize_rag_response_stream
 from app.helpers.audit_logger import log_audit_event
+from typing import AsyncGenerator, Optional
 
 logger = logging.getLogger("arionex.query_logic")
 
 
-async def execute_query_logic(request: QueryRequest) -> QueryResponse:
+async def execute_query_logic(request: QueryRequest, current_user: Optional[dict] = None) -> QueryResponse:
     """
     /// <summary>
-    /// اجرای کامل منطق پردازش پرسش RAG از دریافت تا ممیزی
+    /// اجرای کامل منطق پردازش پرسش RAG از دریافت تا ممیزی با اعمال کنترل دسترسی (ACL)
     /// </summary>
-    /// <param name="request">درخواست پرسش شامل متن سوال، شناسه نشست و فیلتر فایل‌ها</param>
-    /// <returns>پاسخ نهایی دستیار به همراه منابع استنادی و وضعیت ایمنی</returns>
-    /// <remarks>
-    /// این تابع توسط route /v1/query و هر مصرف‌کننده دیگری فراخوانی می‌شود.
-    /// خطاهای ممیزی به صورت silent لاگ می‌شوند تا پاسخ اصلی مختل نشود.
-    /// </remarks>
     """
     if not settings.integrations.rest_api:
         logger.warning("REST API Integration is currently disabled in settings.")
         raise HTTPException(status_code=403, detail="REST API Integration channel is disabled.")
 
+    # استخراج شناسه‌های فایل مجاز بر اساس نقش کاربر (RBAC / ACL)
+    allowed_file_ids = None
+    username = "API_User"
+    role = "Developer"
+    
+    if current_user:
+        username = current_user.get("username", "API_User")
+        role = current_user.get("role", "Developer")
+        
+        # اگر کاربر تحلیل‌گر است، فقط اسناد با دسترسی Analyst
+        if role == "Analyst":
+            from app.core.database import get_db_connection
+            conn = None
+            try:
+                conn = get_db_connection()
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM documents WHERE min_role_required = 'Analyst'")
+                    allowed_file_ids = [row[0] for row in cur.fetchall()]
+                    if not allowed_file_ids:
+                        allowed_file_ids = [-1]
+            except Exception as e:
+                logger.error(f"Failed to fetch allowed documents for {username}: {str(e)}")
+                allowed_file_ids = [-1]
+            finally:
+                if conn:
+                    conn.close()
+
+    # اعمال فیلتر نهایی شناسه‌های فایل
+    final_file_ids = request.file_ids
+    if allowed_file_ids is not None:
+        if final_file_ids:
+            # اشتراک شناسه‌ها
+            final_file_ids = list(set(final_file_ids).intersection(set(allowed_file_ids)))
+            if not final_file_ids:
+                final_file_ids = [-1]
+        else:
+            final_file_ids = allowed_file_ids
+
     try:
-        # فراخوانی موتور RAG — تاریخچه چت فعلاً خالی است (در فاز بعدی از session store لود می‌شود)
+        # فراخوانی موتور RAG
         chat_history = []
         result = synthesize_rag_response(
             user_input=request.query,
             chat_history=chat_history,
             threshold=0.4,
             k=4,
-            file_ids=request.file_ids
+            file_ids=final_file_ids
         )
 
-        # ثبت در سیستم ممیزی مرکزی (خطا باعث قطع پاسخ نمی‌شود)
+        # ثبت در سیستم ممیزی مرکزی
         log_audit_event(
-            user_name="API_User",
-            user_role="Developer",
+            user_name=username,
+            user_role=role,
             query_text=request.query,
             response_text=result["answer"],
         )
@@ -73,26 +106,52 @@ async def execute_query_logic(request: QueryRequest) -> QueryResponse:
         raise HTTPException(status_code=500, detail=f"Internal RAG engine failure: {str(e)}")
 
 
-async def execute_query_stream_logic(request: QueryRequest) -> AsyncGenerator[str, None]:
+async def execute_query_stream_logic(request: QueryRequest, current_user: Optional[dict] = None) -> AsyncGenerator[str, None]:
     """
     /// <summary>
-    /// نسخه streaming منطق پرسش — رویدادهای SSE تولید می‌کند (text/event-stream)
+    /// نسخه streaming منطق پرسش با اعمال قوانین سطح دسترسی اسناد (ACL)
     /// </summary>
-    /// <param name="request">درخواست شامل متن سوال و شناسه نشست</param>
-    /// <returns>async generator از خطوط SSE با فرمت "event: ...\ndata: ...\n\n"</returns>
-    /// <remarks>
-    /// رویدادهای SSE تولید شده:
-    ///   event: sources — منابع استنادی پیش از شروع تولید
-    ///   event: token   — تکه‌ای از پاسخ مدل
-    ///   event: done    — پایان پاسخ + وضعیت ایمنی
-    ///   event: error   — در صورت بروز خطا
-    /// </remarks>
     """
     if not settings.integrations.rest_api:
         logger.warning("REST API streaming requested while disabled.")
         yield _sse_event("error", "REST API channel disabled")
         yield _sse_event("done", {"is_safe": True})
         return
+
+    # استخراج شناسه‌های فایل مجاز بر اساس نقش کاربر (RBAC / ACL)
+    allowed_file_ids = None
+    username = "API_User"
+    role = "Developer"
+    
+    if current_user:
+        username = current_user.get("username", "API_User")
+        role = current_user.get("role", "Developer")
+        
+        if role == "Analyst":
+            from app.core.database import get_db_connection
+            conn = None
+            try:
+                conn = get_db_connection()
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM documents WHERE min_role_required = 'Analyst'")
+                    allowed_file_ids = [row[0] for row in cur.fetchall()]
+                    if not allowed_file_ids:
+                        allowed_file_ids = [-1]
+            except Exception as e:
+                logger.error(f"Failed to fetch allowed documents for {username} in stream: {str(e)}")
+                allowed_file_ids = [-1]
+            finally:
+                if conn:
+                    conn.close()
+
+    final_file_ids = request.file_ids
+    if allowed_file_ids is not None:
+        if final_file_ids:
+            final_file_ids = list(set(final_file_ids).intersection(set(allowed_file_ids)))
+            if not final_file_ids:
+                final_file_ids = [-1]
+        else:
+            final_file_ids = allowed_file_ids
 
     accumulated_answer = ""
     try:
@@ -101,6 +160,7 @@ async def execute_query_stream_logic(request: QueryRequest) -> AsyncGenerator[st
             chat_history=[],
             threshold=0.4,
             k=4,
+            file_ids=final_file_ids
         ):
             if event["event"] == "token":
                 accumulated_answer += event["data"]
@@ -108,11 +168,12 @@ async def execute_query_stream_logic(request: QueryRequest) -> AsyncGenerator[st
 
         # ثبت در سیستم ممیزی پس از پایان stream
         log_audit_event(
-            user_name="API_User",
-            user_role="Developer",
+            user_name=username,
+            user_role=role,
             query_text=request.query,
             response_text=accumulated_answer,
         )
+        yield _sse_event("done", {"is_safe": True})
     except Exception as e:
         logger.error(f"Stream RAG error: {str(e)}")
         yield _sse_event("error", str(e))

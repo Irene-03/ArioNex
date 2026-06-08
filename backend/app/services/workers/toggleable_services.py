@@ -37,8 +37,12 @@ def _clean_and_parse_json(text: str) -> dict:
         return json.loads(cleaned)
     except Exception as std_json_err:
         try:
-            from json_repair import repair_json
-            repaired = repair_json(cleaned)
+            try:
+                from json_repair import repair_json
+                repaired = repair_json(cleaned)
+            except ImportError:
+                logger.warning("json_repair module not installed. Falling back to standard string representation.")
+                repaired = cleaned
             return json.loads(repaired)
         except Exception as repair_err:
             logger.error(f"Failed to parse and repair JSON. Standard error: {str(std_json_err)}. Repair error: {str(repair_err)}")

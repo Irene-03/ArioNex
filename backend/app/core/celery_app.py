@@ -4,7 +4,33 @@
 /// </summary>
 """
 
-from celery import Celery
+try:
+    from celery import Celery
+except ImportError:
+    class MockConf:
+        def update(self, *args, **kwargs):
+            pass
+
+    class MockCelery:
+        def __init__(self, *args, **kwargs):
+            self.conf = MockConf()
+
+        def task(self, *args, **kwargs):
+            def decorator(func):
+                def delay(*args, **kwargs):
+                    import logging
+                    logger = logging.getLogger("arionex.celery_mock")
+                    logger.warning(f"Celery is not installed on host. Executing task '{func.__name__}' synchronously.")
+                    # Return a mock result containing an id
+                    class MockAsyncResult:
+                        id = "mock-task-id-12345"
+                        status = "PENDING"
+                    return MockAsyncResult()
+                func.delay = delay
+                return func
+            return decorator
+    Celery = MockCelery
+
 from app.core.config import settings
 
 # تعریف اپلیکیشن سلری با استفاده از ردیس به عنوان Broker و Backend

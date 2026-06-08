@@ -36,16 +36,18 @@ Rewritten standalone question:
 # -------------------------------------------------------------------
 # ۲. پرامپت پاسخ‌دهنده نهایی RAG با استناد به منابع (RAG Responder)
 # -------------------------------------------------------------------
-# هدف: تولید پاسخ دقیق فارسی صرفاً بر اساس Context بازیابی‌شده
-# قانون طلایی: اگر Context کافی نیست، خروجی باید دقیقاً "####" باشد
-# ورودی‌ها: متن Context رتبه‌بندی‌شده + تاریخچه چت + پرسش کاربر
-RESPONDER_TEMPLATE = """You're a responder assistant designed to provide professional answers using the CONTEXT below.
+# هدف: تولید پاسخ دقیق فارسی صرفاً بر اساس Context بازیابی‌شده و دستورالعمل پویا
+# ورودی‌ها: دستورالعمل سیستم + قوانین ممیزی + متن Context + تاریخچه + سوال کاربر
+RESPONDER_TEMPLATE = """System Instruction:
+{system_instruction}
 
 Key instructions for the AI assistant:
     1. Use the below CONTEXT (delimited with XML tags) to answer the QUESTION.
     2. If CONTEXT does not provide enough information to answer the QUESTION, the output must be exactly the four characters: "####"
     3. Don't try to make up an answer.
     4. Respond in Persian.
+
+Compliance Constraints:
 {compliance_constraints}
 
 <CONTEXT>

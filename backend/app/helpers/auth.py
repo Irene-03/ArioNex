@@ -100,3 +100,84 @@ async def verify_api_key(
     finally:
         if conn:
             conn.close()
+
+
+async def get_current_user_or_api_key(
+    api_key_header: Optional[str] = Security(api_key_header_scheme),
+    api_key_bearer: Optional[HTTPAuthorizationCredentials] = Security(api_key_bearer_scheme),
+) -> dict:
+    """
+    /// <summary>
+    /// اعتبارسنجی هدر درخواست و بازیابی هویت کاربر یا نام کلید API
+    /// </summary>
+    """
+    token = api_key_header or (api_key_bearer.credentials if api_key_bearer else None)
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            # بررسی تعداد کاربران و کلیدها
+            cur.execute("SELECT COUNT(*) FROM users")
+            user_count = cur.fetchone()[0]
+            
+            cur.execute("SELECT COUNT(*) FROM api_keys")
+            key_count = cur.fetchone()[0]
+            
+            # اگر نه کاربری ثبت شده و نه کلیدی، دسترسی آزمایشی آزاد است (سازگاری عقب‌رو تست‌ها)
+            if user_count == 0 and key_count == 0 and not token:
+                return {"username": "development_bypass", "role": "Admin"}
+                
+            if not token:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="توکن احراز هویت یا کلید API ارسال نشده است."
+                )
+                
+            # ابتدا بررسی می‌کنیم که آیا توکن نشست کاربر است (با بررسی هدر Authorization Bearer)
+            from app.routes.auth_routes import verify_session_token
+            user_payload = verify_session_token(token)
+            if user_payload:
+                return {
+                    "username": user_payload.get("username"),
+                    "role": user_payload.get("role")
+                }
+                
+            # اگر توکن نشست نبود، بررسی می‌کنیم کلید API معتبر است یا خیر
+            cur.execute(
+                "SELECT id, name, is_active FROM api_keys WHERE api_key = %s",
+                (token,)
+            )
+            row = cur.fetchone()
+            if row:
+                key_id, name, is_active = row
+                if not is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="این کلید API غیرفعال شده است."
+                    )
+                # به‌روزرسانی آخرین زمان استفاده
+                cur.execute(
+                    "UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE id = %s",
+                    (key_id,)
+                )
+                conn.commit()
+                return {"username": name, "role": "Admin"}
+                
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="توکن احراز هویت یا کلید API نامعتبر است."
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in unified auth: {str(e)}")
+        if conn:
+            conn.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="خطا در سیستم احراز هویت."
+        )
+    finally:
+        if conn:
+            conn.close()

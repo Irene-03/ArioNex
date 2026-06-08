@@ -41,6 +41,8 @@ async def get_active_configuration():
         "model_name": settings.model_name,
         "embedding_provider": settings.embedding_provider,
         "embedding_model": settings.embedding_model,
+        "ollama_model": getattr(settings, "ollama_model", "gemma3:4b"),
+        "ollama_base_url": getattr(settings, "ollama_base_url", "http://localhost:11434"),
     }
 
 

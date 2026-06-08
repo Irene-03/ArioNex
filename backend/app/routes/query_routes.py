@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from app.schemas.query_schemas import QueryRequest, QueryResponse
 from app.logics.query_logic import execute_query_logic, execute_query_stream_logic
-from app.helpers.auth import verify_api_key
+from app.helpers.auth import get_current_user_or_api_key
 
 router = APIRouter(prefix="/v1", tags=["Query — RAG Assistant"])
 
@@ -29,14 +29,14 @@ router = APIRouter(prefix="/v1", tags=["Query — RAG Assistant"])
 )
 async def process_rag_query(
     request: QueryRequest,
-    api_key_name: str = Depends(verify_api_key)
+    current_user: dict = Depends(get_current_user_or_api_key)
 ):
     """
     /// <summary>
     /// اندپوینت اصلی ارسال پرسش به دستیار هوشمند RAG (پاسخ یکجا)
     /// </summary>
     """
-    return await execute_query_logic(request)
+    return await execute_query_logic(request, current_user)
 
 
 @router.post(
@@ -46,7 +46,7 @@ async def process_rag_query(
 )
 async def stream_rag_query(
     request: QueryRequest,
-    api_key_name: str = Depends(verify_api_key)
+    current_user: dict = Depends(get_current_user_or_api_key)
 ):
     """
     /// <summary>
@@ -55,7 +55,7 @@ async def stream_rag_query(
     /// <returns>StreamingResponse با media-type text/event-stream</returns>
     """
     return StreamingResponse(
-        execute_query_stream_logic(request),
+        execute_query_stream_logic(request, current_user),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
