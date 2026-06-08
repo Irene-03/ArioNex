@@ -122,3 +122,66 @@ async def update_active_configuration(update: ConfigUpdateRequest):
     except Exception as e:
         logger.error(f"Failed to update runtime configuration: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# -------------------------------------------------------------------
+# System Prompts Management Endpoints
+# -------------------------------------------------------------------
+from pydantic import BaseModel
+from app.core.database import get_db_connection
+
+class PromptUpdateRequest(BaseModel):
+    prompt: str
+
+
+@router.get("/config/prompts", summary="دریافت پرامپت فعال سیستم")
+async def get_system_prompt():
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT prompt FROM system_prompts WHERE key = 'default_system_instruction'")
+            row = cur.fetchone()
+            if row:
+                return {"prompt": row[0]}
+            
+            # در صورت عدم وجود، یک مقدار پیش‌فرض برمی‌گردانیم
+            default_prompt = (
+                "شما یک دستیار دانش حرفه‌ای برای آریونکس هستید. همیشه منابع را دقیق استناد دهید. "
+                "هیچ‌گاه فراتر از اسناد ارائه‌شده گمانه‌زنی نکنید. اگر سند مرتبطی یافت نشد، صادقانه بگویید."
+            )
+            return {"prompt": default_prompt}
+    except Exception as e:
+        logger.error(f"Failed to get system prompt: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/config/prompts", summary="بروزرسانی پرامپت فعال سیستم")
+async def update_system_prompt(payload: PromptUpdateRequest):
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO system_prompts (key, prompt, updated_at)
+                VALUES ('default_system_instruction', %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (key) DO UPDATE SET
+                    prompt = EXCLUDED.prompt,
+                    updated_at = EXCLUDED.updated_at
+                """,
+                (payload.prompt,)
+            )
+            conn.commit()
+        return {"status": "success", "message": "System prompt updated successfully.", "prompt": payload.prompt}
+    except Exception as e:
+        logger.error(f"Failed to update system prompt: {str(e)}")
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

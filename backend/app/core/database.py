@@ -142,6 +142,34 @@ def init_db() -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+        """,
+        # ۸. جدول کاربران سیستم (Users Table)
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(100) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            role VARCHAR(50) NOT NULL DEFAULT 'Analyst',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """,
+        # ۹. جدول فایل‌های آپلود شده و سطح دسترسی (Documents & ACL)
+        """
+        CREATE TABLE IF NOT EXISTS documents (
+            id INT PRIMARY KEY,
+            filename VARCHAR(255) NOT NULL,
+            file_type VARCHAR(50) NOT NULL,
+            min_role_required VARCHAR(50) NOT NULL DEFAULT 'Analyst',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """,
+        # ۱۰. جدول پرامپت‌های سیستم (System Prompts Table)
+        """
+        CREATE TABLE IF NOT EXISTS system_prompts (
+            key VARCHAR(100) PRIMARY KEY,
+            prompt TEXT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         """
     ]
     
@@ -151,6 +179,34 @@ def init_db() -> None:
         with conn.cursor() as cur:
             for query in queries:
                 cur.execute(query)
+            
+            # ثبت کاربر ادمین پیش‌فرض در صورت عدم وجود (پسورد: admin123)
+            import hashlib
+            admin_username = "admin"
+            admin_pwd_hash = hashlib.sha256(("admin123" + "arionex_secure_salt_2026").encode('utf-8')).hexdigest()
+            cur.execute(
+                """
+                INSERT INTO users (username, password_hash, role)
+                VALUES (%s, %s, 'Admin')
+                ON CONFLICT (username) DO NOTHING;
+                """,
+                (admin_username, admin_pwd_hash)
+            )
+
+            # ثبت پرامپت سیستم پیش‌فرض
+            default_prompt = (
+                "شما یک دستیار دانش حرفه‌ای برای آریونکس هستید. همیشه منابع را دقیق استناد دهید. "
+                "هیچ‌گاه فراتر از اسناد ارائه‌شده گمانه‌زنی نکنید. اگر سند مرتبطی یافت نشد، صادقانه بگویید."
+            )
+            cur.execute(
+                """
+                INSERT INTO system_prompts (key, prompt)
+                VALUES ('default_system_instruction', %s)
+                ON CONFLICT (key) DO NOTHING;
+                """,
+                (default_prompt,)
+            )
+
             conn.commit()
         logger.info("Database and Extensions Initialized Successfully.")
     except Exception as e:
