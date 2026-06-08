@@ -74,8 +74,26 @@ async def update_active_configuration(update: ConfigUpdateRequest):
 
         if update.providers and hasattr(settings, "providers"):
             for k, v in update.providers.items():
-                if hasattr(settings.providers, k):
+                # Ollama: ذخیره در settings به عنوان provider فعال
+                if k == "ollama" and bool(v):
+                    settings.llm_provider = "ollama"
+                    logger.info("LLM provider switched to Ollama (local mode).")
+                elif hasattr(settings.providers, k):
                     setattr(settings.providers, k, bool(v))
+
+        # تنظیمات Ollama — مدل و آدرس سرور
+        if update.ollama_model:
+            settings.ollama_model = update.ollama_model
+            logger.info(f"Ollama model set to: {update.ollama_model}")
+
+        if update.ollama_base_url:
+            settings.ollama_base_url = update.ollama_base_url
+            logger.info(f"Ollama base URL set to: {update.ollama_base_url}")
+
+        # تغییر provider فعال
+        if update.llm_provider:
+            settings.llm_provider = update.llm_provider
+            logger.info(f"LLM provider switched to: {update.llm_provider}")
 
         logger.info("Administrative Feature Toggles updated successfully at runtime.")
         return {
@@ -86,6 +104,9 @@ async def update_active_configuration(update: ConfigUpdateRequest):
                 "integrations": settings.integrations.__dict__,
                 "security": settings.security.__dict__,
                 "providers": settings.providers.__dict__ if hasattr(settings, "providers") else {},
+                "llm_provider": settings.llm_provider,
+                "ollama_model": getattr(settings, "ollama_model", "gemma3:4b"),
+                "ollama_base_url": getattr(settings, "ollama_base_url", "http://localhost:11434"),
             },
         }
     except Exception as e:

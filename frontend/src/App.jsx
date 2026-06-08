@@ -16,7 +16,7 @@ import './App.css';
 //   true  → تمام API calls با داده‌های واقع‌بینانه شبیه‌سازی می‌شوند
 //   false → اتصال واقعی به http://localhost:8000
 // ─────────────────────────────────────────────────────────────────────────────
-const MOCK_MODE = true;
+const MOCK_MODE = false;
 
 /** شبیه‌سازی تاخیر شبکه (میلی‌ثانیه) */
 const mockDelay = (ms = 600) => new Promise(resolve => setTimeout(resolve, ms));
@@ -29,37 +29,29 @@ const MOCK_CONFIG = {
 };
 
 /** پاسخ‌های نمونه برای چت Mock */
-const MOCK_ANSWERS = [
-  {
-    answer: 'بر اساس آیین‌نامه استخدامی شرکت، مرخصی سالانه کارکنان ۳۰ روز کاری است. کارکنان می‌توانند حداکثر ۱۵ روز آن را به سال بعد انتقال دهند.',
-    sources: [
-      { doc_name: 'HR_Policy_Manual_v2.docx', sequence_id: 12 },
-      { doc_name: 'Annual_Report_2024.pdf', sequence_id: 47 }
-    ],
-    is_safe: true
-  },
-  {
-    answer: 'مجموع بدهکاری شرکت در پایان سال مالی ۱۴۰۳ برابر با ۲۴۷ میلیارد ریال بوده که نسبت به سال قبل ۱۲٪ کاهش داشته است.',
-    sources: [
-      { doc_name: 'Sales_Data_Q2.csv', sequence_id: 3 }
-    ],
-    is_safe: true
-  },
-  {
-    answer: 'منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند.',
-    sources: [],
-    is_safe: true
-  },
-  {
-    answer: 'قرارداد با تامین‌کننده شماره A-2024-087 در تاریخ ۱۵ شهریور ۱۴۰۳ امضا شده و تا پایان اسفند ۱۴۰۴ اعتبار دارد. مبلغ قرارداد ۸۵۰ میلیون تومان می‌باشد.',
-    sources: [
-      { doc_name: 'Supplier_Contracts_Q3.pdf', sequence_id: 22 },
-      { doc_name: 'Supplier_Contracts_Q3.pdf', sequence_id: 23 }
-    ],
-    is_safe: true
-  }
-];
+const MOCK_ANSWERS = [];
 let _mockAnswerIdx = 0;
+
+/** نگاشت کلیدهای PII بک‌اند به برچسب فارسی */
+const PII_KEY_LABELS = {
+  national_id: 'کد ملی',
+  phone_number: 'تلفن همراه',
+  phone: 'تلفن همراه',
+  email: 'ایمیل',
+  card_number: 'کارت بانکی',
+  card: 'کارت بانکی',
+  iban: 'شبا',
+  bank_account: 'حساب بانکی',
+};
+
+/** مدل‌های Ollama موجود */
+const OLLAMA_MODELS = [
+  { id: 'gemma3:4b', label: 'Gemma 3 4B (سریع)' },
+  { id: 'gemma3:12b', label: 'Gemma 3 12B (دقیق‌تر)' },
+  { id: 'gemma2:2b', label: 'Gemma 2 2B (سبک‌ترین)' },
+  { id: 'llama3.2:3b', label: 'Llama 3.2 3B' },
+  { id: 'qwen2.5:3b', label: 'Qwen 2.5 3B' },
+];
 
 export default function App() {
   // صفحه فعال جاری در داشبورد
@@ -93,6 +85,7 @@ export default function App() {
       sender: 'ai',
       text: 'سلام! من دستیار دانش امن شما (آریو) هستم. تمام پرسش‌ها روی داده‌های خصوصی شما اجرا می‌شوند — هیچ اطلاعاتی از زیرساخت شما خارج نمی‌شود. چطور می‌توانم کمک کنم؟',
       isSafe: true,
+      isWelcome: true,
       sources: []
     }
   ]);
@@ -107,26 +100,21 @@ export default function App() {
     'شما یک دستیار دانش حرفه‌ای برای آریونکس هستید. همیشه منابع را دقیق استناد دهید. هیچ‌گاه فراتر از اسناد ارائه‌شده گمانه‌زنی نکنید. اگر سند مرتبطی یافت نشد، صادقانه بگویید…'
   );
 
-  // لیست فایل‌های آپلود شده و وضعیت پردازش آن‌ها
-  const [documents, setDocuments] = useState([
-    { id: 1, name: 'Annual_Report_2024.pdf', size: '4.2 MB', chunks: 1204, date: '۲۰ اردیبهشت', status: 'ready', ext: 'PDF' },
-    { id: 2, name: 'Sales_Data_Q2.csv', size: '890 KB', chunks: 387, date: '۲۲ اردیبهشت', status: 'ready', ext: 'CSV' },
-    { id: 3, name: 'HR_Policy_Manual_v2.docx', size: '1.8 MB', chunks: 0, date: 'امروز', status: 'processing', progress: 62, ext: 'DOC' },
-    { id: 4, name: 'Supplier_Contracts_Q3.pdf', size: '6.1 MB', chunks: 2881, date: '۱۸ اردیبهشت', status: 'ready', ext: 'PDF' },
-    { id: 5, name: 'Support_Tickets_2024.csv', size: '3.4 MB', chunks: 918, date: '۱۵ اردیبهشت', status: 'ready', ext: 'CSV' }
-  ]);
+  // تنظیمات حالت محلی Ollama
+  const [ollamaEnabled, setOllamaEnabled] = useState(false);
+  const [ollamaModel, setOllamaModel] = useState('gemma3:4b');
+  const [ollamaEndpoint, setOllamaEndpoint] = useState('http://localhost:11434');
+
+  // لیست فایل‌های آپلود شده و وضعیت پردازش آن‌ها — خالی در ابتدا، از بک‌اند بارگذاری می‌شود
+  const [documents, setDocuments] = useState([]);
 
   // متغیرهای وضعیت پیش‌نمایش قفل حریم شخصی PII
   const [piiPreview, setPiiPreview] = useState('');
   const [piiAuditCounts, setPiiAuditCounts] = useState({});
 
-  // لیست ابزارک‌های سایت‌ها
-  const [widgets, setWidgets] = useState([
-    { id: 1, name: 'سایت رسمی شرکت', url: 'company.ir', welcome_message: 'سلام! چطور می‌توانم کمک کنم؟ 💼', theme_color: '#1a2744', accent_color: '#c4894a', is_active: true }
-  ]);
-  const [apiKeys, setApiKeys] = useState([
-    { id: 1, name: 'پنل اتوماسیون اداری', api_key: 'anx_live_a23b...7ef9', is_active: true, created_at: '۱۴۰۳/۰۲/۱۵', last_used_at: '۱۰ دقیقه پیش' }
-  ]);
+  // لیست ابزارک‌های سایت‌ها — از بک‌اند بارگذاری می‌شود
+  const [widgets, setWidgets] = useState([]);
+  const [apiKeys, setApiKeys] = useState([]);
 
   // متغیرهای فرم
   const [newWidgetName, setNewWidgetName] = useState('');
@@ -138,6 +126,19 @@ export default function App() {
   const [newKeyName, setNewKeyName] = useState('');
   const [generatedKey, setGeneratedKey] = useState('');
   const [widgetPreviewSelected, setWidgetPreviewSelected] = useState(null);
+
+  // بارگذاری اولیه اسناد از بک‌اند
+  const fetchDocuments = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/v1/knowledge/documents');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) setDocuments(data);
+      }
+    } catch (err) {
+      console.info('Documents endpoint not available yet:', err.message);
+    }
+  };
 
   const fetchIntegrations = async () => {
     if (MOCK_MODE) return;
@@ -161,6 +162,9 @@ export default function App() {
 
   useEffect(() => {
     fetchIntegrations();
+    if (activeScreen === 'knowledge' || activeScreen === 'upload') {
+      fetchDocuments();
+    }
   }, [activeScreen]);
 
   const handleCreateWidget = async (e) => {
@@ -895,7 +899,7 @@ export default function App() {
         {/* صفحه چت هوشمند دستیار */}
         {activeScreen === 'chat' && (
           <div className="screen fade-in" style={{padding: '16px'}}>
-            <div className="chat-layout" style={{height: 'calc(800px - 100px)'}}>
+            <div className="chat-layout" style={{height: '100%', minHeight: 0}}>
               
               {/* لیست تاریخچه جلسات چت */}
               <div className="chat-sidebar">
@@ -948,7 +952,7 @@ export default function App() {
                       </div>
                       
                       <div>
-                        {msg.sender === 'ai' && (
+                        {msg.sender === 'ai' && !msg.isWelcome && (
                           <div className="safety-tag">
                             <span>🔒</span> {msg.isRefusal ? 'حفاظت عدم توهم فعال' : 'پاسخ معتبر RAG · تأیید شده توسط مخزن دانش'}
                           </div>
@@ -1145,7 +1149,8 @@ export default function App() {
                     <span>
                       اقلام حساس فیلتر شده در آخرین فایل: {
                         Object.entries(piiAuditCounts)
-                          .map(([k, v]) => `${k === 'national_id' ? 'کد ملی' : k === 'phone_number' ? 'تلفن همراه' : k === 'email' ? 'ایمیل' : k === 'card_number' ? 'کارت بانکی' : 'شبا'}: ${v} مورد`)
+                          .filter(([, v]) => v > 0)
+                          .map(([k, v]) => `${PII_KEY_LABELS[k] || k}: ${v} مورد`)
                           .join(' | ')
                       }
                     </span>
@@ -1279,7 +1284,93 @@ export default function App() {
                 </div>
               </div>
 
-              {/* بخش پنجم: وضعیت پروایدرهای هوش مصنوعی فعال */}
+              {/* بخش پنجم: حالت محلی Ollama */}
+              <div className="admin-card">
+                <div className="admin-card-title">
+                  <span>🖥️</span> حالت محلی — Ollama (بدون نیاز به اینترنت)
+                </div>
+                <div style={{fontSize: '12.5px', color: 'var(--text-muted)', marginBottom: '14px', lineHeight: '1.7'}}>
+                  با فعال کردن این حالت، بک‌اند آریونکس از مدل زبانی محلی Ollama (مثل Gemma 3) به‌جای API خارجی استفاده می‌کند. مناسب برای محیط‌های کاملاً آفلاین و حریم‌خصوصی حداکثری.
+                </div>
+                <div className="toggle-row">
+                  <span className="toggle-label">فعال‌سازی حالت محلی Ollama</span>
+                  <div
+                    id="ollama-toggle"
+                    className={`toggle ${ollamaEnabled ? 'toggle-on' : 'toggle-off'}`}
+                    onClick={() => {
+                      const next = !ollamaEnabled;
+                      setOllamaEnabled(next);
+                      if (!MOCK_MODE) {
+                        fetch('http://localhost:8000/v1/config', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ providers: { ollama: next } })
+                        }).catch(() => {});
+                      }
+                    }}
+                  />
+                </div>
+                {ollamaEnabled && (
+                  <div style={{marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                    <div>
+                      <label style={{fontSize: '12.5px', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', fontWeight: '600'}}>مدل زبانی محلی:</label>
+                      <select
+                        id="ollama-model-select"
+                        value={ollamaModel}
+                        onChange={(e) => {
+                          setOllamaModel(e.target.value);
+                          if (!MOCK_MODE) {
+                            fetch('http://localhost:8000/v1/config', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ ollama_model: e.target.value })
+                            }).catch(() => {});
+                          }
+                        }}
+                        style={{width: '100%', padding: '8px 12px', border: '1px solid var(--gray-100)', borderRadius: 'var(--radius)', fontSize: '13px', background: 'var(--gray-50)', color: 'var(--text-primary)', fontFamily: 'inherit'}}
+                      >
+                        {OLLAMA_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{fontSize: '12.5px', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', fontWeight: '600'}}>آدرس Ollama Server:</label>
+                      <input
+                        id="ollama-endpoint-input"
+                        type="text"
+                        className="chat-input-box"
+                        style={{borderRadius: 'var(--radius)', fontSize: '13px', direction: 'ltr', width: '100%'}}
+                        value={ollamaEndpoint}
+                        onChange={(e) => setOllamaEndpoint(e.target.value)}
+                        placeholder="http://localhost:11434"
+                      />
+                    </div>
+                    <button
+                      className="topbar-btn btn-primary"
+                      style={{width: '100%', justifyContent: 'center'}}
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(`${ollamaEndpoint}/api/tags`, { signal: AbortSignal.timeout(3000) });
+                          const data = await res.json();
+                          const modelCount = data?.models?.length ?? 0;
+                          alert(`✅ اتصال موفق! ${modelCount} مدل روی Ollama یافت شد.`);
+                        } catch {
+                          alert('❌ اتصال به Ollama ناموفق. مطمئن شوید سرویس در حال اجراست.');
+                        }
+                      }}
+                    >
+                      🔍 آزمون اتصال به Ollama
+                    </button>
+                    <div style={{background: 'var(--color-info-bg)', border: '1px solid rgba(21, 101, 192, 0.2)', borderRadius: 'var(--radius)', padding: '12px', fontSize: '12px', color: 'var(--color-info)', lineHeight: '1.8'}}>
+                      <strong>راهنمای نصب Ollama:</strong><br/>
+                      ۱. از <span style={{direction: 'ltr', display: 'inline'}}>ollama.com</span> نصب کنید<br/>
+                      ۲. دستور <code style={{background: 'rgba(21,101,192,0.1)', padding: '1px 5px', borderRadius: '3px', direction: 'ltr'}}>ollama pull gemma3:4b</code> را اجرا کنید<br/>
+                      ۳. این حالت را فعال کنید و «آزمون اتصال» بزنید
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* بخش ششم: وضعیت پروایدرهای هوش مصنوعی فعال */}
               <div className="admin-card">
                 <div className="admin-card-title">
                   <span>🧠</span> پروایدرهای هوش مصنوعی فعال (LLM Providers)

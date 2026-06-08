@@ -40,3 +40,16 @@ class ConfigUpdateRequest(BaseModel):
         default=None,
         description="تنظیمات روشن/خاموش بودن پروایدرهای هوش مصنوعی"
     )
+    # تنظیمات Ollama (حالت محلی آفلاین)
+    ollama_model: Optional[str] = Field(
+        default=None,
+        description="نام مدل محلی Ollama — مثال: gemma3:4b, llama3.2:3b"
+    )
+    ollama_base_url: Optional[str] = Field(
+        default=None,
+        description="آدرس سرور Ollama — پیش‌فرض: http://localhost:11434"
+    )
+    llm_provider: Optional[str] = Field(
+        default=None,
+        description="تغییر provider فعال در زمان اجرا — مثال: ollama, openrouter, openai"
+    )

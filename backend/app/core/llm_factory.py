@@ -13,8 +13,10 @@
 ///   - deepseek    : DeepSeek-Chat, DeepSeek-Coder (از طریق OpenAI-compatible API)
 ///   - openrouter  : دسترسی به تمام مدل‌های فوق از طریق یک API key واحد (پیشنهادی برای تولید)
 ///   - hormouz     : دروازه ۳۵۰+ مدل از طریق یک API key واحد — سازگار با OpenAI (https://api.hormouz.net/v1)
+///   - ollama      : مدل‌های محلی روی سخت‌افزار شخصی (بدون نیاز به اینترنت یا API key)
 ///
 /// مزیت openrouter: یک API key، دسترسی به همه مدل‌ها، fallback خودکار، مدیریت هزینه متمرکز
+/// مزیت ollama: حریم‌خصوصی کامل، آفلاین، بدون هزینه
 /// </remarks>
 """
 
@@ -76,6 +78,8 @@ def get_llm(
             return _create_avalai_llm(active_model, temperature)
         elif active_provider == "hormouz":
             return _create_hormouz_llm(active_model, temperature)
+        elif active_provider == "ollama":
+            return _create_ollama_llm(active_model, temperature)
         else:
             logger.warning(f"Unknown LLM provider '{active_provider}'. Falling back to OpenRouter.")
             return _create_openrouter_llm(active_model, temperature)
@@ -280,6 +284,50 @@ def _create_hormouz_llm(model: str, temperature: float):
         openai_api_base="https://api.hormouz.net/v1",
         streaming=True,
     )
+
+
+def _create_ollama_llm(model: str, temperature: float):
+    """
+    /// <summary>
+    /// ساخت LLM محلی از طریق Ollama — بدون نیاز به API key یا اینترنت
+    /// </summary>
+    /// <remarks>
+    /// Ollama یک سرور محلی برای اجرای مدل‌های LLM است.
+    /// نیاز به نصب: pip install langchain-ollama  (یا langchain-community)
+    /// نصب Ollama: https://ollama.com
+    /// دستور pull مدل: ollama pull gemma3:4b
+    /// مدل‌های پیشنهادی: gemma3:4b, gemma3:12b, gemma2:2b, llama3.2:3b, qwen2.5:3b
+    /// </remarks>
+    """
+    # تعیین مدل و endpoint
+    ollama_model = getattr(settings, 'ollama_model', None) or model or 'gemma3:4b'
+    ollama_base = getattr(settings, 'ollama_base_url', 'http://localhost:11434')
+
+    try:
+        from langchain_ollama import ChatOllama
+        logger.info(f"Ollama LLM: using langchain-ollama, model='{ollama_model}'")
+        return ChatOllama(
+            model=ollama_model,
+            temperature=temperature,
+            base_url=ollama_base,
+        )
+    except ImportError:
+        pass
+
+    try:
+        from langchain_community.chat_models import ChatOllama as CommChatOllama
+        logger.info(f"Ollama LLM (community): model='{ollama_model}'")
+        return CommChatOllama(
+            model=ollama_model,
+            temperature=temperature,
+            base_url=ollama_base,
+        )
+    except ImportError:
+        raise ImportError(
+            "Ollama LangChain integration not installed.\n"
+            "Run: pip install langchain-ollama\n"
+            "Or:  pip install langchain-community"
+        )
 
 
 def _warn_if_mock(api_key: str, provider_name: str) -> None:
