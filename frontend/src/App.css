@@ -672,3 +672,103 @@
   pointer-events: none;
   user-select: none;
 }
+
+/* 
+================================================================
+  آریونکس — استایل‌های رسپانسیو و چیدمان‌های گرید (Responsive Grid Layouts)
+================================================================
+*/
+
+/* کلاس‌های گرید برای واکنش‌گرایی */
+.grid-3-col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.grid-2-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.api-keys-grid {
+  display: grid;
+  grid-template-columns: 2fr 2fr 1fr 1fr;
+}
+
+/* قوانین واکنش‌گرایی برای موبایل و تبلت */
+@media (max-width: 900px) {
+  .grid-3-col {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  /* تنظیم پدینگ‌های المان‌های صفحه در موبایل */
+  .screen {
+    padding: 12px !important;
+  }
+  
+  .topbar {
+    padding: 0 12px !important;
+    gap: 8px !important;
+  }
+
+  /* مخفی کردن متن دکمه‌های هدر برای همخوانی در موبایل */
+  .btn-text {
+    display: none !important;
+  }
+  
+  .topbar-btn {
+    padding: 8px 12px !important;
+  }
+
+  /* رسپانسیو کردن جدول فایل‌ها */
+  .ft-header {
+    grid-template-columns: 3fr 1fr !important;
+  }
+  .ft-header div:nth-child(2),
+  .ft-header div:nth-child(3),
+  .ft-header div:nth-child(4) {
+    display: none !important;
+  }
+  
+  .ft-row {
+    grid-template-columns: 3fr 1fr !important;
+    padding: 10px 14px !important;
+  }
+  .ft-row > div:nth-child(2),
+  .ft-row > div:nth-child(3),
+  .ft-row > div:nth-child(4) {
+    display: none !important;
+  }
+
+  /* رسپانسیو کردن صف آپلود */
+  .upload-zone {
+    padding: 24px 16px !important;
+  }
+  .file-type-pills {
+    margin-top: 10px !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .grid-3-col {
+    grid-template-columns: 1fr;
+  }
+  
+  .grid-2-col {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .api-keys-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .api-keys-grid div:nth-child(3) {
+    display: none !important;
+  }
+}

@@ -185,7 +185,7 @@ class AnalystAgent:
             # شبیه‌سازی نتایج حسابداری دمو جهت اجرای تست محلی
             logger.warning("Mock mode active in LangGraph Analyst. Answering using mock solver.")
             if "بدهکاری" in query or "چک" in query:
-                return "مجموع بدهکاری اسناد از نوع سند چک برابر با ۶۲۳،۳۴۶ ریال می‌باشد."
+                return "مجموع بدهکاری اسناد از نوع سند چک برابر با ۶۲۳,۳۴۶ ریال می‌باشد."
             return "DOUBTFUL ANSWER: Mock solver cannot process this query without active LLM API key."
 
         # ۲. پیکربندی ابزارها و مدل LLM از طریق Factory

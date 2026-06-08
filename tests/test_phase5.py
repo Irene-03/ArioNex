@@ -27,7 +27,15 @@ from app.services.integrations.telegram_bot import (
 
 client = TestClient(app)
 
-def test_fastapi_endpoints():
+@patch("app.helpers.auth.get_db_connection")
+def test_fastapi_endpoints(mock_get_db):
+    # Setup mock cursor to return 0 for count of API keys
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_cursor.fetchone.return_value = (0,)
+    mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
+    mock_get_db.return_value = mock_conn
+
     print("Testing REST API Endpoints...")
     
     # ۱. تست اندپوینت سلامت سیستم

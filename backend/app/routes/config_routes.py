@@ -75,9 +75,19 @@ async def update_active_configuration(update: ConfigUpdateRequest):
         if update.providers and hasattr(settings, "providers"):
             for k, v in update.providers.items():
                 # Ollama: ذخیره در settings به عنوان provider فعال
-                if k == "ollama" and bool(v):
-                    settings.llm_provider = "ollama"
-                    logger.info("LLM provider switched to Ollama (local mode).")
+                if k == "ollama":
+                    if bool(v):
+                        settings.llm_provider = "ollama"
+                        logger.info("LLM provider switched to Ollama (local mode).")
+                    else:
+                        # Find fallback provider
+                        fallback = "openrouter"
+                        for p_name in ["openrouter", "openai", "deepseek", "google", "anthropic", "gapgpt", "avalai", "hormouz"]:
+                            if getattr(settings.providers, p_name, False):
+                                fallback = p_name
+                                break
+                        settings.llm_provider = fallback
+                        logger.info(f"Ollama disabled. LLM provider fell back to: {fallback}")
                 elif hasattr(settings.providers, k):
                     setattr(settings.providers, k, bool(v))
 

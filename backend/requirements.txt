@@ -13,6 +13,7 @@ langchain>=0.1.13
 langchain-community>=0.0.29
 langchain-core>=0.1.33
 langchain-openai>=0.1.1
+langchain-ollama>=0.1.0
 langchain-experimental>=0.0.55
 langgraph>=0.0.26
 pypdf>=4.1.0

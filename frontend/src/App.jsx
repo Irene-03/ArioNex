@@ -12,25 +12,8 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ⚙️  MOCK MODE — برای تست UI بدون بک‌اند
-//   true  → تمام API calls با داده‌های واقع‌بینانه شبیه‌سازی می‌شوند
-//   false → اتصال واقعی به http://localhost:8000
+// ⚙️  REAL MODE ONLY
 // ─────────────────────────────────────────────────────────────────────────────
-const MOCK_MODE = false;
-
-/** شبیه‌سازی تاخیر شبکه (میلی‌ثانیه) */
-const mockDelay = (ms = 600) => new Promise(resolve => setTimeout(resolve, ms));
-
-/** داده‌های تنظیمات Mock */
-const MOCK_CONFIG = {
-  security: { pii_redaction: true, strict_non_hallucination: true },
-  services: { safety_auditor: false, log_processor: true, web_search: false },
-  integrations: { telegram_bot: true, popup_widget: true, rest_api: true }
-};
-
-/** پاسخ‌های نمونه برای چت Mock */
-const MOCK_ANSWERS = [];
-let _mockAnswerIdx = 0;
 
 /** نگاشت کلیدهای PII بک‌اند به برچسب فارسی */
 const PII_KEY_LABELS = {
@@ -46,9 +29,12 @@ const PII_KEY_LABELS = {
 
 /** مدل‌های Ollama موجود */
 const OLLAMA_MODELS = [
-  { id: 'gemma3:4b', label: 'Gemma 3 4B (سریع)' },
-  { id: 'gemma3:12b', label: 'Gemma 3 12B (دقیق‌تر)' },
+  { id: 'gemma2:9b', label: 'Gemma 2 9B (پیشنهادی)' },
   { id: 'gemma2:2b', label: 'Gemma 2 2B (سبک‌ترین)' },
+  { id: 'gemma2:27b', label: 'Gemma 2 27B (قدرتمند)' },
+  { id: 'gemma:2b', label: 'Gemma 1 2B' },
+  { id: 'gemma:7b', label: 'Gemma 1 7B' },
+  { id: 'gemma3:4b', label: 'Gemma 3 4B (سریع)' },
   { id: 'llama3.2:3b', label: 'Llama 3.2 3B' },
   { id: 'qwen2.5:3b', label: 'Qwen 2.5 3B' },
 ];
@@ -141,7 +127,6 @@ export default function App() {
   };
 
   const fetchIntegrations = async () => {
-    if (MOCK_MODE) return;
     try {
       const resWidgets = await fetch('http://localhost:8000/v1/integrations/widgets');
       const dataWidgets = await resWidgets.json();
@@ -181,23 +166,17 @@ export default function App() {
     };
 
     try {
-      if (MOCK_MODE) {
-        const newW = { id: Date.now(), ...widgetData };
-        setWidgets(prev => [newW, ...prev]);
-        setWidgetPreviewSelected(newW);
+      const res = await fetch('http://localhost:8000/v1/integrations/widgets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(widgetData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setWidgets(prev => [data, ...prev]);
+        setWidgetPreviewSelected(data);
       } else {
-        const res = await fetch('http://localhost:8000/v1/integrations/widgets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(widgetData)
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setWidgets(prev => [data, ...prev]);
-          setWidgetPreviewSelected(data);
-        } else {
-          alert(data.detail || 'خطا در ثبت ابزارک');
-        }
+        alert(data.detail || 'خطا در ثبت ابزارک');
       }
       setNewWidgetName('');
       setNewWidgetUrl('');
@@ -209,20 +188,13 @@ export default function App() {
   const handleDeleteWidget = async (id) => {
     if (!confirm('آیا از حذف این ابزارک اطمینان دارید؟')) return;
     try {
-      if (MOCK_MODE) {
+      const res = await fetch(`http://localhost:8000/v1/integrations/widgets/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
         setWidgets(prev => prev.filter(w => w.id !== id));
         if (widgetPreviewSelected?.id === id) {
           setWidgetPreviewSelected(null);
-        }
-      } else {
-        const res = await fetch(`http://localhost:8000/v1/integrations/widgets/${id}`, {
-          method: 'DELETE'
-        });
-        if (res.ok) {
-          setWidgets(prev => prev.filter(w => w.id !== id));
-          if (widgetPreviewSelected?.id === id) {
-            setWidgetPreviewSelected(null);
-          }
         }
       }
     } catch (err) {
@@ -235,29 +207,15 @@ export default function App() {
     if (!newKeyName.trim()) return;
 
     try {
-      if (MOCK_MODE) {
-        const mockToken = 'anx_live_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        const newKey = {
-          id: Date.now(),
-          name: newKeyName,
-          api_key: mockToken,
-          is_active: true,
-          created_at: new Date().toLocaleDateString('fa-IR'),
-          last_used_at: '—'
-        };
-        setApiKeys(prev => [newKey, ...prev]);
-        setGeneratedKey(mockToken);
-      } else {
-        const res = await fetch('http://localhost:8000/v1/integrations/apikeys', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: newKeyName })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setApiKeys(prev => [data, ...prev]);
-          setGeneratedKey(data.api_key);
-        }
+      const res = await fetch('http://localhost:8000/v1/integrations/apikeys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newKeyName })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setApiKeys(prev => [data, ...prev]);
+        setGeneratedKey(data.api_key);
       }
       setNewKeyName('');
     } catch (err) {
@@ -268,15 +226,11 @@ export default function App() {
   const handleDeleteAPIKey = async (id) => {
     if (!confirm('آیا از ابطال این کلید API اطمینان دارید؟')) return;
     try {
-      if (MOCK_MODE) {
+      const res = await fetch(`http://localhost:8000/v1/integrations/apikeys/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
         setApiKeys(prev => prev.filter(k => k.id !== id));
-      } else {
-        const res = await fetch(`http://localhost:8000/v1/integrations/apikeys/${id}`, {
-          method: 'DELETE'
-        });
-        if (res.ok) {
-          setApiKeys(prev => prev.filter(k => k.id !== id));
-        }
       }
     } catch (err) {
       console.error('Error deleting API key:', err);
@@ -287,16 +241,8 @@ export default function App() {
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        let data;
-        if (MOCK_MODE) {
-          // --- حالت Mock: بدون نیاز به بک‌اند ---
-          await mockDelay(300);
-          data = MOCK_CONFIG;
-          console.info('[MOCK] Loaded config from mock data.');
-        } else {
-          const res = await fetch('http://localhost:8000/v1/config');
-          data = await res.json();
-        }
+        const res = await fetch('http://localhost:8000/v1/config');
+        const data = await res.json();
         if (data) {
           setFeatures({
             piiRedaction: data.security?.pii_redaction ?? true,
@@ -330,11 +276,7 @@ export default function App() {
     const updatedFeatures = { ...features, [key]: !features[key] };
     setFeatures(updatedFeatures);
 
-    if (MOCK_MODE) {
-      // --- حالت Mock: فقط state محلی تغییر می‌کند ---
-      console.info('[MOCK] Feature toggle updated locally (no API call):', key, '->', !features[key]);
-      return;
-    }
+
 
     // ثبت زنده تاگل‌ها در وب‌سرور FastAPI
     fetch('http://localhost:8000/v1/config', {
@@ -379,10 +321,7 @@ export default function App() {
     const updatedFeatures = { ...features, [featureKey]: !features[featureKey] };
     setFeatures(updatedFeatures);
 
-    if (MOCK_MODE) {
-      console.info('[MOCK] Provider toggle updated locally:', providerKey, '->', !features[featureKey]);
-      return;
-    }
+
 
     fetch('http://localhost:8000/v1/config', {
       method: 'POST',
@@ -415,40 +354,7 @@ export default function App() {
     setInputText('');
     setIsAiLoading(true);
 
-    if (MOCK_MODE) {
-      // --- حالت Mock: شبیه‌سازی streaming توکن به توکن از پاسخ نمونه ---
-      const mockData = MOCK_ANSWERS[_mockAnswerIdx % MOCK_ANSWERS.length];
-      _mockAnswerIdx++;
-      const aiMsgId = Date.now() + 1;
-      const aiPlaceholder = {
-        id: aiMsgId,
-        sender: 'ai',
-        text: '',
-        sources: mockData.sources || [],
-        isSafe: mockData.is_safe ?? true,
-        isRefusal: mockData.answer === 'منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند.'
-      };
-      setChatMessages(prev => [...prev, aiPlaceholder]);
-      setIsAiLoading(false);
 
-      const fullText = mockData.answer;
-      let cursor = 0;
-      await new Promise(resolve => {
-        const interval = setInterval(() => {
-          cursor += 3;
-          const partial = fullText.slice(0, cursor);
-          setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: partial } : m));
-          if (cursor >= fullText.length) {
-            clearInterval(interval);
-            resolve();
-          }
-        }, 30);
-      });
-      console.info('[MOCK] Streamed mock answer #', _mockAnswerIdx);
-      return;
-    }
-
-    // --- حالت واقعی: streaming SSE از /v1/query/stream ---
     const aiMsgId = Date.now() + 1;
     const aiPlaceholder = {
       id: aiMsgId,
@@ -578,38 +484,11 @@ export default function App() {
     }, 250);
 
     try {
-      let data;
-      if (MOCK_MODE) {
-        // --- حالت Mock: شبیه‌سازی پردازش و نمایش نمونه PII ---
-        await mockDelay(1800);
-        const mockChunks = Math.floor(Math.random() * 400) + 80;
-        data = {
-          status: 'success',
-          chunks_indexed: mockChunks,
-          pii_preview:
-            `نام فایل: ${file.name}\n\n` +
-            'متن نمونه پس از اعمال قفل حریم شخصی:\n\n' +
-            'کارمند گرامی،\n' +
-            'کد ملی [شناسه ملی سانسور شده] شما در سامانه ثبت شده است.\n' +
-            'لطفاً با شماره [شماره تلفن سانسور شده] تماس بگیرید.\n' +
-            'حساب بانکی [شماره کارت سانسور شده] تأیید گردید.\n' +
-            `\nمجموع ${mockChunks} قطعه متنی استخراج و ایندکس شد.`,
-          pii_audit_counts: {
-            national_id: 1,
-            phone: 1,
-            card: 1,
-            email: 0,
-            iban: 0
-          }
-        };
-        console.info('[MOCK] File upload simulated:', file.name, '→', mockChunks, 'chunks');
-      } else {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch('http://localhost:8000/v1/upload', { method: 'POST', body: formData });
-        data = await res.json();
-        if (data.status !== 'success') throw new Error(data.detail || 'Upload failed');
-      }
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('http://localhost:8000/v1/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.status !== 'success') throw new Error(data.detail || 'Upload failed');
 
       clearInterval(progressInterval);
       setDocuments(prev => prev.map(d =>
@@ -720,11 +599,11 @@ export default function App() {
           </div>
 
           <button className="topbar-btn btn-ghost" onClick={() => setActiveScreen('chat')}>
-            <span>+</span> پرسش جدید
+            <span>+</span> <span className="btn-text">پرسش جدید</span>
           </button>
           
           <button className="topbar-btn btn-primary" onClick={() => setActiveScreen('upload')}>
-            <span>↑</span> آپلود سریع
+            <span>↑</span> <span className="btn-text">آپلود سریع</span>
           </button>
 
           <div style={{
@@ -909,6 +788,7 @@ export default function App() {
                     sender: 'ai',
                     text: 'مکالمه جدید شروع شد. چطور می‌توانم کمک کنم؟',
                     isSafe: true,
+                    isWelcome: true,
                     sources: []
                   }]);
                 }}>
@@ -1015,7 +895,7 @@ export default function App() {
         {/* صفحه کل پایگاه دانش */}
         {activeScreen === 'knowledge' && (
           <div className="screen fade-in">
-            <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '20px'}}>
+            <div className="grid-3-col">
               <div className="card" style={{borderRight: '4px solid var(--navy)'}}>
                 <div style={{fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px'}}>تعداد کل قطعات و بردارها (Chunks)</div>
                 <div style={{fontSize: '26px', fontWeight: '800', color: 'var(--navy)'}}>48,291 قطعه</div>
@@ -1102,7 +982,7 @@ export default function App() {
               </button>
             </div>
 
-            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px'}}>
+            <div className="grid-2-col">
               <div className="card">
                 <div className="card-title">صف نوبت‌دهی پردازش اسناد (Ingestion Queue)</div>
                 <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
@@ -1138,9 +1018,8 @@ export default function App() {
                   {piiPreview ? (
                     piiPreview
                   ) : (
-                    <span>
-                      کارمند سازمان به شماره پرسنلی ۶۷۴۳ با <span className="pii-redact">کد ملی ۲۹۸۰۳****۱</span> بررسی پرونده گردید. جهت هماهنگی‌های لازم با شماره <span className="pii-redact">تلفن همراه ۰۹۱۲***۴۵۶۷</span> یا ایمیل رسمی ایشان به آدرس <span className="pii-redact">ایمیل ali***@organization.ir</span> ارتباط برقرار فرمایید.
-                      پرداختی‌های حقوق ایشان به شماره <span className="pii-redact">حساب بانکی IR۷۶۰۱۲****************</span> واریز خواهد شد.
+                    <span style={{color: 'var(--text-secondary)', fontStyle: 'italic', opacity: 0.8}}>
+                      هیچ سندی هنوز بارگذاری نشده است. پیش‌نمایش پوشش اطلاعات حساس (PII) پس از بارگذاری سند در اینجا نمایش داده خواهد شد.
                     </span>
                   )}
                 </div>
@@ -1153,6 +1032,10 @@ export default function App() {
                           .map(([k, v]) => `${PII_KEY_LABELS[k] || k}: ${v} مورد`)
                           .join(' | ')
                       }
+                    </span>
+                  ) : piiPreview ? (
+                    <span style={{color: 'var(--color-success)', fontWeight: '600'}}>
+                      ✓ هیچ اطلاعات حساسی (مانند کد ملی، تلفن همراه، حساب بانکی و ایمیل) در آخرین سند بارگذاری شده یافت نشد.
                     </span>
                   ) : (
                     "پیش‌نمایش زنده اقلام حساس شامل کد ملی، تلفن همراه، ایمیل، کارت بانکی و شبا پیش از ایندکس در پایگاه دانش."
@@ -1300,13 +1183,11 @@ export default function App() {
                     onClick={() => {
                       const next = !ollamaEnabled;
                       setOllamaEnabled(next);
-                      if (!MOCK_MODE) {
-                        fetch('http://localhost:8000/v1/config', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ providers: { ollama: next } })
-                        }).catch(() => {});
-                      }
+                      fetch('http://localhost:8000/v1/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ providers: { ollama: next } })
+                      }).catch(() => {});
                     }}
                   />
                 </div>
@@ -1319,13 +1200,11 @@ export default function App() {
                         value={ollamaModel}
                         onChange={(e) => {
                           setOllamaModel(e.target.value);
-                          if (!MOCK_MODE) {
-                            fetch('http://localhost:8000/v1/config', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ ollama_model: e.target.value })
-                            }).catch(() => {});
-                          }
+                          fetch('http://localhost:8000/v1/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ollama_model: e.target.value })
+                          }).catch(() => {});
                         }}
                         style={{width: '100%', padding: '8px 12px', border: '1px solid var(--gray-100)', borderRadius: 'var(--radius)', fontSize: '13px', background: 'var(--gray-50)', color: 'var(--text-primary)', fontFamily: 'inherit'}}
                       >
@@ -1426,7 +1305,7 @@ export default function App() {
         {/* صفحه اتصالات و مستندات API */}
         {activeScreen === 'integrations' && (
           <div className="screen fade-in">
-            <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '20px'}}>
+            <div className="grid-3-col">
               <div className="card" style={{borderTop: '3px solid var(--color-success)'}}>
                 <div style={{fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px'}}>کلیدهای فعال API</div>
                 <div style={{fontSize: '26px', fontWeight: '800', color: 'var(--navy)'}}>{apiKeys.length} عدد</div>
@@ -1491,7 +1370,7 @@ export default function App() {
 
                   {/* جدول نمایش کلیدها */}
                   <div className="files-table" style={{border: '1px solid var(--gray-100)', borderRadius: 'var(--radius)'}}>
-                    <div style={{display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr', padding: '10px 14px', background: 'var(--gray-50)', fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', borderBottom: '1px solid var(--gray-100)'}}>
+                    <div className="api-keys-grid" style={{padding: '10px 14px', background: 'var(--gray-50)', fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', borderBottom: '1px solid var(--gray-100)'}}>
                       <div>نام کلید</div>
                       <div>کلید دسترسی (Masked)</div>
                       <div>تاریخ ایجاد</div>
@@ -1501,7 +1380,7 @@ export default function App() {
                       <div style={{padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px'}}>هیچ کلید API تعریف نشده است. کلیدها پیش از حذف شدن دسترسی آزاد را فراهم می‌کنند.</div>
                     ) : (
                       apiKeys.map(key => (
-                        <div key={key.id} style={{display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr', padding: '12px 14px', alignItems: 'center', borderBottom: '1px solid var(--gray-50)', fontSize: '12.5px'}}>
+                        <div key={key.id} className="api-keys-grid" style={{padding: '12px 14px', alignItems: 'center', borderBottom: '1px solid var(--gray-50)', fontSize: '12.5px'}}>
                           <div style={{fontWeight: '600', color: 'var(--text-primary)'}}>{key.name}</div>
                           <div style={{fontFamily: 'monospace', direction: 'ltr', color: 'var(--text-secondary)'}}>{key.api_key}</div>
                           <div style={{color: 'var(--text-muted)'}}>{key.created_at}</div>
@@ -1549,7 +1428,7 @@ export default function App() {
                   {/* فرم ساخت ابزارک */}
                   <form onSubmit={handleCreateWidget} style={{display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--gray-50)', padding: '16px', borderRadius: 'var(--radius)', border: '1px solid var(--gray-100)', marginBottom: '20px'}}>
                     <div style={{fontWeight: 'bold', fontSize: '13px', color: 'var(--navy)'}}>ثبت دامنه جدید برای قرار دادن پاپ‌آپ:</div>
-                    <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px'}}>
+                    <div className="grid-2-col" style={{gap: '10px'}}>
                       <input
                         type="text"
                         className="chat-input-box"
