@@ -121,6 +121,7 @@ def init_db() -> None:
         );
         """,
         # جدول حذف موقت برای بازسازی اسکیما در فاز توسعه
+        "DROP TABLE IF EXISTS compliance_audit_logs CASCADE;",
         "DROP TABLE IF EXISTS extracted_rules CASCADE;",
         "DROP TABLE IF EXISTS extracted_relationships CASCADE;",
         "DROP TABLE IF EXISTS extracted_entities CASCADE;",
@@ -160,6 +161,19 @@ def init_db() -> None:
             file_id INT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE (file_id, rule_code)
+        );
+        """,
+        # ۱۰. جدول گزارش‌های ممیزی انطباق قوانین (Compliance Audit Logs)
+        """
+        CREATE TABLE IF NOT EXISTS compliance_audit_logs (
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            file_id INT,
+            query_text TEXT,
+            response_text TEXT,
+            is_compliant BOOLEAN NOT NULL,
+            violations TEXT,
+            audit_report TEXT
         );
         """
     ]
