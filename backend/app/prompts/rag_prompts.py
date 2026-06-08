@@ -46,6 +46,7 @@ Key instructions for the AI assistant:
     2. If CONTEXT does not provide enough information to answer the QUESTION, the output must be exactly the four characters: "####"
     3. Don't try to make up an answer.
     4. Respond in Persian.
+{compliance_constraints}
 
 <CONTEXT>
 {reranked_text}
