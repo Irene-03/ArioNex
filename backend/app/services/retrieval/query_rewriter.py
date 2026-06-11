@@ -66,9 +66,9 @@ def rewrite_query(user_input: str, chat_history: list) -> str:
     if not chat_history:
         return user_input
         
-    # در صورت عدم وجود کلید واقعی OpenAI، برای ممانعت از کرش از بازنویسی صرف نظر کرده و خود ورودی را برمی‌گردانیم
-    if not settings.openai_api_key or settings.openai_api_key == "mock_key" or "your-openai-key" in settings.openai_api_key:
-        logger.warning("Mock mode active. Skipping query rewriting and returning original user query.")
+    # در صورت عدم وجود کلید واقعی، برای ممانعت از کرش از بازنویسی صرف نظر کرده و خود ورودی را برمی‌گردانیم
+    if not settings.openai_api_key:
+        logger.info("OpenAI API key is not configured. Skipping query rewriting and returning original user query.")
         return user_input
         
     try:

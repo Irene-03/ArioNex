@@ -111,35 +111,8 @@ class LawyerAgent:
         # ۳. فراخوانی LLM جهت ارزیابی انطباق پاسخ
         audit_result = {"is_compliant": True, "violations": [], "audit_report": ""}
         
-        active_provider = settings.llm_provider
-        active_key = (
-            settings.openrouter_api_key if active_provider == "openrouter"
-            else settings.openai_api_key
-        )
-        is_mock_key = not active_key or active_key in ("mock_key", "") or "your-" in active_key
-
-        if is_mock_key:
-            # رفتار شبیه‌سازی شده در محیط لوکال/تست آفلاین
-            # ممیزی بر اساس متون پاسخ: اگر کلمات حساس نقض قانون در پاسخ باشند، عدم انطباق صادر می‌کنیم
-            response_lower = response.lower()
-            query_lower = query.lower()
-            
-            # مثال شبیه‌سازی نقض قانون
-            if "افشا" in response_lower or "کارت بانکی" in response_lower or "رمز" in response_lower or "لو" in response_lower:
-                audit_result = {
-                    "is_compliant": False,
-                    "violations": ["RULE-CONF-2", "RULE-SEC-4"],
-                    "audit_report": "هشدار عدم انطباق: پاسخ پیشنهادی حاوی اطلاعات کارت یا افشای رمز عبور است که طبق قوانین امنیتی RULE-CONF-2 و RULE-SEC-4 اکیداً ممنوع می‌باشد."
-                }
-            else:
-                audit_result = {
-                    "is_compliant": True,
-                    "violations": [],
-                    "audit_report": "ممیزی انطباق قوانین: پاسخ بررسی شد و با تمام سیاست‌های سازمان مطابقت کامل دارد."
-                }
-        else:
-            try:
-                llm = get_llm(temperature=0.0)  # دمای صفر برای دریافت نتیجه قطعی
+        try:
+            llm = get_llm(temperature=0.0)  # دمای صفر برای دریافت نتیجه قطعی
                 
                 # پرامپت ممیز حقوقی
                 audit_prompt = f"""You are an expert enterprise compliance auditor (The Lawyer). Your job is to strictly audit the proposed RESPONSE to the USER QUERY against the list of corporate COMPLIANCE RULES.
