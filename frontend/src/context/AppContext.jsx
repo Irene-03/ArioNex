@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { createApiClient } from '../api/apiClient';
-import { MOCK_MODE, mockDelay } from '../constants/models';
 
 const AppContext = createContext(null);
 

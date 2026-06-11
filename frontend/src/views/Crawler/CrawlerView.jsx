@@ -1,6 +1,5 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { MOCK_MODE, mockDelay } from '../../constants/models';
 
 export default function CrawlerView() {
   const {
@@ -60,47 +59,24 @@ export default function CrawlerView() {
               if (!crawlUrl.trim() || crawlSubmitting) return;
               setCrawlSubmitting(true);
               try {
-                if (MOCK_MODE) {
-                  await mockDelay(800);
-                  const newJob = {
-                    job_id: `job-${Date.now()}`,
+                const res = await fetch('http://localhost:8000/v1/crawl/start', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({
                     url: crawlUrl,
-                    status: 'queued',
-                    pages_crawled: 0,
-                    chunks_indexed: 0,
-                    pages_failed: 0,
                     max_pages: crawlMaxPages,
                     max_depth: crawlMaxDepth,
                     js_render: crawlJsRender,
                     follow_external_domains: crawlFollowExternal,
-                    label: null,
-                    widget_id: null,
-                    error_message: null,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                  };
-                  setCrawlJobs(prev => [newJob, ...prev]);
+                    respect_robots: crawlRobots,
+                  }),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                  setCrawlJobs(prev => [data, ...prev]);
                   setCrawlUrl('');
                 } else {
-                  const res = await fetch('http://localhost:8000/v1/crawl/start', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                      url: crawlUrl,
-                      max_pages: crawlMaxPages,
-                      max_depth: crawlMaxDepth,
-                      js_render: crawlJsRender,
-                      follow_external_domains: crawlFollowExternal,
-                      respect_robots: crawlRobots,
-                    }),
-                  });
-                  const data = await res.json();
-                  if (res.ok) {
-                    setCrawlJobs(prev => [data, ...prev]);
-                    setCrawlUrl('');
-                  } else {
-                    alert(data.detail || 'خطا در شروع کرال');
-                  }
+                  alert(data.detail || 'خطا در شروع کرال');
                 }
               } catch(err) {
                 alert('خطا در اتصال به سرور');
@@ -260,13 +236,9 @@ export default function CrawlerView() {
                         {(job.status === 'queued' || job.status === 'running') && (
                           <button
                             onClick={async () => {
-                              if (MOCK_MODE) {
+                              const res = await fetch(`http://localhost:8000/v1/crawl/${job.job_id}`, {method: 'DELETE'});
+                              if (res.ok) {
                                 setCrawlJobs(prev => prev.map(j => j.job_id === job.job_id ? {...j, status: 'cancelled'} : j));
-                              } else {
-                                const res = await fetch(`http://localhost:8000/v1/crawl/${job.job_id}`, {method: 'DELETE'});
-                                if (res.ok) {
-                                  setCrawlJobs(prev => prev.map(j => j.job_id === job.job_id ? {...j, status: 'cancelled'} : j));
-                                }
                               }
                             }}
                             style={{background: '#ffebee', color: '#c62828', border: 'none', borderRadius: '4px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold'}}

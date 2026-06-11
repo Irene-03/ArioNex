@@ -19,6 +19,3 @@ export const OLLAMA_MODELS = [
   { id: 'llama3.2:3b', label: 'Llama 3.2 3B' },
   { id: 'qwen2.5:3b', label: 'Qwen 2.5 3B' },
 ];
-
-export const MOCK_MODE = false;
-export const mockDelay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
