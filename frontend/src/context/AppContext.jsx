@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createApiClient } from '../api/apiClient';
 
 const AppContext = createContext(null);
@@ -416,12 +416,14 @@ export const AppProvider = ({ children }) => {
   const [crawlJobs, setCrawlJobs] = useState([]);
   const [crawlSubmitting, setCrawlSubmitting] = useState(false);
   const [crawlStatusFilter, setCrawlStatusFilter] = useState('');
+  const crawlStatusFilterRef = useRef('');
 
   const fetchCrawlJobs = async () => {
     try {
       let url = 'http://localhost:8000/v1/crawl/jobs?limit=20';
-      if (crawlStatusFilter) {
-        url += `&status=${crawlStatusFilter}`;
+      const currentFilter = crawlStatusFilterRef.current;
+      if (currentFilter) {
+        url += `&status=${currentFilter}`;
       }
       const res = await apiFetch(url);
       if (res && res.ok) {
@@ -524,15 +526,33 @@ export const AppProvider = ({ children }) => {
     }
   }, [activeScreen, currentUser]);
 
+  // ─── Crawler polling: stable interval using useRef ──────────────────────
+  // NOTE: We do NOT put crawlJobs in deps — that caused a race condition where
+  // every state update would cancel+recreate the interval, briefly showing an
+  // empty list. Instead, we always poll every 4 s when on the crawler screen.
+  const crawlPollRef = useRef(null);
   useEffect(() => {
-    if (!currentUser || activeScreen !== 'crawler') return;
-    const hasRunningOrQueued = crawlJobs.some(j => j.status === 'running' || j.status === 'queued');
-    if (!hasRunningOrQueued) return;
-    const interval = setInterval(() => {
+    if (!currentUser || activeScreen !== 'crawler') {
+      if (crawlPollRef.current) {
+        clearInterval(crawlPollRef.current);
+        crawlPollRef.current = null;
+      }
+      return;
+    }
+    // Fetch immediately on entering the crawler screen
+    fetchCrawlJobs();
+    // Then poll every 4 seconds
+    crawlPollRef.current = setInterval(() => {
       fetchCrawlJobs();
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [crawlJobs, activeScreen, currentUser]);
+    }, 4000);
+    return () => {
+      if (crawlPollRef.current) {
+        clearInterval(crawlPollRef.current);
+        crawlPollRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeScreen, currentUser]);
 
   useEffect(() => {
     if (currentUser && currentUser.role !== 'Admin' && (activeScreen === 'admin' || activeScreen === 'integrations')) {
@@ -885,7 +905,11 @@ export const AppProvider = ({ children }) => {
       crawlRobots, setCrawlRobots,
       crawlJobs, setCrawlJobs,
       crawlSubmitting, setCrawlSubmitting,
-      crawlStatusFilter, setCrawlStatusFilter,
+      crawlStatusFilter,
+      setCrawlStatusFilter: (val) => {
+        crawlStatusFilterRef.current = val;
+        setCrawlStatusFilter(val);
+      },
       stats, fetchStats,
       cosineThreshold,
             apiFetch,
