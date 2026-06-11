@@ -9,3 +9,5 @@ from .rag_prompts import (
     STANDARD_REFUSAL_MESSAGE,
 )
 from .analyst_prompts import get_analyst_system_prompt
+from .router_prompts import QUERY_ROUTER_PROMPT
+from .lawyer_prompts import LAWYER_AUDIT_PROMPT

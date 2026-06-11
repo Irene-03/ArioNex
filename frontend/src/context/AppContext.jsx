@@ -439,7 +439,31 @@ export const AppProvider = ({ children }) => {
     return 'session_default';
   });
 
-  const [chatMessages, setChatMessages] = useState([]);
+  const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
+  const chatMessages = activeSession ? activeSession.messages : [];
+
+  const setChatMessages = (updater) => {
+    setSessions(prev => prev.map(s => {
+      if (s.id === activeSessionId) {
+        const newMessages = typeof updater === 'function' ? updater(s.messages) : updater;
+        
+        let title = s.title;
+        if (s.title === 'مکالمه جدید') {
+          const firstUserMsg = newMessages.find(m => m.sender === 'user');
+          if (firstUserMsg) {
+            title = firstUserMsg.text.substring(0, 30) + (firstUserMsg.text.length > 30 ? '...' : '');
+          }
+        }
+        return {
+          ...s,
+          title,
+          messages: newMessages
+        };
+      }
+      return s;
+    }));
+  };
+
   const [inputText, setInputText] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
 
@@ -455,41 +479,15 @@ export const AppProvider = ({ children }) => {
     } catch (_) {}
   }, [activeSessionId]);
 
-  // Load chat messages when active session changes
+  // Safety sync: Ensure activeSessionId is always a valid existing session ID
   useEffect(() => {
-    const activeSess = sessions.find(s => s.id === activeSessionId);
-    if (activeSess) {
-      setChatMessages(activeSess.messages);
-    } else if (sessions.length > 0) {
-      setActiveSessionId(sessions[0].id);
-      setChatMessages(sessions[0].messages);
-    }
-  }, [activeSessionId, sessions]);
-
-  // Sync chat messages state back to sessions array
-  useEffect(() => {
-    if (chatMessages.length === 0) return;
-    setSessions(prev => prev.map(s => {
-      if (s.id === activeSessionId) {
-        const hasChanged = JSON.stringify(s.messages) !== JSON.stringify(chatMessages);
-        if (!hasChanged) return s;
-
-        let title = s.title;
-        if (s.title === 'مکالمه جدید') {
-          const firstUserMsg = chatMessages.find(m => m.sender === 'user');
-          if (firstUserMsg) {
-            title = firstUserMsg.text.substring(0, 30) + (firstUserMsg.text.length > 30 ? '...' : '');
-          }
-        }
-        return {
-          ...s,
-          title,
-          messages: chatMessages
-        };
+    if (sessions.length > 0) {
+      const exists = sessions.some(s => s.id === activeSessionId);
+      if (!exists) {
+        setActiveSessionId(sessions[0].id);
       }
-      return s;
-    }));
-  }, [chatMessages, activeSessionId]);
+    }
+  }, [sessions, activeSessionId]);
 
   const createNewSession = () => {
     const newId = `session_${Date.now()}`;
@@ -507,9 +505,8 @@ export const AppProvider = ({ children }) => {
         }
       ]
     };
-    setSessions(prev => [...prev, newSession]);
+    setSessions(prev => [newSession, ...prev]);
     setActiveSessionId(newId);
-    setChatMessages(newSession.messages);
   };
 
   const deleteSession = (id, e) => {
@@ -523,7 +520,6 @@ export const AppProvider = ({ children }) => {
     if (activeSessionId === id) {
       const fallbackId = nextSessions[0].id;
       setActiveSessionId(fallbackId);
-      setChatMessages(nextSessions[0].messages);
     }
   };
 

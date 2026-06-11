@@ -86,6 +86,7 @@ class CrawlJobResponse(BaseModel):
     label: Optional[str]
     widget_id: Optional[int]
     error_message: Optional[str]
+    resume_available: bool = False
     created_at: datetime
     updated_at: datetime
 

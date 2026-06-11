@@ -76,6 +76,12 @@ def _row_to_job_response(row: dict) -> CrawlJobResponse:
     /// تبدیل رکورد دیتابیس به مدل پاسخ Pydantic
     /// </summary>
     """
+    import os
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    jobs_dir = os.path.join(backend_dir, "jobs")
+    jobdir_exists = os.path.isdir(os.path.join(jobs_dir, row["job_id"]))
+    resume_available = row["status"] in ("cancelled", "failed") and jobdir_exists
+
     return CrawlJobResponse(
         job_id=row["job_id"],
         url=row["url"],
@@ -90,6 +96,7 @@ def _row_to_job_response(row: dict) -> CrawlJobResponse:
         label=row.get("label"),
         widget_id=row.get("widget_id"),
         error_message=row.get("error_message"),
+        resume_available=resume_available,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -283,3 +290,152 @@ async def execute_cancel_crawl_job(job_id: str) -> dict:
 
     logger.info(f"Crawler job {job_id} marked as cancelled.")
     return {"message": f"Job '{job_id}' has been marked as cancelled", "job_id": job_id}
+
+
+async def execute_resume_crawl(job_id: str) -> CrawlStartResponse:
+    """
+    /// <summary>
+    /// رزومه کردن یک job کرال متوقف یا ناموفق با استفاده از jobdir ذخیره شده
+    /// </summary>
+    """
+    import os
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM crawler_jobs WHERE job_id = %s", (job_id,))
+            row = cur.fetchone()
+    except Exception as e:
+        logger.error(f"Failed to query crawler job {job_id} for resume: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to query crawler job")
+    finally:
+        if conn:
+            conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Crawler job '{job_id}' not found")
+
+    if row["status"] in ("queued", "running"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot resume crawl job in status '{row['status']}'"
+        )
+
+    # Check if jobdir exists
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    jobs_dir = os.path.join(backend_dir, "jobs")
+    jobdir_path = os.path.join(jobs_dir, job_id)
+    if not os.path.isdir(jobdir_path):
+        raise HTTPException(
+            status_code=400,
+            detail="No crawl state found to resume. The crawl must be started from scratch."
+        )
+
+    # Update job status to queued
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE crawler_jobs SET status = 'queued', updated_at = %s WHERE job_id = %s",
+                (datetime.utcnow(), job_id)
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Failed to update crawler job status for resume: {str(e)}")
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update crawler job status")
+    finally:
+        if conn:
+            conn.close()
+
+    logger.info(f"Resuming crawler job [{job_id}] for URL: {row['url']}")
+
+    # Start Celery Task with the parameters loaded from the DB
+    run_crawler_task.delay(
+        job_id=job_id,
+        url=row["url"],
+        max_pages=row["max_pages"],
+        max_depth=row["max_depth"],
+        concurrency=row["concurrency"],
+        js_render=row["js_render"],
+        follow_external=row["follow_external"],
+        respect_robots=True,
+        label=row.get("label") or "",
+        widget_id=row.get("widget_id") or 0
+    )
+
+    return CrawlStartResponse(
+        job_id=job_id,
+        status="queued",
+        message="Crawler job resumed successfully.",
+        url=row["url"]
+    )
+
+
+async def execute_delete_jobdir(job_id: str) -> dict:
+    """
+    /// <summary>
+    /// حذف پوشه حالت کرال (jobdir) و فایل‌های موقت MinIO
+    /// </summary>
+    """
+    import os
+    import shutil
+    from app.core.minio_client import storage_manager
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT status FROM crawler_jobs WHERE job_id = %s", (job_id,))
+            row = cur.fetchone()
+    except Exception as e:
+        logger.error(f"Failed to query crawler job {job_id} for deletion: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to query crawler job")
+    finally:
+        if conn:
+            conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Crawler job '{job_id}' not found")
+
+    if row["status"] in ("queued", "running"):
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete job state for a running or queued crawl. Please cancel the job first."
+        )
+
+    # Resolve paths
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    jobs_dir = os.path.join(backend_dir, "jobs")
+    jobdir_path = os.path.join(jobs_dir, job_id)
+
+    # 1. Delete jobdir recursively
+    deleted_dir = False
+    if os.path.exists(jobdir_path):
+        try:
+            shutil.rmtree(jobdir_path, ignore_errors=True)
+            deleted_dir = True
+            logger.info(f"Deleted job state directory: {jobdir_path}")
+        except Exception as err:
+            logger.error(f"Failed to delete job directory {jobdir_path}: {str(err)}")
+
+    # 2. Delete MinIO staging files
+    deleted_staging = False
+    try:
+        prefix = f"crawl-staging/{job_id}/"
+        staged_files = storage_manager.list_objects(prefix)
+        if staged_files:
+            storage_manager.delete_objects_in_prefix(prefix)
+            deleted_staging = True
+            logger.info(f"Cleaned up MinIO staging prefix: {prefix}")
+    except Exception as e:
+        logger.warning(f"MinIO staging cleanup failed for {job_id}: {str(e)}")
+
+    return {
+        "message": "Crawl job state and staging files deleted successfully.",
+        "job_id": job_id,
+        "jobdir_deleted": deleted_dir,
+        "staging_deleted": deleted_staging
+    }

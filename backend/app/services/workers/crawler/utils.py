@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import random
+import trafilatura
 from typing import Optional
 from urllib.parse import urljoin, urlparse, urlunparse
 import httpx
@@ -146,61 +147,69 @@ async def _fetch_page_js(url: str, proxy: Optional[str] = None, user_agent: Opti
 
 
 def _extract_page_content(html: str, url: str) -> dict:
-    soup = BeautifulSoup(html, "lxml")
-
-    for tag in soup(["script", "style", "nav", "footer", "header",
-                     "aside", "noscript", "iframe", "form",
-                     "button", "input", "select", "textarea"]):
-        tag.decompose()
-
+    # Use trafilatura to extract clean main text and metadata
+    res = trafilatura.bare_extraction(html, url=url, include_links=False)
+    
     title = ""
-    if soup.title and soup.title.string:
-        title = soup.title.string.strip()
-
     description = ""
-    meta_desc = soup.find("meta", attrs={"name": "description"})
-    if meta_desc and meta_desc.get("content"):
-        description = meta_desc["content"].strip()
+    body_text = ""
+    
+    if res:
+        title = res.get("title") or ""
+        description = res.get("description") or ""
+        body_text = res.get("text") or ""
 
-    if not description:
-        og_desc = soup.find("meta", property="og:description")
-        if og_desc and og_desc.get("content"):
-            description = og_desc["content"].strip()
+    # Fallback to BeautifulSoup if body text is empty
+    if not body_text.strip():
+        logger.debug(f"Trafilatura failed or returned empty text for {url}. Falling back to BeautifulSoup.")
+        soup = BeautifulSoup(html, "lxml")
+        
+        # Decompose unnecessary elements
+        for tag in soup(["script", "style", "nav", "footer", "header",
+                         "aside", "noscript", "iframe", "form",
+                         "button", "input", "select", "textarea"]):
+            tag.decompose()
+            
+        if not title and soup.title and soup.title.string:
+            title = soup.title.string.strip()
+            
+        if not description:
+            meta_desc = soup.find("meta", attrs={"name": "description"})
+            if meta_desc and meta_desc.get("content"):
+                description = meta_desc["content"].strip()
+            if not description:
+                og_desc = soup.find("meta", property="og:description")
+                if og_desc and og_desc.get("content"):
+                    description = og_desc["content"].strip()
+                    
+        body_parts = []
+        for tag in soup.find_all(_SEMANTIC_TAGS):
+            text = tag.get_text(separator=" ", strip=True)
+            if text and len(text) > 30:
+                body_parts.append(text)
+                
+        seen = set()
+        unique_parts = []
+        for part in body_parts:
+            part_hash = hashlib.md5(part.encode()).hexdigest()
+            if part_hash not in seen:
+                seen.add(part_hash)
+                unique_parts.append(part)
+                
+        body_text = "\n".join(unique_parts)
+    else:
+        # If trafilatura succeeded, ensure we still populate title/desc from BeautifulSoup if they are missing
+        if not title or not description:
+            soup = BeautifulSoup(html, "lxml")
+            if not title and soup.title and soup.title.string:
+                title = soup.title.string.strip()
+            if not description:
+                meta_desc = soup.find("meta", attrs={"name": "description"})
+                if meta_desc and meta_desc.get("content"):
+                    description = meta_desc["content"].strip()
 
-    headings = []
-    for h in soup.find_all(["h1", "h2", "h3"]):
-        h_text = h.get_text(separator=" ", strip=True)
-        if h_text:
-            headings.append(h_text)
-
-    body_parts = []
-    for tag in soup.find_all(_SEMANTIC_TAGS):
-        text = tag.get_text(separator=" ", strip=True)
-        if text and len(text) > 30:
-            body_parts.append(text)
-
-    seen = set()
-    unique_parts = []
-    for part in body_parts:
-        part_hash = hashlib.md5(part.encode()).hexdigest()
-        if part_hash not in seen:
-            seen.add(part_hash)
-            unique_parts.append(part)
-
-    body_text = "\n".join(unique_parts)
-
-    full_content_parts = []
-    if title:
-        full_content_parts.append(f"عنوان صفحه: {title}")
-    if description:
-        full_content_parts.append(f"توضیح: {description}")
-    if headings:
-        full_content_parts.append("سرفصل‌ها: " + " | ".join(headings[:10]))
-    if body_text:
-        full_content_parts.append(body_text)
-
-    full_text = "\n\n".join(full_content_parts)
-
+    # Extract outgoing links
+    soup = BeautifulSoup(html, "lxml")
     outgoing_links = set()
     for a_tag in soup.find_all("a", href=True):
         href = a_tag["href"].strip()
@@ -213,6 +222,17 @@ def _extract_page_content(html: str, url: str) -> dict:
                 outgoing_links.add(normalized)
         except Exception:
             continue
+
+    # Compile the final text format
+    full_content_parts = []
+    if title:
+        full_content_parts.append(f"عنوان صفحه: {title}")
+    if description:
+        full_content_parts.append(f"توضیح: {description}")
+    if body_text:
+        full_content_parts.append(body_text)
+        
+    full_text = "\n\n".join(full_content_parts)
 
     return {
         "title": title,

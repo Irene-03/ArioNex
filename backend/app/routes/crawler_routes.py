@@ -23,6 +23,8 @@ from app.logics.crawler_logic import (
     execute_get_crawl_status,
     execute_list_crawl_jobs,
     execute_start_crawl,
+    execute_resume_crawl,
+    execute_delete_jobdir,
 )
 from app.schemas.crawler_schemas import (
     CrawlJobResponse,
@@ -105,3 +107,34 @@ async def cancel_crawl_job(job_id: str) -> dict:
     /// <param name="job_id">شناسه یکتای job</param>
     """
     return await execute_cancel_crawl_job(job_id)
+
+
+@router.post(
+    "/{job_id}/resume",
+    response_model=CrawlStartResponse,
+    summary="رزومه کردن یک job کرال",
+    description="یک job کرال قبلاً متوقف یا ناموفق شده را با استفاده از jobdir رزومه می‌کند.",
+)
+async def resume_crawl_job(job_id: str) -> CrawlStartResponse:
+    """
+    /// <summary>
+    /// اندپوینت رزومه کردن job کرال
+    /// </summary>
+    /// <param name="job_id">شناسه یکتای job</param>
+    """
+    return await execute_resume_crawl(job_id)
+
+
+@router.delete(
+    "/{job_id}/jobdir",
+    summary="حذف حالت و فایل‌های موقت job کرال",
+    description="پوشه حالت (jobdir) و فایل‌های موقت MinIO مربوط به یک job کرال را حذف می‌کند تا دیگر قابل رزومه نباشد.",
+)
+async def delete_crawl_jobdir(job_id: str) -> dict:
+    """
+    /// <summary>
+    /// اندپوینت حذف پوشه حالت کرال
+    /// </summary>
+    /// <param name="job_id">شناسه یکتای job</param>
+    """
+    return await execute_delete_jobdir(job_id)
