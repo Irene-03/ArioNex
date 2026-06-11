@@ -27,87 +27,98 @@ from app.services.integrations.telegram_bot import (
 
 client = TestClient(app)
 
-@patch("app.helpers.auth.get_db_connection")
-def test_fastapi_endpoints(mock_get_db):
+def test_fastapi_endpoints():
     # Setup mock cursor to return 0 for count of API keys
     mock_conn = MagicMock()
     mock_cursor = MagicMock()
     mock_cursor.fetchone.return_value = (0,)
     mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-    mock_get_db.return_value = mock_conn
 
     print("Testing REST API Endpoints...")
     from app.helpers.auth import verify_api_key
     app.dependency_overrides[verify_api_key] = lambda: "test_user"
     
-    try:
-        # ۱. تست اندپوینت سلامت سیستم
-        response = client.get("/health")
-        print(f"GET /health: {response.status_code}")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "online"
-        assert "telegram_bot" in data["active_features"]
-        
-        # ۲. تست دریافت فیچر تاگل‌ها
-        response = client.get("/v1/config")
-        print(f"GET /v1/config: {response.status_code}")
-        assert response.status_code == 200
-        config_data = response.json()
-        assert "services" in config_data
-        assert "integrations" in config_data
-        
-        # ۳. تست تغییر پویای تنظیمات
-        update_payload = {
-            "services": {"entity_extractor": True},
-            "integrations": {"telegram_bot": False}
+    from unittest.mock import patch
+    with patch("app.helpers.auth.get_db_connection") as mock_get_db, \
+         patch("app.services.retrieval.query_router.synthesize_rag_response") as mock_synthesize, \
+         patch("app.services.retrieval.analyst.analyst_agent.execute_analysis") as mock_execute:
+         
+        mock_get_db.return_value = mock_conn
+        mock_execute.return_value = "مجموع بدهکاری اسناد از نوع سند چک برابر با ۶۲۳,۳۴۶ ریال می‌باشد."
+        mock_synthesize.return_value = {
+            "answer": "قوانین استخدام شرکت شامل ساعات کاری ۸:۰۰ الی ۱۶:۳۰ می‌باشد.",
+            "sources": [{"name": "document.txt"}],
+            "is_safe": True
         }
-        response = client.post("/v1/config", json=update_payload)
-        print(f"POST /v1/config: {response.status_code}")
-        assert response.status_code == 200
-        res_json = response.json()
-        assert res_json["status"] == "success"
         
-        # بازیابی تنظیمات به حالت اولیه
-        restore_payload = {
-            "services": {"entity_extractor": False},
-            "integrations": {"telegram_bot": True}
-        }
-        client.post("/v1/config", json=restore_payload)
-        
-        # ۴. تست دریافت اسکریپت ابزارک چت وب‌سایت
-        response = client.get("/v1/widget.js")
-        print(f"GET /v1/widget.js: {response.status_code}")
-        assert response.status_code == 200
-        assert "arionex-widget-bubble" in response.text
-        assert "application/javascript" in response.headers["content-type"]
-        
-        # ۵. تست اندپوینت ثبت پیام ابزارک چت
-        chat_payload = {
-            "query": "مجموع بدهکاری اسناد نوع چک چقدر است؟",
-            "session_id": "test_widget_session"
-        }
-        response = client.post("/v1/widget/chat", json=chat_payload)
-        print(f"POST /v1/widget/chat: {response.status_code}")
-        assert response.status_code == 200
-        chat_response = response.json()
-        assert "answer" in chat_response
-        assert "sources" in chat_response
-        
-        # ۶. تست اندپوینت ثبت پرسش عمومی RAG
-        query_payload = {
-            "query": "قوانین استخدام شرکت چیست؟",
-            "session_id": "test_rest_session"
-        }
-        response = client.post("/v1/query", json=query_payload)
-        print(f"POST /v1/query: {response.status_code}")
-        assert response.status_code == 200
-        query_response = response.json()
-        assert "answer" in query_response
-        
-        print(" REST API Endpoints checks PASSED.\n")
-    finally:
-        app.dependency_overrides.clear()
+        try:
+            # ۱. تست اندپوینت سلامت سیستم
+            response = client.get("/health")
+            print(f"GET /health: {response.status_code}")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "online"
+            assert "telegram_bot" in data["active_features"]
+            
+            # ۲. تست دریافت فیچر تاگل‌ها
+            response = client.get("/v1/config")
+            print(f"GET /v1/config: {response.status_code}")
+            assert response.status_code == 200
+            config_data = response.json()
+            assert "services" in config_data
+            assert "integrations" in config_data
+            
+            # ۳. تست تغییر پویای تنظیمات
+            update_payload = {
+                "services": {"entity_extractor": True},
+                "integrations": {"telegram_bot": False}
+            }
+            response = client.post("/v1/config", json=update_payload)
+            print(f"POST /v1/config: {response.status_code}")
+            assert response.status_code == 200
+            res_json = response.json()
+            assert res_json["status"] == "success"
+            
+            # بازیابی تنظیمات به حالت اولیه
+            restore_payload = {
+                "services": {"entity_extractor": False},
+                "integrations": {"telegram_bot": True}
+            }
+            client.post("/v1/config", json=restore_payload)
+            
+            # ۴. تست دریافت اسکریپت ابزارک چت وب‌سایت
+            response = client.get("/v1/widget.js")
+            print(f"GET /v1/widget.js: {response.status_code}")
+            assert response.status_code == 200
+            assert "arionex-widget-bubble" in response.text
+            assert "application/javascript" in response.headers["content-type"]
+            
+            # ۵. تست اندپوینت ثبت پیام ابزارک چت
+            chat_payload = {
+                "query": "مجموع بدهکاری اسناد نوع چک چقدر است؟",
+                "session_id": "test_widget_session"
+            }
+            response = client.post("/v1/widget/chat", json=chat_payload)
+            print(f"POST /v1/widget/chat: {response.status_code}")
+            assert response.status_code == 200
+            chat_response = response.json()
+            assert "answer" in chat_response
+            assert "sources" in chat_response
+            
+            # ۶. تست اندپوینت ثبت پرسش عمومی RAG
+            query_payload = {
+                "query": "قوانین استخدام شرکت چیست؟",
+                "session_id": "test_rest_session"
+            }
+            response = client.post("/v1/query", json=query_payload)
+            print(f"POST /v1/query: {response.status_code}")
+            assert response.status_code == 200
+            query_response = response.json()
+            assert "answer" in query_response
+            
+            print(" REST API Endpoints checks PASSED.\n")
+        finally:
+            app.dependency_overrides.clear()
 
 def test_telegram_bot_session_manager():
     print("Testing Telegram Bot Session Manager...")
@@ -146,28 +157,39 @@ async def test_telegram_bot_handlers():
     mock_context = MagicMock()
     mock_context.bot = AsyncMock()
     
-    # ۱. تست هندلر استارت
-    await start_command(mock_update, mock_context)
-    mock_update.message.reply_text.assert_called()
-    welcome_call_args = mock_update.message.reply_text.call_args[0][0]
-    assert "آریونکس" in welcome_call_args
-    print("  Start Handler check PASSED.")
-    
-    # ۲. تست هندلر راهنما
-    await help_command(mock_update, mock_context)
-    mock_update.message.reply_text.assert_called()
-    help_call_args = mock_update.message.reply_text.call_args[0][0]
-    assert "راهنمای استفاده" in help_call_args
-    print("  Help Handler check PASSED.")
-    
-    # ۳. تست هندلر پیام‌های متنی و اتصال به موتور RAG
-    mock_update.message.reply_text = AsyncMock()
-    await message_handler(mock_update, mock_context)
-    mock_update.message.reply_text.assert_called()
-    reply_args = mock_update.message.reply_text.call_args[0][0]
-    assert len(reply_args) > 0
-    print("  Message Handler RAG Connection check PASSED.")
-    
+    from unittest.mock import patch
+    with patch("app.services.retrieval.query_router.synthesize_rag_response") as mock_synthesize, \
+         patch("app.services.retrieval.analyst.analyst_agent.execute_analysis") as mock_execute:
+         
+        mock_execute.return_value = "مجموع بدهکاری اسناد از نوع سند چک برابر با ۶۲۳,۳۴۶ ریال می‌باشد."
+        mock_synthesize.return_value = {
+            "answer": "قوانین استخدام شرکت شامل ساعات کاری ۸:۰۰ الی ۱۶:۳۰ می‌باشد.",
+            "sources": [{"name": "document.txt"}],
+            "is_safe": True
+        }
+        
+        # ۱. تست هندلر استارت
+        await start_command(mock_update, mock_context)
+        mock_update.message.reply_text.assert_called()
+        welcome_call_args = mock_update.message.reply_text.call_args[0][0]
+        assert "آریونکس" in welcome_call_args
+        print("  Start Handler check PASSED.")
+        
+        # ۲. تست هندلر راهنما
+        await help_command(mock_update, mock_context)
+        mock_update.message.reply_text.assert_called()
+        help_call_args = mock_update.message.reply_text.call_args[0][0]
+        assert "راهنمای استفاده" in help_call_args
+        print("  Help Handler check PASSED.")
+        
+        # ۳. تست هندلر پیام‌های متنی و اتصال به موتور RAG
+        mock_update.message.reply_text = AsyncMock()
+        await message_handler(mock_update, mock_context)
+        mock_update.message.reply_text.assert_called()
+        reply_args = mock_update.message.reply_text.call_args[0][0]
+        assert len(reply_args) > 0
+        print("  Message Handler RAG Connection check PASSED.")
+        
     print(" Telegram Bot Async Handlers checks PASSED.\n")
 
 async def test_telegram_lifecycle_and_safety():
