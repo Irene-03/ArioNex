@@ -44,6 +44,7 @@ async def get_active_configuration():
         "ollama_model": getattr(settings, "ollama_model", "gemma3:4b"),
         "ollama_base_url": getattr(settings, "ollama_base_url", "http://localhost:11434"),
         "cosine_threshold": getattr(settings, "cosine_threshold", 0.50),
+        "telegram_bot_token": settings.telegram_bot_token,
     }
 
 
@@ -65,10 +66,27 @@ async def update_active_configuration(update: ConfigUpdateRequest):
                 if hasattr(settings.services, k):
                     setattr(settings.services, k, bool(v))
 
+        telegram_needs_restart = False
         if update.integrations:
             for k, v in update.integrations.items():
                 if hasattr(settings.integrations, k):
+                    if k == "telegram_bot" and getattr(settings.integrations, k) != bool(v):
+                        telegram_needs_restart = True
                     setattr(settings.integrations, k, bool(v))
+
+        if update.telegram_bot_token is not None:
+            if settings.telegram_bot_token != update.telegram_bot_token:
+                settings.telegram_bot_token = update.telegram_bot_token
+                telegram_needs_restart = True
+
+        if telegram_needs_restart:
+            from app.services.integrations.telegram_bot import start_telegram_bot_service, stop_telegram_bot_service
+            import asyncio
+            async def restart_bot():
+                await stop_telegram_bot_service()
+                if settings.integrations.telegram_bot:
+                    await start_telegram_bot_service()
+            asyncio.create_task(restart_bot())
 
         if update.security:
             for k, v in update.security.items():
@@ -120,6 +138,7 @@ async def update_active_configuration(update: ConfigUpdateRequest):
                 "llm_provider": settings.llm_provider,
                 "ollama_model": getattr(settings, "ollama_model", "gemma3:4b"),
                 "ollama_base_url": getattr(settings, "ollama_base_url", "http://localhost:11434"),
+                "telegram_bot_token": settings.telegram_bot_token,
             },
         }
     except Exception as e:

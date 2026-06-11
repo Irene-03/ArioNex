@@ -24,8 +24,18 @@ export default function IntegrationsView() {
     handleCreateAPIKey,
     handleDeleteAPIKey,
     handleCreateWidget,
-    handleDeleteWidget
+    handleDeleteWidget,
+    telegramBotToken,
+    handleSaveTelegramToken
   } = useApp();
+
+  const [localToken, setLocalToken] = React.useState('');
+
+  React.useEffect(() => {
+    if (telegramBotToken) {
+      setLocalToken(telegramBotToken);
+    }
+  }, [telegramBotToken]);
 
   return (
     <div className="screen fade-in">
@@ -139,6 +149,72 @@ export default function IntegrationsView() {
               </pre>
             </div>
           </div>
+
+          {/* ربات تلگرام سازمانی */}
+          <div className="card">
+            <div className="card-title">🤖 ربات تلگرام سازمانی (Telegram Bot Integration)</div>
+            <div style={{fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.7', marginBottom: '16px'}}>
+              با فعال‌سازی ربات تلگرام، کاربران و کارکنان سازمان می‌توانند مستقیماً از طریق پیام‌رسان تلگرام با هوش مصنوعی و پایگاه دانش آریونکس گفتگو کنند.
+            </div>
+
+            {/* نمایش وضعیت ربات */}
+            <div style={{
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '10px', 
+              background: 'var(--gray-50)', 
+              padding: '12px 14px', 
+              borderRadius: 'var(--radius)', 
+              marginBottom: '16px',
+              border: '1px solid var(--gray-100)'
+            }}>
+              <span style={{fontSize: '12.5px', fontWeight: 'bold', color: 'var(--navy)'}}>وضعیت ربات تلگرام:</span>
+              {!features.telegramBot ? (
+                <span style={{fontSize: '12px', background: 'var(--color-danger-bg)', color: 'var(--color-danger)', padding: '2px 8px', borderRadius: '10px', fontWeight: '600'}}>
+                  ❌ غیرفعال در تنظیمات سیستم
+                </span>
+              ) : !telegramBotToken ? (
+                <span style={{fontSize: '12px', background: 'var(--color-warning-bg)', color: 'var(--color-warning)', padding: '2px 8px', borderRadius: '10px', fontWeight: '600'}}>
+                  ⚠️ نیاز به پیکربندی توکن ربات
+                </span>
+              ) : (
+                <span style={{fontSize: '12px', background: 'var(--color-success-bg)', color: 'var(--color-success)', padding: '2px 8px', borderRadius: '10px', fontWeight: '600'}}>
+                  ✅ فعال و آماده به کار
+                </span>
+              )}
+            </div>
+
+            {/* فرم تنظیم توکن ربات */}
+            <div style={{display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--gray-50)', padding: '16px', borderRadius: 'var(--radius)', border: '1px solid var(--gray-100)'}}>
+              <div style={{fontWeight: 'bold', fontSize: '13px', color: 'var(--navy)'}}>پیکربندی توکن تلگرام ربات:</div>
+              <div style={{display: 'flex', gap: '10px'}}>
+                <input
+                  type="text"
+                  className="chat-input-box"
+                  style={{borderRadius: 'var(--radius)', fontSize: '12.5px', padding: '8px 12px', flex: 1, minWidth: 0}}
+                  placeholder="توکن ربات (مثال: 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ)"
+                  value={localToken}
+                  onChange={(e) => setLocalToken(e.target.value)}
+                />
+                <button 
+                  onClick={() => handleSaveTelegramToken(localToken)} 
+                  className="topbar-btn btn-primary" 
+                  style={{padding: '10px 20px'}}
+                  disabled={!features.telegramBot}
+                >
+                  ذخیره و فعال‌سازی
+                </button>
+              </div>
+
+              {/* دستورالعمل راه‌اندازی */}
+              <div style={{fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: '1.6', borderTop: '1px dashed var(--gray-200)', paddingTop: '10px', marginTop: '4px'}}>
+                <div style={{fontWeight: 'bold', marginBottom: '6px', color: 'var(--navy)'}}>راهنمای راه‌اندازی ربات تلگرام:</div>
+                <div style={{marginBottom: '4px'}}>۱. در تلگرام به شناسه <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" style={{color: 'var(--copper)', textDecoration: 'none', fontWeight: 'bold'}}>BotFather@</a> پیام داده و دستور <code>/newbot</code> را ارسال کنید.</div>
+                <div style={{marginBottom: '4px'}}>۲. نام و شناسه کاربری دلخواه خود را تعیین کرده و در نهایت <b>API Token</b> دریافتی را در فیلد بالا کپی کنید.</div>
+                <div>۳. دکمه «ذخیره و فعال‌سازی» را بزنید. سپس کاربران با وارد شدن به شناسه ربات شما می‌توانند چت RAG را آغاز کنند.</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* بخش سمت چپ: ابزارک‌های وب‌سایت */}
@@ -191,7 +267,7 @@ export default function IntegrationsView() {
                   />
                 </div>
                 <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
-                  <span>رنگ مسی ثانویه:</span>
+                  <span>رنگ ثانویه:</span>
                   <input 
                     type="color" 
                     value={newWidgetAccent} 

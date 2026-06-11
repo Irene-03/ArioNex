@@ -53,3 +53,7 @@ class ConfigUpdateRequest(BaseModel):
         default=None,
         description="تغییر provider فعال در زمان اجرا — مثال: ollama, openrouter, openai"
     )
+    telegram_bot_token: Optional[str] = Field(
+        default=None,
+        description="توکن ربات تلگرام جهت فعال‌سازی ربات تلگرام"
+    )

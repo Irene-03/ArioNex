@@ -334,6 +334,33 @@ export const AppProvider = ({ children }) => {
     .catch(err => console.error('Failed to sync provider toggles:', err));
   };
 
+  const [telegramBotToken, setTelegramBotToken] = useState('');
+
+  const handleSaveTelegramToken = async (tokenValue) => {
+    try {
+      const res = await apiFetch('http://localhost:8000/v1/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegram_bot_token: tokenValue
+        })
+      });
+      if (res.ok) {
+        setTelegramBotToken(tokenValue);
+        alert('توکن ربات تلگرام با موفقیت به‌روزرسانی و ربات راه‌اندازی شد.');
+        return true;
+      } else {
+        const data = await res.json();
+        alert(data.detail || 'خطا در به‌روزرسانی توکن ربات تلگرام');
+        return false;
+      }
+    } catch (err) {
+      console.error(err);
+      alert('خطا در به‌روزرسانی توکن ربات تلگرام');
+      return false;
+    }
+  };
+
   const [ollamaEnabled, setOllamaEnabled] = useState(false);
   const [ollamaModel, setOllamaModel] = useState('gemma3:4b');
   const [ollamaEndpoint, setOllamaEndpoint] = useState('http://localhost:11434');
@@ -500,6 +527,7 @@ export const AppProvider = ({ children }) => {
           if (data.ollama_model) setOllamaModel(data.ollama_model);
           if (data.ollama_base_url) setOllamaEndpoint(data.ollama_base_url);
           if (data.cosine_threshold !== undefined) setCosineThreshold(data.cosine_threshold);
+          if (data.telegram_bot_token) setTelegramBotToken(data.telegram_bot_token);
         }
       } catch (err) {
         console.error('Error loading configuration:', err);
@@ -935,7 +963,9 @@ export const AppProvider = ({ children }) => {
       handleDeleteWidget,
       handleCreateAPIKey,
       handleDeleteAPIKey,
-      handleSendMessage
+      handleSendMessage,
+      telegramBotToken, setTelegramBotToken,
+      handleSaveTelegramToken
     }}>
       {children}
     </AppContext.Provider>
