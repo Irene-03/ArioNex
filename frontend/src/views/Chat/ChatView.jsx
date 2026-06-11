@@ -4,11 +4,15 @@ import { useApp } from '../../context/AppContext';
 export default function ChatView() {
   const {
     chatMessages,
-    setChatMessages,
     inputText,
     setInputText,
     isAiLoading,
-    handleSendMessage
+    handleSendMessage,
+    sessions,
+    activeSessionId,
+    setActiveSessionId,
+    createNewSession,
+    deleteSession
   } = useApp();
 
   return (
@@ -16,33 +20,43 @@ export default function ChatView() {
       <div className="chat-layout" style={{height: '100%', minHeight: 0}}>
         
         {/* لیست تاریخچه جلسات چت */}
-        <div className="chat-sidebar">
-          <button className="topbar-btn btn-primary" style={{width: '100%', justifyContent: 'center', gap: '8px'}} onClick={() => {
-            setChatMessages([{
-              id: Date.now(),
-              sender: 'ai',
-              text: 'مکالمه جدید شروع شد. چطور می‌توانم کمک کنم؟',
-              isSafe: true,
-              isWelcome: true,
-              sources: []
-            }]);
-          }}>
+        <div className="chat-sidebar" style={{display: 'flex', flexDirection: 'column'}}>
+          <button className="topbar-btn btn-primary" style={{width: '100%', justifyContent: 'center', gap: '8px'}} onClick={createNewSession}>
             + مکالمه جدید
           </button>
-          <div style={{fontSize: '11.5px', color: 'var(--text-muted)', fontWeight: '700', marginTop: '10px', padding: '0 4px'}}>مکالمات اخیر</div>
+          <div style={{fontSize: '11.5px', color: 'var(--text-muted)', fontWeight: '700', marginTop: '14px', padding: '0 4px'}}>مکالمات اخیر</div>
           
-          {chatMessages.filter(m => m.sender === 'user').length > 0 ? (
-            <div className="chat-history-item active-chat">
-              <div className="chi-title" style={{overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
-                {chatMessages.filter(m => m.sender === 'user').slice(-1)[0]?.text?.substring(0, 40) || 'مکالمه جاری'}
-              </div>
-              <div className="chi-sub">{chatMessages.filter(m => m.sender === 'user').length} پیام · همین نشست</div>
-            </div>
-          ) : (
-            <div style={{fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '16px 4px', textAlign: 'center', lineHeight: '1.7'}}>
-              هیچ مکالمه‌ای در این نشست وجود ندارد. یک سوال بپرسید تا اینجا نمایش داده شود.
-            </div>
-          )}
+          <div style={{display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px', overflowY: 'auto', flex: 1}}>
+            {sessions.map(s => {
+              const userMsgsCount = s.messages.filter(m => m.sender === 'user').length;
+              return (
+                <div 
+                  key={s.id} 
+                  className={`chat-history-item ${activeSessionId === s.id ? 'active-chat' : ''}`}
+                  onClick={() => setActiveSessionId(s.id)}
+                  style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 'var(--radius)', cursor: 'pointer', position: 'relative'}}
+                >
+                  <div style={{overflow: 'hidden', flex: 1, minWidth: 0, textAlign: 'right', direction: 'rtl'}}>
+                    <div className="chi-title" style={{overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '13px', fontWeight: activeSessionId === s.id ? '700' : '400', color: activeSessionId === s.id ? 'var(--navy)' : 'var(--text-primary)'}}>
+                      {s.title}
+                    </div>
+                    <div className="chi-sub" style={{fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px'}}>{userMsgsCount} پیام</div>
+                  </div>
+                  {sessions.length > 1 && (
+                    <button 
+                      onClick={(e) => deleteSession(s.id, e)} 
+                      style={{background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '16px', cursor: 'pointer', padding: '2px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 0.2s'}}
+                      title="حذف مکالمه"
+                      onMouseEnter={(e) => e.target.style.color = 'var(--color-danger)'}
+                      onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* پنجره چت اصلی */}

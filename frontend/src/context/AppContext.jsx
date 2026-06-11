@@ -404,19 +404,128 @@ export const AppProvider = ({ children }) => {
   const [ollamaModel, setOllamaModel] = useState('gemma3:4b');
   const [ollamaEndpoint, setOllamaEndpoint] = useState('http://localhost:11434');
 
-  // ─── Chat messages ────────────────────────────────────────────────────────
-  const [chatMessages, setChatMessages] = useState([
-    {
-      id: 1,
-      sender: 'ai',
-      text: 'سلام! من دستیار دانش امن شما (آریو) هستم. تمام پرسش‌ها روی داده‌های خصوصی شما اجرا می‌شوند — هیچ اطلاعاتی از زیرساخت شما خارج نمی‌شود. چطور می‌توانم کمک کنم؟',
-      isSafe: true,
-      isWelcome: true,
-      sources: []
-    }
-  ]);
+  // ─── Chat messages & Sessions ──────────────────────────────────────────────
+  const [sessions, setSessions] = useState(() => {
+    try {
+      const stored = localStorage.getItem('arionex_chat_sessions');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return [
+      {
+        id: 'session_default',
+        title: 'مکالمه جدید',
+        messages: [
+          {
+            id: 1,
+            sender: 'ai',
+            text: 'سلام! من دستیار دانش امن شما (آریو) هستم. تمام پرسش‌ها روی داده‌های خصوصی شما اجرا می‌شوند — هیچ اطلاعاتی از زیرساخت شما خارج نمی‌شود. چطور می‌توانم کمک کنم؟',
+            isSafe: true,
+            isWelcome: true,
+            sources: []
+          }
+        ]
+      }
+    ];
+  });
+
+  const [activeSessionId, setActiveSessionId] = useState(() => {
+    try {
+      const storedActive = localStorage.getItem('arionex_active_session_id');
+      if (storedActive) return storedActive;
+    } catch (_) {}
+    return 'session_default';
+  });
+
+  const [chatMessages, setChatMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('arionex_chat_sessions', JSON.stringify(sessions));
+    } catch (_) {}
+  }, [sessions]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('arionex_active_session_id', activeSessionId);
+    } catch (_) {}
+  }, [activeSessionId]);
+
+  // Load chat messages when active session changes
+  useEffect(() => {
+    const activeSess = sessions.find(s => s.id === activeSessionId);
+    if (activeSess) {
+      setChatMessages(activeSess.messages);
+    } else if (sessions.length > 0) {
+      setActiveSessionId(sessions[0].id);
+      setChatMessages(sessions[0].messages);
+    }
+  }, [activeSessionId, sessions]);
+
+  // Sync chat messages state back to sessions array
+  useEffect(() => {
+    if (chatMessages.length === 0) return;
+    setSessions(prev => prev.map(s => {
+      if (s.id === activeSessionId) {
+        const hasChanged = JSON.stringify(s.messages) !== JSON.stringify(chatMessages);
+        if (!hasChanged) return s;
+
+        let title = s.title;
+        if (s.title === 'مکالمه جدید') {
+          const firstUserMsg = chatMessages.find(m => m.sender === 'user');
+          if (firstUserMsg) {
+            title = firstUserMsg.text.substring(0, 30) + (firstUserMsg.text.length > 30 ? '...' : '');
+          }
+        }
+        return {
+          ...s,
+          title,
+          messages: chatMessages
+        };
+      }
+      return s;
+    }));
+  }, [chatMessages, activeSessionId]);
+
+  const createNewSession = () => {
+    const newId = `session_${Date.now()}`;
+    const newSession = {
+      id: newId,
+      title: 'مکالمه جدید',
+      messages: [
+        {
+          id: Date.now(),
+          sender: 'ai',
+          text: 'مکالمه جدید شروع شد. چطور می‌توانم کمک کنم؟',
+          isSafe: true,
+          isWelcome: true,
+          sources: []
+        }
+      ]
+    };
+    setSessions(prev => [...prev, newSession]);
+    setActiveSessionId(newId);
+    setChatMessages(newSession.messages);
+  };
+
+  const deleteSession = (id, e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (sessions.length <= 1) {
+      alert('نمی‌توان تنها مکالمه موجود را حذف کرد.');
+      return;
+    }
+    const nextSessions = sessions.filter(s => s.id !== id);
+    setSessions(nextSessions);
+    if (activeSessionId === id) {
+      const fallbackId = nextSessions[0].id;
+      setActiveSessionId(fallbackId);
+      setChatMessages(nextSessions[0].messages);
+    }
+  };
 
   // ─── Documents ────────────────────────────────────────────────────────────
   const [documents, setDocuments] = useState([]);
@@ -862,7 +971,7 @@ export const AppProvider = ({ children }) => {
           'Content-Type': 'application/json',
           ...(savedToken ? { 'Authorization': `Bearer ${savedToken}` } : {})
         },
-        body: JSON.stringify({ query: queryText, session_id: 'react_admin_dashboard_chat' })
+        body: JSON.stringify({ query: queryText, session_id: activeSessionId })
       });
 
       if (!res.body) throw new Error('Streaming not supported by browser');
@@ -957,6 +1066,9 @@ export const AppProvider = ({ children }) => {
       ollamaEnabled, setOllamaEnabled,
       ollamaModel, setOllamaModel,
       ollamaEndpoint, setOllamaEndpoint,
+      sessions, setSessions,
+      activeSessionId, setActiveSessionId,
+      createNewSession, deleteSession,
       chatMessages, setChatMessages,
       inputText, setInputText,
       isAiLoading, setIsAiLoading,
