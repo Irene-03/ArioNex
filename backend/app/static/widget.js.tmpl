@@ -9,6 +9,8 @@
     // تزریق مستقیم کدهای استایل CSS به سند جهت استایل‌دهی لوکس و هم‌ساز
     const style = document.createElement('style');
     style.innerHTML = `
+        @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap');
+
         .arionex-widget-bubble {
             position: fixed;
             bottom: 25px;
@@ -48,7 +50,7 @@
             flex-direction: column;
             overflow: hidden;
             z-index: 999999;
-            font-family: system-ui, -apple-system, sans-serif;
+            font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
             border: 1px solid rgba(196, 137, 74, 0.3);
             direction: rtl;
             transition: all 0.3s ease;
