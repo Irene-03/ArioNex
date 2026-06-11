@@ -333,16 +333,13 @@ def _create_ollama_llm(model: str, temperature: float):
 def _warn_if_mock(api_key: str, provider_name: str) -> None:
     """
     /// <summary>
-    /// هشدار لاگ در صورت استفاده از کلید mock در حین توسعه
+    /// بررسی وجود کلید API معتبر و سلب امکان استفاده از کلیدهای پیش‌فرض یا خالی
     /// </summary>
-    /// <param name="api_key">کلید API بررسی‌شده</param>
-    /// <param name="provider_name">نام provider برای نمایش در لاگ</param>
     """
-    if not api_key or api_key in ("mock_key", "") or "your-" in api_key:
-        logger.warning(
-            f"Mock API key detected for {provider_name}. "
-            f"LLM calls will likely fail or return mock responses. "
-            f"Please configure a valid key in backend/.env"
+    if not api_key or api_key.strip() in ("mock_key", "") or "your-" in api_key:
+        raise ValueError(
+            f"کلید API برای پروایدر '{provider_name}' تنظیم نشده است یا روی مقدار پیش‌فرض 'mock_key' قرار دارد. "
+            f"لطفاً ابتدا از پنل مدیریت یکپارچه‌سازی، کلید API معتبر برای آن ست کنید."
         )
 
 

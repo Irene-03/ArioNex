@@ -40,6 +40,23 @@ def _get_embedding_dimension() -> int:
     return _EMBEDDING_DIMENSIONS.get(settings.embedding_model, 3072)
 
 
+def _validate_api_key(provider: str):
+    if provider == "google":
+        key = settings.google_api_key
+    elif provider == "openrouter":
+        key = settings.openrouter_api_key
+    elif provider == "hormouz":
+        key = settings.hormouz_api_key
+    else:
+        key = settings.openai_api_key
+
+    if not key or key.strip() in ("", "mock_key") or "your-" in key:
+        raise ValueError(
+            f"کلید API برای پروایدر '{provider}' تنظیم نشده است یا روی مقدار پیش‌فرض 'mock_key' قرار دارد. "
+            f"لطفاً ابتدا از پنل مدیریت یکپارچه‌سازی، کلید API معتبر برای آن ست کنید."
+        )
+
+
 def get_embedding(text: str) -> list[float]:
     """
     /// <summary>
@@ -60,11 +77,14 @@ def get_embedding(text: str) -> list[float]:
     provider = settings.embedding_provider
 
     try:
+        _validate_api_key(provider)
         if provider == "google":
             return _embed_with_google(text)
         else:
             # پیش‌فرض: OpenAI یا هر endpoint سازگار
             return _embed_with_openai(text)
+    except ValueError as ve:
+        raise ve
     except Exception as e:
         logger.error(
             f"Embedding generation failed (provider={provider}): {str(e)}. "
