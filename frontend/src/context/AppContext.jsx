@@ -361,6 +361,45 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const [providerApiKeys, setProviderApiKeys] = useState({
+    openai: '',
+    openrouter: '',
+    anthropic: '',
+    google: '',
+    deepseek: '',
+    gapgpt: '',
+    avalai: '',
+    hormouz: ''
+  });
+
+  const handleSaveProviderApiKey = async (provider, keyValue) => {
+    try {
+      const res = await apiFetch('http://localhost:8000/v1/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          [`${provider}_api_key`]: keyValue
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.current_config?.api_keys) {
+          setProviderApiKeys(data.current_config.api_keys);
+        }
+        alert('کلید API پروایدر با موفقیت ذخیره شد.');
+        return true;
+      } else {
+        const data = await res.json();
+        alert(data.detail || 'خطا در ذخیره کلید API');
+        return false;
+      }
+    } catch (err) {
+      console.error(err);
+      alert('خطا در ذخیره کلید API');
+      return false;
+    }
+  };
+
   const [ollamaEnabled, setOllamaEnabled] = useState(false);
   const [ollamaModel, setOllamaModel] = useState('gemma3:4b');
   const [ollamaEndpoint, setOllamaEndpoint] = useState('http://localhost:11434');
@@ -528,6 +567,7 @@ export const AppProvider = ({ children }) => {
           if (data.ollama_base_url) setOllamaEndpoint(data.ollama_base_url);
           if (data.cosine_threshold !== undefined) setCosineThreshold(data.cosine_threshold);
           if (data.telegram_bot_token) setTelegramBotToken(data.telegram_bot_token);
+          if (data.api_keys) setProviderApiKeys(data.api_keys);
         }
       } catch (err) {
         console.error('Error loading configuration:', err);
@@ -870,6 +910,11 @@ export const AppProvider = ({ children }) => {
             } catch (_) {}
           } else if (eventName === 'error') {
             console.error('Stream RAG error:', decodedData);
+            setChatMessages(prev => prev.map(m => m.id === aiMsgId ? {
+              ...m,
+              text: `⚠️ خطا: ${decodedData}`,
+              isRefusal: true
+            } : m));
           }
         }
       }
@@ -965,7 +1010,9 @@ export const AppProvider = ({ children }) => {
       handleDeleteAPIKey,
       handleSendMessage,
       telegramBotToken, setTelegramBotToken,
-      handleSaveTelegramToken
+      handleSaveTelegramToken,
+      providerApiKeys, setProviderApiKeys,
+      handleSaveProviderApiKey
     }}>
       {children}
     </AppContext.Provider>

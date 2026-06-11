@@ -18,8 +18,21 @@ export default function AdminView() {
     setOllamaModel,
     ollamaEndpoint,
     setOllamaEndpoint,
-    toggleProvider
+    toggleProvider,
+    providerApiKeys,
+    handleSaveProviderApiKey
   } = useApp();
+
+  const [keysInput, setKeysInput] = React.useState({
+    openai: '',
+    openrouter: '',
+    anthropic: '',
+    google: '',
+    deepseek: '',
+    gapgpt: '',
+    avalai: '',
+    hormouz: ''
+  });
 
   return (
     <div className="screen fade-in">
@@ -229,47 +242,213 @@ export default function AdminView() {
           <div className="admin-card-title">
             <span>🧠</span> پروایدرهای هوش مصنوعی فعال (LLM Providers)
           </div>
-          <div className="toggle-row">
+
+          {/* OpenAI */}
+          <div className="toggle-row" style={{borderBottom: 'none', paddingBottom: '4px'}}>
             <span className="toggle-label">OpenAI direct (GPT-4o, GPT-4o-mini)</span>
             <div 
               className={`toggle ${features.providerOpenAI ? 'toggle-on' : 'toggle-off'}`} 
               onClick={() => toggleProvider('openai')}
             />
           </div>
-          <div className="toggle-row">
+          <div style={{display: 'flex', gap: '8px', padding: '0 10px 14px', borderBottom: '1px solid var(--gray-100)'}}>
+            <input 
+              type="password" 
+              className="chat-input-box" 
+              style={{borderRadius: 'var(--radius)', fontSize: '12px', padding: '6px 10px', flex: 1, minWidth: 0}}
+              placeholder={providerApiKeys.openai ? "•••••••••••• (کلید ذخیره شده)" : "کلید API برای OpenAI را وارد کنید"}
+              value={keysInput.openai}
+              onChange={(e) => setKeysInput(prev => ({...prev, openai: e.target.value}))}
+            />
+            <button 
+              onClick={() => handleSaveProviderApiKey('openai', keysInput.openai)}
+              className="topbar-btn btn-ghost" 
+              style={{padding: '6px 12px', fontSize: '11.5px'}}
+            >
+              ذخیره
+            </button>
+          </div>
+
+          {/* OpenRouter */}
+          <div className="toggle-row" style={{borderBottom: 'none', paddingBottom: '4px'}}>
             <span className="toggle-label">OpenRouter API (دسترسی تجاری متمرکز)</span>
             <div 
               className={`toggle ${features.providerOpenRouter ? 'toggle-on' : 'toggle-off'}`} 
               onClick={() => toggleProvider('openrouter')}
             />
           </div>
-          <div className="toggle-row">
+          <div style={{display: 'flex', gap: '8px', padding: '0 10px 14px', borderBottom: '1px solid var(--gray-100)'}}>
+            <input 
+              type="password" 
+              className="chat-input-box" 
+              style={{borderRadius: 'var(--radius)', fontSize: '12px', padding: '6px 10px', flex: 1, minWidth: 0}}
+              placeholder={providerApiKeys.openrouter ? "•••••••••••• (کلید ذخیره شده)" : "کلید API برای OpenRouter را وارد کنید"}
+              value={keysInput.openrouter}
+              onChange={(e) => setKeysInput(prev => ({...prev, openrouter: e.target.value}))}
+            />
+            <button 
+              onClick={() => handleSaveProviderApiKey('openrouter', keysInput.openrouter)}
+              className="topbar-btn btn-ghost" 
+              style={{padding: '6px 12px', fontSize: '11.5px'}}
+            >
+              ذخیره
+            </button>
+          </div>
+
+          {/* Google Gemini */}
+          <div className="toggle-row" style={{borderBottom: 'none', paddingBottom: '4px'}}>
+            <span className="toggle-label">Google Gemini API (Flash & Pro)</span>
+            <div 
+              className={`toggle ${features.providerGoogle ? 'toggle-on' : 'toggle-off'}`} 
+              onClick={() => toggleProvider('google')}
+            />
+          </div>
+          <div style={{display: 'flex', gap: '8px', padding: '0 10px 14px', borderBottom: '1px solid var(--gray-100)'}}>
+            <input 
+              type="password" 
+              className="chat-input-box" 
+              style={{borderRadius: 'var(--radius)', fontSize: '12px', padding: '6px 10px', flex: 1, minWidth: 0}}
+              placeholder={providerApiKeys.google ? "•••••••••••• (کلید ذخیره شده)" : "کلید API برای Google Gemini را وارد کنید"}
+              value={keysInput.google}
+              onChange={(e) => setKeysInput(prev => ({...prev, google: e.target.value}))}
+            />
+            <button 
+              onClick={() => handleSaveProviderApiKey('google', keysInput.google)}
+              className="topbar-btn btn-ghost" 
+              style={{padding: '6px 12px', fontSize: '11.5px'}}
+            >
+              ذخیره
+            </button>
+          </div>
+
+          {/* Anthropic Claude */}
+          <div className="toggle-row" style={{borderBottom: 'none', paddingBottom: '4px'}}>
+            <span className="toggle-label">Anthropic Claude API (Sonnet & Haiku)</span>
+            <div 
+              className={`toggle ${features.providerAnthropic ? 'toggle-on' : 'toggle-off'}`} 
+              onClick={() => toggleProvider('anthropic')}
+            />
+          </div>
+          <div style={{display: 'flex', gap: '8px', padding: '0 10px 14px', borderBottom: '1px solid var(--gray-100)'}}>
+            <input 
+              type="password" 
+              className="chat-input-box" 
+              style={{borderRadius: 'var(--radius)', fontSize: '12px', padding: '6px 10px', flex: 1, minWidth: 0}}
+              placeholder={providerApiKeys.anthropic ? "•••••••••••• (کلید ذخیره شده)" : "کلید API برای Anthropic Claude را وارد کنید"}
+              value={keysInput.anthropic}
+              onChange={(e) => setKeysInput(prev => ({...prev, anthropic: e.target.value}))}
+            />
+            <button 
+              onClick={() => handleSaveProviderApiKey('anthropic', keysInput.anthropic)}
+              className="topbar-btn btn-ghost" 
+              style={{padding: '6px 12px', fontSize: '11.5px'}}
+            >
+              ذخیره
+            </button>
+          </div>
+
+          {/* DeepSeek */}
+          <div className="toggle-row" style={{borderBottom: 'none', paddingBottom: '4px'}}>
             <span className="toggle-label">DeepSeek API (مدل ارزان و قدرتمند)</span>
             <div 
               className={`toggle ${features.providerDeepSeek ? 'toggle-on' : 'toggle-off'}`} 
               onClick={() => toggleProvider('deepseek')}
             />
           </div>
-          <div className="toggle-row">
+          <div style={{display: 'flex', gap: '8px', padding: '0 10px 14px', borderBottom: '1px solid var(--gray-100)'}}>
+            <input 
+              type="password" 
+              className="chat-input-box" 
+              style={{borderRadius: 'var(--radius)', fontSize: '12px', padding: '6px 10px', flex: 1, minWidth: 0}}
+              placeholder={providerApiKeys.deepseek ? "•••••••••••• (کلید ذخیره شده)" : "کلید API برای DeepSeek را وارد کنید"}
+              value={keysInput.deepseek}
+              onChange={(e) => setKeysInput(prev => ({...prev, deepseek: e.target.value}))}
+            />
+            <button 
+              onClick={() => handleSaveProviderApiKey('deepseek', keysInput.deepseek)}
+              className="topbar-btn btn-ghost" 
+              style={{padding: '6px 12px', fontSize: '11.5px'}}
+            >
+              ذخیره
+            </button>
+          </div>
+
+          {/* GapGPT */}
+          <div className="toggle-row" style={{borderBottom: 'none', paddingBottom: '4px'}}>
             <span className="toggle-label">GapGPT API (پروایدر ایرانی بدون تحریم)</span>
             <div 
               className={`toggle ${features.providerGapGPT ? 'toggle-on' : 'toggle-off'}`} 
               onClick={() => toggleProvider('gapgpt')}
             />
           </div>
-          <div className="toggle-row">
+          <div style={{display: 'flex', gap: '8px', padding: '0 10px 14px', borderBottom: '1px solid var(--gray-100)'}}>
+            <input 
+              type="password" 
+              className="chat-input-box" 
+              style={{borderRadius: 'var(--radius)', fontSize: '12px', padding: '6px 10px', flex: 1, minWidth: 0}}
+              placeholder={providerApiKeys.gapgpt ? "•••••••••••• (کلید ذخیره شده)" : "کلید API برای GapGPT را وارد کنید"}
+              value={keysInput.gapgpt}
+              onChange={(e) => setKeysInput(prev => ({...prev, gapgpt: e.target.value}))}
+            />
+            <button 
+              onClick={() => handleSaveProviderApiKey('gapgpt', keysInput.gapgpt)}
+              className="topbar-btn btn-ghost" 
+              style={{padding: '6px 12px', fontSize: '11.5px'}}
+            >
+              ذخیره
+            </button>
+          </div>
+
+          {/* AvalAI */}
+          <div className="toggle-row" style={{borderBottom: 'none', paddingBottom: '4px'}}>
             <span className="toggle-label">AvalAI API (پروایدر ایرانی همکار)</span>
             <div 
               className={`toggle ${features.providerAvalAI ? 'toggle-on' : 'toggle-off'}`} 
               onClick={() => toggleProvider('avalai')}
             />
           </div>
-          <div className="toggle-row">
+          <div style={{display: 'flex', gap: '8px', padding: '0 10px 14px', borderBottom: '1px solid var(--gray-100)'}}>
+            <input 
+              type="password" 
+              className="chat-input-box" 
+              style={{borderRadius: 'var(--radius)', fontSize: '12px', padding: '6px 10px', flex: 1, minWidth: 0}}
+              placeholder={providerApiKeys.avalai ? "•••••••••••• (کلید ذخیره شده)" : "کلید API برای AvalAI را وارد کنید"}
+              value={keysInput.avalai}
+              onChange={(e) => setKeysInput(prev => ({...prev, avalai: e.target.value}))}
+            />
+            <button 
+              onClick={() => handleSaveProviderApiKey('avalai', keysInput.avalai)}
+              className="topbar-btn btn-ghost" 
+              style={{padding: '6px 12px', fontSize: '11.5px'}}
+            >
+              ذخیره
+            </button>
+          </div>
+
+          {/* Hormouz */}
+          <div className="toggle-row" style={{borderBottom: 'none', paddingBottom: '4px'}}>
             <span className="toggle-label">Hormouz API (دروازه ۳۵۰+ مدل · streaming)</span>
             <div 
               className={`toggle ${features.providerHormouz ? 'toggle-on' : 'toggle-off'}`} 
               onClick={() => toggleProvider('hormouz')}
             />
+          </div>
+          <div style={{display: 'flex', gap: '8px', padding: '0 10px 14px', borderBottom: 'none'}}>
+            <input 
+              type="password" 
+              className="chat-input-box" 
+              style={{borderRadius: 'var(--radius)', fontSize: '12px', padding: '6px 10px', flex: 1, minWidth: 0}}
+              placeholder={providerApiKeys.hormouz ? "•••••••••••• (کلید ذخیره شده)" : "کلید API برای Hormouz را وارد کنید"}
+              value={keysInput.hormouz}
+              onChange={(e) => setKeysInput(prev => ({...prev, hormouz: e.target.value}))}
+            />
+            <button 
+              onClick={() => handleSaveProviderApiKey('hormouz', keysInput.hormouz)}
+              className="topbar-btn btn-ghost" 
+              style={{padding: '6px 12px', fontSize: '11.5px'}}
+            >
+              ذخیره
+            </button>
           </div>
         </div>
 
