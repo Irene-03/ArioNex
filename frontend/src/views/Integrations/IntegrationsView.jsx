@@ -156,7 +156,7 @@ export default function IntegrationsView() {
                 <input
                   type="text"
                   className="chat-input-box"
-                  style={{borderRadius: 'var(--radius)', fontSize: '12.5px', padding: '8px 12px'}}
+                  style={{borderRadius: 'var(--radius)', fontSize: '12.5px', padding: '8px 12px', minWidth: 0}}
                   placeholder="عنوان سایت (مثلاً: پورتال پشتیبانی)"
                   value={newWidgetName}
                   onChange={(e) => setNewWidgetName(e.target.value)}
@@ -164,7 +164,7 @@ export default function IntegrationsView() {
                 <input
                   type="text"
                   className="chat-input-box"
-                  style={{borderRadius: 'var(--radius)', fontSize: '12.5px', padding: '8px 12px'}}
+                  style={{borderRadius: 'var(--radius)', fontSize: '12.5px', padding: '8px 12px', minWidth: 0}}
                   placeholder="دامنه یا آدرس (مثلاً: support.company.ir)"
                   value={newWidgetUrl}
                   onChange={(e) => setNewWidgetUrl(e.target.value)}
