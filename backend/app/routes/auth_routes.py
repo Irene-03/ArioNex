@@ -37,17 +37,18 @@ def hash_password(password: str) -> str:
     salt = "arionex_secure_salt_2026"
     return hashlib.sha256((password + salt).encode('utf-8')).hexdigest()
 
-def create_session_token(payload: dict) -> str:
+def create_session_token(payload: dict, expires_in: int = 86400, token_type: str = "access") -> str:
     """تولید توکن نشست ایمن با الگوریتم HMAC-SHA256"""
     payload_data = payload.copy()
-    payload_data["exp"] = int(time.time()) + TOKEN_EXPIRY_SECONDS
+    payload_data["exp"] = int(time.time()) + expires_in
+    payload_data["type"] = token_type
     payload_json = json.dumps(payload_data)
     encoded_payload = base64.urlsafe_b64encode(payload_json.encode('utf-8')).decode('utf-8')
     sig = hmac.new(SECRET_KEY.encode('utf-8'), encoded_payload.encode('utf-8'), hashlib.sha256).hexdigest()
     return f"{encoded_payload}.{sig}"
 
-def verify_session_token(token: str) -> Optional[dict]:
-    """اعتبارسنجی توکن نشست و بررسی انقضا"""
+def verify_session_token(token: str, expected_type: str = "access") -> Optional[dict]:
+    """اعتبارسنجی توکن نشست و بررسی انقضا و نوع توکن"""
     try:
         parts = token.split(".")
         if len(parts) != 2:
@@ -59,6 +60,10 @@ def verify_session_token(token: str) -> Optional[dict]:
         payload_json = base64.urlsafe_b64decode(encoded_payload.encode('utf-8')).decode('utf-8')
         payload = json.loads(payload_json)
         if payload.get("exp", 0) < time.time():
+            return None
+        # برای توکن‌های قدیمی فیلد type وجود ندارد، بنابراین پیش‌فرض را access در نظر می‌گیریم
+        t_type = payload.get("type", "access")
+        if t_type != expected_type:
             return None
         return payload
     except Exception:
