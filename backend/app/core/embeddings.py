@@ -96,14 +96,7 @@ def _embed_with_openai(text: str) -> list[float]:
         api_key = settings.openai_api_key
         base_url = None
 
-    # بررسی mock mode
-    if not api_key or api_key in ("mock_key", "") or "your-" in api_key:
-        logger.warning(
-            f"Mock mode active: no valid API key for embedding provider '{provider}'. "
-            f"Returning zero-vector. Configure a real key in backend/.env for actual RAG."
-        )
-        return [0.0] * dim
-
+    # تولید امبدینگ با کلاینت OpenAI
     client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
     response = client.embeddings.create(model=model, input=text)
     return response.data[0].embedding
@@ -125,10 +118,6 @@ def _embed_with_google(text: str) -> list[float]:
     api_key = settings.google_api_key
     model = settings.embedding_model
     dim = _get_embedding_dimension()
-
-    if not api_key or "your-" in api_key:
-        logger.warning("Mock mode active: no valid GOOGLE_API_KEY. Returning zero-vector.")
-        return [0.0] * dim
 
     genai.configure(api_key=api_key)
     result = genai.embed_content(model=model, content=text)

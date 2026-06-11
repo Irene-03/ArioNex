@@ -111,8 +111,8 @@ class Settings(BaseSettings):
     model_name: str = Field(default="openai/gpt-4o-mini", validation_alias="MODEL_NAME")
 
     # کلیدهای API هر provider
-    openai_api_key: str = Field(default="mock_key", validation_alias="OPENAI_API_KEY")
-    openrouter_api_key: str = Field(default="mock_key", validation_alias="OPENROUTER_API_KEY")
+    openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
+    openrouter_api_key: str = Field(default="", validation_alias="OPENROUTER_API_KEY")
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
     google_api_key: str = Field(default="", validation_alias="GOOGLE_API_KEY")
     deepseek_api_key: str = Field(default="", validation_alias="DEEPSEEK_API_KEY")
