@@ -31,18 +31,18 @@ export default function ChatView() {
           </button>
           <div style={{fontSize: '11.5px', color: 'var(--text-muted)', fontWeight: '700', marginTop: '10px', padding: '0 4px'}}>مکالمات اخیر</div>
           
-          <div className="chat-history-item active-chat">
-            <div className="chi-title">تحلیل سود خالص Q2</div>
-            <div className="chi-sub">۴ پیام · ۸ دقیقه پیش</div>
-          </div>
-          <div className="chat-history-item">
-            <div className="chi-title">سیاست مرخصی کارمندان</div>
-            <div className="chi-sub">۲ پیام · ۲ ساعت پیش</div>
-          </div>
-          <div className="chat-history-item">
-            <div className="chi-title">بندهای فسخ قرارداد Q3</div>
-            <div className="chi-sub">۷ پیام · دیروز</div>
-          </div>
+          {chatMessages.filter(m => m.sender === 'user').length > 0 ? (
+            <div className="chat-history-item active-chat">
+              <div className="chi-title" style={{overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                {chatMessages.filter(m => m.sender === 'user').slice(-1)[0]?.text?.substring(0, 40) || 'مکالمه جاری'}
+              </div>
+              <div className="chi-sub">{chatMessages.filter(m => m.sender === 'user').length} پیام · همین نشست</div>
+            </div>
+          ) : (
+            <div style={{fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '16px 4px', textAlign: 'center', lineHeight: '1.7'}}>
+              هیچ مکالمه‌ای در این نشست وجود ندارد. یک سوال بپرسید تا اینجا نمایش داده شود.
+            </div>
+          )}
         </div>
 
         {/* پنجره چت اصلی */}

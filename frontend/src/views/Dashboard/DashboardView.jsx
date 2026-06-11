@@ -41,30 +41,42 @@ export default function DashboardView() {
             </div>
             
             <div className="pipeline">
-              <div className="pipe-step">
-                <div className="pipe-node pipe-done">📥<div className="pipe-check">✓</div></div>
-                <div className="pipe-label">دریافت منبع</div>
-              </div>
-              <div className="pipe-arrow">←</div>
-              <div className="pipe-step">
-                <div className="pipe-node pipe-done">🔒<div className="pipe-check">✓</div></div>
-                <div className="pipe-label">ایرلاک حریم خصوصی</div>
-              </div>
-              <div className="pipe-arrow">←</div>
-              <div className="pipe-step">
-                <div className="pipe-node pipe-active">⚙️</div>
-                <div className="pipe-label" style={{color: 'var(--copper-dark)', fontWeight: 'bold'}}>تقطیع و پردازش</div>
-              </div>
-              <div className="pipe-arrow">←</div>
-              <div className="pipe-step">
-                <div className="pipe-node pipe-idle">🗄</div>
-                <div className="pipe-label">ذخیره برداری</div>
-              </div>
-              <div className="pipe-arrow">←</div>
-              <div className="pipe-step">
-                <div className="pipe-node pipe-idle">✅</div>
-                <div className="pipe-label">آماده بهره‌برداری</div>
-              </div>
+              {(() => {
+                const activeDoc = documents.find(d => d.status === 'uploading' || (d.progress !== undefined && d.progress < 100));
+                const prog = activeDoc ? (activeDoc.progress || 0) : (documents.length > 0 ? 100 : -1);
+                // -1 = هیچ سندی نیست, 0-30 = دریافت, 30-60 = ایرلاک, 60-85 = تقطیع, 85-99 = ذخیره, 100 = آماده
+                const s1 = prog >= 0 ? (prog >= 30 ? 'pipe-done' : 'pipe-active') : 'pipe-idle';
+                const s2 = prog >= 30 ? (prog >= 60 ? 'pipe-done' : 'pipe-active') : 'pipe-idle';
+                const s3 = prog >= 60 ? (prog >= 85 ? 'pipe-done' : 'pipe-active') : 'pipe-idle';
+                const s4 = prog >= 85 ? (prog >= 100 ? 'pipe-done' : 'pipe-active') : 'pipe-idle';
+                const s5 = prog >= 100 ? 'pipe-done' : 'pipe-idle';
+                return (<>
+                  <div className="pipe-step">
+                    <div className={`pipe-node ${s1}`}>📥{s1==='pipe-done' && <div className="pipe-check">✓</div>}</div>
+                    <div className="pipe-label" style={s1==='pipe-active' ? {color: 'var(--copper-dark)', fontWeight: 'bold'} : {}}>دریافت منبع</div>
+                  </div>
+                  <div className="pipe-arrow">←</div>
+                  <div className="pipe-step">
+                    <div className={`pipe-node ${s2}`}>🔒{s2==='pipe-done' && <div className="pipe-check">✓</div>}</div>
+                    <div className="pipe-label" style={s2==='pipe-active' ? {color: 'var(--copper-dark)', fontWeight: 'bold'} : {}}>ایرلاک حریم خصوصی</div>
+                  </div>
+                  <div className="pipe-arrow">←</div>
+                  <div className="pipe-step">
+                    <div className={`pipe-node ${s3}`}>⚙️{s3==='pipe-done' && <div className="pipe-check">✓</div>}</div>
+                    <div className="pipe-label" style={s3==='pipe-active' ? {color: 'var(--copper-dark)', fontWeight: 'bold'} : {}}>تقطیع و پردازش</div>
+                  </div>
+                  <div className="pipe-arrow">←</div>
+                  <div className="pipe-step">
+                    <div className={`pipe-node ${s4}`}>🗄{s4==='pipe-done' && <div className="pipe-check">✓</div>}</div>
+                    <div className="pipe-label" style={s4==='pipe-active' ? {color: 'var(--copper-dark)', fontWeight: 'bold'} : {}}>ذخیره برداری</div>
+                  </div>
+                  <div className="pipe-arrow">←</div>
+                  <div className="pipe-step">
+                    <div className={`pipe-node ${s5}`}>✅{s5==='pipe-done' && <div className="pipe-check">✓</div>}</div>
+                    <div className="pipe-label" style={s5==='pipe-active' ? {color: 'var(--copper-dark)', fontWeight: 'bold'} : {}}>آماده بهره‌برداری</div>
+                  </div>
+                </>);
+              })()}
             </div>
 
             {documents.some(d => d.status === 'uploading' || d.progress < 100) ? (

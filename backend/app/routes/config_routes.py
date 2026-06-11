@@ -43,6 +43,7 @@ async def get_active_configuration():
         "embedding_model": settings.embedding_model,
         "ollama_model": getattr(settings, "ollama_model", "gemma3:4b"),
         "ollama_base_url": getattr(settings, "ollama_base_url", "http://localhost:11434"),
+        "cosine_threshold": getattr(settings, "cosine_threshold", 0.50),
     }
 
 

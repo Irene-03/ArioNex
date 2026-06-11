@@ -9,7 +9,8 @@ export default function KnowledgeView() {
     apiFetch,
     fetchDocuments,
     setActiveScreen,
-    stats
+    stats,
+    cosineThreshold
   } = useApp();
 
   return (
@@ -22,7 +23,7 @@ export default function KnowledgeView() {
         </div>
         <div className="card" style={{borderRight: '4px solid var(--copper)'}}>
           <div style={{fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px'}}>حد آستانه شباهت بازیابی (Threshold)</div>
-          <div style={{fontSize: '26px', fontWeight: '800', color: 'var(--navy)'}}>0.50 Cosine</div>
+          <div style={{fontSize: '26px', fontWeight: '800', color: 'var(--navy)'}}>Cosine {cosineThreshold.toFixed(2)}</div>
           <div style={{fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px'}}>قابل تنظیم جهت ممانعت از توهم و ورود داده کاذب</div>
         </div>
         <div className="card" style={{borderRight: '4px solid var(--color-success)'}}>

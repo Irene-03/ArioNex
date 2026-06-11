@@ -356,6 +356,7 @@ export const AppProvider = ({ children }) => {
   const [documents, setDocuments] = useState([]);
   const [piiPreview, setPiiPreview] = useState('');
   const [piiAuditCounts, setPiiAuditCounts] = useState({});
+  const [cosineThreshold, setCosineThreshold] = useState(0.50);
   const [stats, setStats] = useState({
     total_documents: 0,
     total_chunks: 0,
@@ -496,6 +497,7 @@ export const AppProvider = ({ children }) => {
           setOllamaEnabled(data.llm_provider === 'ollama');
           if (data.ollama_model) setOllamaModel(data.ollama_model);
           if (data.ollama_base_url) setOllamaEndpoint(data.ollama_base_url);
+          if (data.cosine_threshold !== undefined) setCosineThreshold(data.cosine_threshold);
         }
       } catch (err) {
         console.error('Error loading configuration:', err);
@@ -885,8 +887,8 @@ export const AppProvider = ({ children }) => {
       crawlSubmitting, setCrawlSubmitting,
       crawlStatusFilter, setCrawlStatusFilter,
       stats, fetchStats,
-      
-      apiFetch,
+      cosineThreshold,
+            apiFetch,
       handleLogin,
       handleSignup,
       handleLogout,
