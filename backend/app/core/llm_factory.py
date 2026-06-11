@@ -43,7 +43,7 @@ def get_llm(
     /// <returns>نمونه‌ای از BaseChatModel سازگار با LangChain</returns>
     /// <remarks>
     /// این تابع به عنوان تنها نقطه ورود برای ساخت مدل زبانی در سراسر سیستم استفاده می‌شود.
-    /// در صورت وجود mock_key یا کلید خالی، یک LLM mock برمی‌گرداند که خطا نمی‌دهد.
+    /// در صورت خالی بودن کلید، یک خطای ValueError صادر می‌کند.
     /// </remarks>
     """
     # استفاده از مقادیر پیش‌فرض از settings در صورت عدم ارائه
@@ -336,7 +336,7 @@ def _warn_if_mock(api_key: str, provider_name: str) -> None:
     /// بررسی وجود کلید API معتبر و سلب امکان استفاده از کلیدهای پیش‌فرض یا خالی
     /// </summary>
     """
-    if not api_key or api_key.strip() in ("mock_key", "") or "your-" in api_key:
+    if not api_key or api_key.strip() == "" or "your-" in api_key:
         raise ValueError(
             f"کلید API برای پروایدر '{provider_name}' تنظیم نشده است. "
             f"لطفاً ابتدا از پنل مدیریت یکپارچه‌سازی، کلید API معتبر برای آن ست کنید."

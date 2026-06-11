@@ -50,7 +50,7 @@ def _validate_api_key(provider: str):
     else:
         key = settings.openai_api_key
 
-    if not key or key.strip() in ("", "mock_key") or "your-" in key:
+    if not key or key.strip() == "" or "your-" in key:
         raise ValueError(
             f"کلید API برای پروایدر '{provider}' تنظیم نشده است. "
             f"لطفاً ابتدا از پنل مدیریت یکپارچه‌سازی، کلید API معتبر برای آن ست کنید."

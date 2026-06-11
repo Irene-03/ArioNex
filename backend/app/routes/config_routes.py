@@ -22,7 +22,7 @@ router = APIRouter(prefix="/v1", tags=["Config — Feature Toggles"])
 
 
 def _mask_api_key(key: str) -> str:
-    if not key or key.strip() in ("mock_key", "") or "your-" in key:
+    if not key or key.strip() == "" or "your-" in key:
         return ""
     if len(key) <= 12:
         return "********"
