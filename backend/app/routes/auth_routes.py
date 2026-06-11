@@ -121,8 +121,17 @@ class UserResponse(BaseModel):
 
 class LoginResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
     user: UserResponse
+
+class TokenRefreshRequest(BaseModel):
+    refresh_token: str
+
+class TokenRefreshResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str
 
 # -------------------------------------------------------------------
 # Auth Endpoints
@@ -213,10 +222,12 @@ async def login_user(payload: UserLogin):
             if hash_password(payload.password) != pwd_hash:
                 raise HTTPException(status_code=401, detail="نام کاربری یا رمز عبور اشتباه است.")
             
-            # تولید توکن نشست
-            token = create_session_token({"username": payload.username, "role": role})
+            # تولید توکن‌های نشست (۲ ساعت برای دسترسی، ۷ روز برای رفرش)
+            access_token = create_session_token({"username": payload.username, "role": role}, expires_in=7200, token_type="access")
+            refresh_token = create_session_token({"username": payload.username, "role": role}, expires_in=604800, token_type="refresh")
             return LoginResponse(
-                access_token=token,
+                access_token=access_token,
+                refresh_token=refresh_token,
                 token_type="bearer",
                 user=UserResponse(username=payload.username, role=role)
             )
@@ -228,6 +239,33 @@ async def login_user(payload: UserLogin):
     finally:
         if conn:
             conn.close()
+
+@router.post("/refresh", response_model=TokenRefreshResponse, summary="نوسازی توکن دسترسی منقضی شده")
+async def refresh_token(payload: TokenRefreshRequest):
+    """
+    /// <summary>
+    /// نوسازی توکن دسترسی با استفاده از توکن بازنشانی (Refresh Token) معتبر
+    /// </summary>
+    """
+    token_payload = verify_session_token(payload.refresh_token, expected_type="refresh")
+    if not token_payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="توکن بازنشانی نامعتبر یا منقضی شده است. لطفاً مجدداً وارد شوید."
+        )
+    
+    username = token_payload.get("username")
+    role = token_payload.get("role")
+    
+    # تولید توکن‌های جدید
+    new_access_token = create_session_token({"username": username, "role": role}, expires_in=7200, token_type="access")
+    new_refresh_token = create_session_token({"username": username, "role": role}, expires_in=604800, token_type="refresh")
+    
+    return TokenRefreshResponse(
+        access_token=new_access_token,
+        refresh_token=new_refresh_token,
+        token_type="bearer"
+    )
 
 @router.get("/users", response_model=List[UserResponse], summary="لیست کل کاربران (فقط ادمین)")
 async def list_users(admin: dict = Depends(require_admin)):
