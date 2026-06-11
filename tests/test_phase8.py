@@ -145,6 +145,7 @@ class TestPhase8Agents(unittest.TestCase):
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         from langchain_core.messages import AIMessage
+        mock_llm.return_value = AIMessage(content="پاسخ نمونه تولید شده توسط هوش مصنوعی")
         mock_llm.invoke.return_value = AIMessage(content="پاسخ نمونه تولید شده توسط هوش مصنوعی")
         
         # سناریو اول: عدم انطباق بحرانی (باید پاسخ بلاک شده و پیغام امتناع برگردد)
