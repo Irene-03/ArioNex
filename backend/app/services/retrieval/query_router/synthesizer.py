@@ -142,28 +142,7 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
 
     active_provider = settings.llm_provider
     active_key = _get_active_api_key(active_provider)
-    if not active_key or active_key in ("mock_key", "") or "your-" in active_key:
-        logger.warning("Mock mode active in Query Router. Simulating LLM response based on context.")
-        mock_response = f"بر اساس مستندات موجود در {sources[0]['name']}: \n{formatted_context_list[0][:150]}..."
-        
-        audit_result = qr.lawyer_agent.audit_compliance(standalone_query, mock_response, active_file_id)
-        if not audit_result.get("is_compliant", True):
-            logger.warning(f"Lawyer Agent detected compliance violations in Mock response. Blocking response.")
-            return {
-                "answer": STANDARD_REFUSAL_MESSAGE,
-                "sources": [],
-                "is_safe": False
-            }
-            
-        if audit_result.get("audit_report"):
-            mock_response += f"\n\n⚖️ **گزارش انطباق قوانین (ArioNex Lawyer Audit):**\n*{audit_result['audit_report']}*"
-            
-        return {
-            "answer": mock_response,
-            "sources": sources[:2],
-            "is_safe": True
-        }
-        
+    
     try:
         llm = get_llm(temperature=0.1)
         
@@ -339,14 +318,7 @@ async def synthesize_rag_response_stream(
 
     active_provider = settings.llm_provider
     active_key = _get_active_api_key(active_provider)
-    if not active_key or active_key in ("mock_key", "") or "your-" in active_key:
-        logger.warning("Mock mode active in stream Query Router. Emitting simulated response.")
-        mock_response = f"بر اساس گزارش موجود در {sources[0]['name']}: \n{formatted_context_list[0][:150]}..."
-        for chunk in _chunk_text_for_mock(mock_response, size=20):
-            yield {"event": "token", "data": chunk}
-        yield {"event": "done", "data": {"is_safe": True}}
-        return
-
+    
     try:
         llm = get_llm(temperature=0.1)
 
@@ -384,6 +356,3 @@ async def synthesize_rag_response_stream(
         yield {"event": "done", "data": {"is_safe": True}}
 
 
-def _chunk_text_for_mock(text: str, size: int = 20):
-    for i in range(0, len(text), size):
-        yield text[i:i + size]
