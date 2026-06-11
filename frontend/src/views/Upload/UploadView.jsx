@@ -7,12 +7,23 @@ export default function UploadView() {
     piiPreview,
     piiAuditCounts,
     piiChecked,
-    handleFileUpload
+    handleFileUpload,
+    documents
   } = useApp();
+
+  // اسناد در حال آپلود یا پردازش
+  const processingDocs = documents.filter(d => d.status === 'uploading' || (d.progress !== undefined && d.progress < 100));
 
   return (
     <div className="screen fade-in">
-      <div className="upload-zone" onDragOver={(e) => e.preventDefault()} onDrop={handleFileUpload}>
+      {/* ناحیه درگ اند دراپ — کلیک روی کل ناحیه فایل‌انتخاب را باز می‌کند */}
+      <div
+        className="upload-zone"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleFileUpload}
+        onClick={handleFileUpload}
+        style={{ cursor: 'pointer' }}
+      >
         <div className="upload-icon">📂</div>
         <div className="upload-title">اسناد سازمان را به اینجا بکشید یا برای انتخاب کلیک کنید</div>
         <div className="upload-sub">
@@ -27,7 +38,14 @@ export default function UploadView() {
           <span className="file-pill">Plain Text (TXT)</span>
         </div>
 
-        <button className="topbar-btn btn-primary" style={{marginTop: '20px'}} onClick={handleFileUpload}>
+        <button
+          className="topbar-btn btn-primary"
+          style={{ marginTop: '20px' }}
+          onClick={(e) => {
+            e.stopPropagation(); // جلوگیری از اجرای دوباره رویداد کلیک ناحیه
+            handleFileUpload(e);
+          }}
+        >
           انتخاب اسناد از سیستم
         </button>
       </div>
@@ -35,25 +53,24 @@ export default function UploadView() {
       <div className="grid-2-col">
         <div className="card">
           <div className="card-title">صف نوبت‌دهی پردازش اسناد (Ingestion Queue)</div>
-          <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
-            <div style={{border: '1px solid var(--gray-100)', borderRadius: 'var(--radius)', padding: '12px'}}>
-              <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px', fontWeight: 'bold'}}>
-                <span>Q3_Financial_Report.pdf</span>
-                <span style={{color: 'var(--text-muted)'}}>۲.۹ MB · چانک‌سازی...</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {processingDocs.length > 0 ? (
+              processingDocs.map(doc => (
+                <div key={doc.id} style={{ border: '1px solid var(--gray-100)', borderRadius: 'var(--radius)', padding: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px', fontWeight: 'bold' }}>
+                    <span>{doc.name}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{doc.size} · {doc.progress < 100 ? 'در حال پردازش...' : 'تکمیل شد'}</span>
+                  </div>
+                  <div className="prog-bar-wrap" style={{ width: '100%' }}>
+                    <div className="prog-bar" style={{ width: `${doc.progress || 0}%` }}></div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: '13px', fontStyle: 'italic' }}>
+                هیچ فایلی در صف پردازش قرار ندارد. یک فایل آپلود کنید تا اینجا نمایش داده شود.
               </div>
-              <div className="prog-bar-wrap" style={{width: '100%'}}>
-                <div className="prog-bar" style={{width: '39%'}}></div>
-              </div>
-            </div>
-            <div style={{border: '1px solid var(--gray-100)', borderRadius: 'var(--radius)', padding: '12px'}}>
-              <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px', fontWeight: 'bold'}}>
-                <span>HR_Policy_Manual_v2.docx</span>
-                <span style={{color: 'var(--text-muted)'}}>۱.۸ MB · بررسی حریم شخصی...</span>
-              </div>
-              <div className="prog-bar-wrap" style={{width: '100%'}}>
-                <div className="prog-bar" style={{width: '62%'}}></div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -62,18 +79,18 @@ export default function UploadView() {
             🔒 پیش‌نمایش قفل حریم خصوصی (PII Masking Preview)
             <span className="q-badge qb-done">قفل حریم شخصی فعال</span>
           </div>
-          <div style={{fontSize: '12.5px', color: 'var(--text-secondary)', marginBottom: '12px'}}>پیش‌نمایش زنده و هوشمند اقلام ماسک‌شده:</div>
+          <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginBottom: '12px' }}>پیش‌نمایش زنده و هوشمند اقلام ماسک‌شده:</div>
           
-          <div className="pii-demo" style={{whiteSpace: 'pre-wrap'}}>
+          <div className="pii-demo" style={{ whiteSpace: 'pre-wrap' }}>
             {piiPreview ? (
               piiPreview
             ) : (
-              <span style={{color: 'var(--text-secondary)', fontStyle: 'italic', opacity: 0.8}}>
+              <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic', opacity: 0.8 }}>
                 هیچ سندی هنوز بارگذاری نشده است. پیش‌نمایش پوشش اطلاعات حساس (PII) پس از بارگذاری سند در اینجا نمایش داده خواهد شد.
               </span>
             )}
           </div>
-          <div style={{fontSize: '12px', color: 'var(--text-muted)', marginTop: '10px'}}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '10px' }}>
             {Object.keys(piiAuditCounts || {}).length > 0 ? (
               <span>
                 اقلام حساس فیلتر شده در آخرین فایل: {
@@ -84,13 +101,13 @@ export default function UploadView() {
                 }
               </span>
             ) : piiChecked ? (
-              <span style={{color: 'var(--color-success)', fontWeight: '600'}}>
+              <span style={{ color: 'var(--color-success)', fontWeight: '600' }}>
                 ✓ هیچ اطلاعات حساسی (مانند کد ملی، تلفن همراه، حساب بانکی و ایمیل) در آخرین سند بارگذاری شده یافت نشد.
               </span>
             ) : piiPreview ? (
               <span>{piiPreview}</span>
             ) : (
-              "پیش‌نمایش زنده اقلام"
+              'پیش‌نمایش زنده اقلام'
             )}
           </div>
         </div>
@@ -98,3 +115,4 @@ export default function UploadView() {
     </div>
   );
 }
+

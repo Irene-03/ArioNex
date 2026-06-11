@@ -356,6 +356,29 @@ export const AppProvider = ({ children }) => {
   const [documents, setDocuments] = useState([]);
   const [piiPreview, setPiiPreview] = useState('');
   const [piiAuditCounts, setPiiAuditCounts] = useState({});
+  const [stats, setStats] = useState({
+    total_documents: 0,
+    total_chunks: 0,
+    total_queries_today: 0,
+    average_response_time: 1.2,
+    total_pii_masked: 0,
+    pdf_count: 0,
+    csv_excel_count: 0,
+    other_count: 0,
+    disk_usage_gb: 0.0
+  });
+
+  const fetchStats = async () => {
+    try {
+      const res = await apiFetch('http://localhost:8000/v1/knowledge/stats');
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      }
+    } catch (err) {
+      console.error('Error fetching knowledge stats:', err);
+    }
+  };
 
   const fetchDocuments = async () => {
     try {
@@ -400,14 +423,15 @@ export const AppProvider = ({ children }) => {
         url += `&status=${crawlStatusFilter}`;
       }
       const res = await apiFetch(url);
-      if (res.ok) {
+      if (res && res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
           setCrawlJobs(data);
         }
       }
     } catch (err) {
-      console.error('Error fetching crawl jobs:', err);
+      console.info('Crawl jobs fetch skipped (service may be unavailable):', err.message);
+      // Do NOT re-throw — silent failure keeps the UI stable
     }
   };
 
@@ -483,6 +507,9 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     if (!currentUser) return;
     fetchIntegrations();
+    if (activeScreen === 'dashboard' || activeScreen === 'knowledge' || activeScreen === 'upload') {
+      fetchStats();
+    }
     if (activeScreen === 'knowledge' || activeScreen === 'upload') {
       fetchDocuments();
     }
@@ -576,6 +603,7 @@ export const AppProvider = ({ children }) => {
 
         alert(`سند "${file.name}" با موفقیت آپلود و در پایگاه دانش ایندکس شد.`);
         fetchDocuments();
+        fetchStats();
       } else {
         setDocuments(prev => prev.filter(d => d.id !== tempId));
         alert(data.detail || 'خطا در آپلود و پردازش سند');
@@ -589,6 +617,7 @@ export const AppProvider = ({ children }) => {
 
   const handleFileUpload = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
+    if (e && e.stopPropagation) e.stopPropagation();
     
     let file = null;
     if (e && e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
@@ -600,13 +629,29 @@ export const AppProvider = ({ children }) => {
     } else {
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
-      fileInput.accept = '.pdf,.docx,.doc,.txt,.csv,.json';
+      fileInput.accept = '.pdf,.docx,.doc,.txt,.csv,.json,.xlsx,.xls';
+      fileInput.style.position = 'fixed';
+      fileInput.style.top = '-9999px';
+      fileInput.style.left = '-9999px';
+      fileInput.style.opacity = '0';
+      // Append to DOM so browser doesn't block/freeze the render thread
+      document.body.appendChild(fileInput);
       fileInput.onchange = async (event) => {
         const selectedFile = event.target.files[0];
+        // Remove from DOM immediately after selection
+        try { document.body.removeChild(fileInput); } catch (_) {}
         if (selectedFile) {
           await performUpload(selectedFile);
         }
       };
+      // Also clean up if dialog is cancelled (focus returns to window)
+      const onFocus = () => {
+        setTimeout(() => {
+          try { document.body.removeChild(fileInput); } catch (_) {}
+          window.removeEventListener('focus', onFocus);
+        }, 300);
+      };
+      window.addEventListener('focus', onFocus);
       fileInput.click();
     }
   };
@@ -839,6 +884,7 @@ export const AppProvider = ({ children }) => {
       crawlJobs, setCrawlJobs,
       crawlSubmitting, setCrawlSubmitting,
       crawlStatusFilter, setCrawlStatusFilter,
+      stats, fetchStats,
       
       apiFetch,
       handleLogin,

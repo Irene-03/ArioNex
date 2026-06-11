@@ -8,7 +8,8 @@ export default function KnowledgeView() {
     currentUser,
     apiFetch,
     fetchDocuments,
-    setActiveScreen
+    setActiveScreen,
+    stats
   } = useApp();
 
   return (
@@ -16,18 +17,18 @@ export default function KnowledgeView() {
       <div className="grid-3-col">
         <div className="card" style={{borderRight: '4px solid var(--navy)'}}>
           <div style={{fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px'}}>تعداد کل قطعات و بردارها (Chunks)</div>
-          <div style={{fontSize: '26px', fontWeight: '800', color: 'var(--navy)'}}>48,291 قطعه</div>
+          <div style={{fontSize: '26px', fontWeight: '800', color: 'var(--navy)'}}>{stats.total_chunks} قطعه</div>
           <div style={{fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px'}}>مستقر در افزونه PostgreSQL pgvector</div>
         </div>
         <div className="card" style={{borderRight: '4px solid var(--copper)'}}>
           <div style={{fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px'}}>حد آستانه شباهت بازیابی (Threshold)</div>
-          <div style={{fontSize: '26px', fontWeight: '800', color: 'var(--navy)'}}>0.75 Cosine</div>
+          <div style={{fontSize: '26px', fontWeight: '800', color: 'var(--navy)'}}>0.50 Cosine</div>
           <div style={{fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px'}}>قابل تنظیم جهت ممانعت از توهم و ورود داده کاذب</div>
         </div>
         <div className="card" style={{borderRight: '4px solid var(--color-success)'}}>
           <div style={{fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px'}}>حجم دیسک اشغال شده</div>
-          <div style={{fontSize: '26px', fontWeight: '800', color: 'var(--navy)'}}>14.2 GB</div>
-          <div style={{fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px'}}>فضای اختصاص یافته آبجکت استوریج MinIO</div>
+          <div style={{fontSize: '26px', fontWeight: '800', color: 'var(--navy)'}}>{stats.disk_usage_gb >= 1 ? `${stats.disk_usage_gb.toFixed(2)} GB` : `${(stats.disk_usage_gb * 1024).toFixed(0)} MB`}</div>
+          <div style={{fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px'}}>فضای تخمینی دیتابیس و استوریج</div>
         </div>
       </div>
 
