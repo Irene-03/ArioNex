@@ -65,18 +65,9 @@ class AnalystAgent:
                 self.df = pd.read_csv(DEFAULT_DEMO_DATA_PATH)
                 logger.info(f"Analyst Agent loaded default demo accounting data with {len(self.df)} records.")
             else:
-                # ایجاد یک دیتابیس ساختگی در صورتی که دمو در آدرس بالا یافت نشد
-                dummy_data = {
-                    "تاریخ": ["2023-01-01", "2023-01-02"],
-                    "نوع سند": ["چک", "فاکتور"],
-                    "شماره سند": ["123", "456"],
-                    "شرح": ["تست مالی", "خرید تجهیزات"],
-                    "حساب": ["بانک", "وجوه نقد"],
-                    "بدهکار": [1000, 0],
-                    "بستانکار": [0, 500]
-                }
-                self.df = pd.DataFrame(dummy_data)
-                logger.warning("Demo accounting data not found. Loaded mock dataframe structure instead.")
+                # در صورت عدم وجود دیتای مالی دمو، یک DataFrame خالی ایجاد می‌کنیم
+                self.df = pd.DataFrame(columns=["تاریخ", "نوع سند", "شماره سند", "شرح", "حساب", "بدهکار", "بستانکار"])
+                logger.warning("Demo accounting data file was not found. Loaded empty DataFrame.")
         except Exception as e:
             logger.error(f"Failed to load accounting data: {str(e)}")
             self.df = None
@@ -174,19 +165,6 @@ class AnalystAgent:
                 
         if df_to_use is None:
             return "DOUBTFUL ANSWER: No structural dataframe is loaded."
-
-        # بررسی mock mode: در صورت عدم وجود کلید واقعی برای provider فعال
-        active_provider = settings.llm_provider
-        active_key = (
-            settings.openrouter_api_key if active_provider == "openrouter"
-            else settings.openai_api_key
-        )
-        if not active_key or active_key in ("mock_key", "") or "your-" in active_key:
-            # شبیه‌سازی نتایج حسابداری دمو جهت اجرای تست محلی
-            logger.warning("Mock mode active in LangGraph Analyst. Answering using mock solver.")
-            if "بدهکاری" in query or "چک" in query:
-                return "مجموع بدهکاری اسناد از نوع سند چک برابر با ۶۲۳,۳۴۶ ریال می‌باشد."
-            return "DOUBTFUL ANSWER: Mock solver cannot process this query without active LLM API key."
 
         # ۲. پیکربندی ابزارها و مدل LLM از طریق Factory
         tools_list = self.get_tools(df_to_use)
