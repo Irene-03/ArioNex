@@ -54,8 +54,9 @@ class TestPhase8Agents(unittest.TestCase):
         
         print(" Investigator Agent checks PASSED.\n")
 
+    @patch("app.services.retrieval.lawyer.get_llm")
     @patch("app.services.retrieval.lawyer.get_db_connection")
-    def test_lawyer_compliance_violations(self, mock_get_db):
+    def test_lawyer_compliance_violations(self, mock_get_db, mock_get_llm):
         print("Testing Lawyer compliance audit violations...")
         
         mock_conn = MagicMock()
@@ -67,6 +68,27 @@ class TestPhase8Agents(unittest.TestCase):
         mock_cur.fetchone.return_value = [1]
         mock_cur.fetchall.return_value = [
             ("RULE-CONF-2", "هرگونه افشای اطلاعات محرمانه تجاری بدون هماهنگی کتبی ممنوع است", "CONSTRAINT", "حفظ اسرار")
+        ]
+        
+        # ماک کردن LLM
+        mock_llm = MagicMock()
+        mock_get_llm.return_value = mock_llm
+        from langchain_core.messages import AIMessage
+        import json
+        
+        non_compliant_json = json.dumps({
+            "is_compliant": False,
+            "violations": ["RULE-CONF-2"],
+            "audit_report": "نقض سیاست محرمانگی"
+        })
+        compliant_json = json.dumps({
+            "is_compliant": True,
+            "violations": [],
+            "audit_report": "تایید انطباق کامل با ضوابط"
+        })
+        mock_llm.invoke.side_effect = [
+            AIMessage(content=non_compliant_json),
+            AIMessage(content=compliant_json)
         ]
         
         # تست با پاسخ غیرمنطبق (نقض بحرانی حاوی کلمات کارت بانکی و رمز)
@@ -87,12 +109,13 @@ class TestPhase8Agents(unittest.TestCase):
         
         print(" Lawyer Agent checks PASSED.\n")
 
+    @patch("app.services.retrieval.query_router.synthesizer.get_llm")
     @patch("app.services.retrieval.query_router.vector_search_agent")
     @patch("app.services.retrieval.query_router.qna_agent")
     @patch("app.services.retrieval.query_router.investigator_agent")
     @patch("app.services.retrieval.query_router.lawyer_agent")
     @patch("app.services.retrieval.query_router.get_db_connection")
-    def test_query_router_integration_compliance_blocking(self, mock_get_db, mock_lawyer, mock_investigator, mock_qna, mock_vector):
+    def test_query_router_integration_compliance_blocking(self, mock_get_db, mock_lawyer, mock_investigator, mock_qna, mock_vector, mock_get_llm):
         print("Testing Query Router Integration & Compliance Blocking...")
         
         # شبیه‌سازی دیتابیس در کل زنجیره RAG
@@ -117,6 +140,12 @@ class TestPhase8Agents(unittest.TestCase):
         
         # شبیه‌سازی Investigator
         mock_investigator.retrieve_graph_context.return_value = "[اطلاعات ساختاریافته گراف دانش]:\n- موجودیت آریونکس"
+        
+        # ماک کردن LLM
+        mock_llm = MagicMock()
+        mock_get_llm.return_value = mock_llm
+        from langchain_core.messages import AIMessage
+        mock_llm.invoke.return_value = AIMessage(content="پاسخ نمونه تولید شده توسط هوش مصنوعی")
         
         # سناریو اول: عدم انطباق بحرانی (باید پاسخ بلاک شده و پیغام امتناع برگردد)
         mock_lawyer.audit_compliance.return_value = {
