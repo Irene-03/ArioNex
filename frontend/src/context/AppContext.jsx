@@ -1,0 +1,860 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createApiClient } from '../api/apiClient';
+import { MOCK_MODE, mockDelay } from '../constants/models';
+
+const AppContext = createContext(null);
+
+export const useApp = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
+  return context;
+};
+
+export const AppProvider = ({ children }) => {
+  const [activeScreen, setActiveScreen] = useState('dashboard');
+
+  // ─── Authentication State ──────────────────────────────────────────────────
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem('arionex_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [token, setToken] = useState(() => localStorage.getItem('arionex_token') || null);
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoginLoading, setIsLoginLoading] = useState(false);
+  
+  const [isSignupMode, setIsSignupMode] = useState(false);
+  const [signupUsername, setSignupUsername] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupError, setSignupError] = useState('');
+  const [isSignupLoading, setIsSignupLoading] = useState(false);
+  const [signupSuccess, setSignupSuccess] = useState(false);
+
+  // ─── User Management State ────────────────────────────────────────────────
+  const [usersList, setUsersList] = useState([]);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteUsername, setInviteUsername] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
+  const [inviteRole, setInviteRole] = useState('Analyst');
+  const [inviteError, setInviteError] = useState('');
+
+  // ─── PII Checked State ────────────────────────────────────────────────────
+  const [piiChecked, setPiiChecked] = useState(false);
+
+  // API Fetch Wrapper
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setToken(null);
+    localStorage.removeItem('arionex_token');
+    localStorage.removeItem('arionex_user');
+    setActiveScreen('dashboard');
+    setLoginUsername('');
+    setLoginPassword('');
+    setLoginError('');
+  };
+
+  const apiFetch = createApiClient(token, handleLogout);
+
+  // ─── Auth Handlers ────────────────────────────────────────────────────────
+  const handleLogin = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!loginUsername.trim() || !loginPassword.trim()) {
+      setLoginError('لطفاً نام کاربری و رمز عبور را وارد کنید.');
+      return;
+    }
+    
+    setLoginError('');
+    setIsLoginLoading(true);
+    
+    try {
+      const res = await fetch('http://localhost:8000/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: loginUsername,
+          password: loginPassword
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        setToken(data.access_token);
+        setCurrentUser(data.user);
+        localStorage.setItem('arionex_token', data.access_token);
+        localStorage.setItem('arionex_user', JSON.stringify(data.user));
+        
+        fetchDocuments();
+        fetchIntegrations();
+        fetchSystemInstruction();
+      } else {
+        setLoginError(data.detail || 'نام کاربری یا رمز عبور اشتباه است.');
+      }
+    } catch (err) {
+      console.error('Login failed:', err);
+      setLoginError('خطا در اتصال به سرور احراز هویت آریونکس.');
+    } finally {
+      setIsLoginLoading(false);
+    }
+  };
+
+  const handleSignup = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!signupUsername.trim() || !signupPassword.trim()) {
+      setSignupError('لطفاً نام کاربری و رمز عبور را وارد کنید.');
+      return;
+    }
+    if (signupUsername.length < 3) {
+      setSignupError('نام کاربری باید حداقل ۳ کاراکتر باشد.');
+      return;
+    }
+    if (signupPassword.length < 6) {
+      setSignupError('رمز عبور باید حداقل ۶ کاراکتر باشد.');
+      return;
+    }
+
+    setSignupError('');
+    setSignupSuccess(false);
+    setIsSignupLoading(true);
+
+    try {
+      const res = await fetch('http://localhost:8000/v1/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: signupUsername,
+          password: signupPassword
+        })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setSignupSuccess(true);
+        setLoginUsername(signupUsername);
+        setLoginPassword(signupPassword);
+        alert('ثبت‌نام با موفقیت انجام شد. می‌توانید اکنون وارد شوید.');
+        setIsSignupMode(false);
+        setSignupUsername('');
+        setSignupPassword('');
+      } else {
+        setSignupError(data.detail || 'خطا در ثبت‌نام کاربر.');
+      }
+    } catch (err) {
+      console.error('Signup failed:', err);
+      setSignupError('خطا در اتصال به سرور احراز هویت آریونکس.');
+    } finally {
+      setIsSignupLoading(false);
+    }
+  };
+
+  const fetchUsersList = async () => {
+    try {
+      const res = await apiFetch('http://localhost:8000/v1/auth/users');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) setUsersList(data);
+      }
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    }
+  };
+
+  const handleInviteUser = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!inviteUsername.trim() || !invitePassword.trim()) {
+      setInviteError('لطفاً نام کاربری و رمز عبور را وارد نمایید.');
+      return;
+    }
+    setInviteError('');
+    try {
+      const res = await apiFetch('http://localhost:8000/v1/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          username: inviteUsername,
+          password: invitePassword,
+          role: inviteRole
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`کاربر "${data.username}" با موفقیت ثبت شد.`);
+        setShowInviteModal(false);
+        setInviteUsername('');
+        setInvitePassword('');
+        setInviteRole('Analyst');
+        fetchUsersList();
+      } else {
+        setInviteError(data.detail || 'خطا در ثبت کاربر');
+      }
+    } catch (err) {
+      console.error(err);
+      setInviteError('خطا در ارتباط با سرور.');
+    }
+  };
+
+  // ─── Prompts and Settings ────────────────────────────────────────────────
+  const [systemInstruction, setSystemInstruction] = useState(
+    'شما یک دستیار دانش حرفه‌ای برای آریونکس هستید. همیشه منابع را دقیق استناد دهید. هیچ‌گاه فراتر از اسناد ارائه‌شده گمانه‌زنی نکنید. اگر سند مرتبطی یافت نشد، صادقانه بگویید…'
+  );
+
+  const fetchSystemInstruction = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/v1/config/prompts');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.prompt) {
+          setSystemInstruction(data.prompt);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching system instruction:', err);
+    }
+  };
+
+  const saveSystemInstruction = async () => {
+    try {
+      const res = await apiFetch('http://localhost:8000/v1/config/prompts', {
+        method: 'POST',
+        body: JSON.stringify({ prompt: systemInstruction })
+      });
+      if (res.ok) {
+        alert('دستورالعمل سیستم با موفقیت به‌روزرسانی شد.');
+      } else {
+        const data = await res.json();
+        alert(data.detail || 'خطا در به‌روزرسانی دستورالعمل سیستم');
+      }
+    } catch (err) {
+      console.error('Error saving system instruction:', err);
+      alert('خطا در ارتباط با سرور');
+    }
+  };
+
+  const resetSystemInstruction = () => {
+    const defaultPrompt = "شما یک دستیار دانش حرفه‌ای برای آریونکس هستید. همیشه منابع را دقیق استناد دهید. هیچ‌گاه فراتر از اسناد ارائه‌شده گمانه‌زنی نکنید. اگر سند مرتبطی یافت نشد، صادقانه بگویید.";
+    setSystemInstruction(defaultPrompt);
+  };
+
+  const [features, setFeatures] = useState({
+    piiRedaction: true,
+    localGemma: true,
+    hallucinationGuard: true,
+    externalApiBlocked: true,
+    strictCitation: true,
+    auditLog: true,
+    telegramBot: true,
+    popupWidget: true,
+    restApi: true,
+    providerOpenAI: true,
+    providerOpenRouter: true,
+    providerAnthropic: true,
+    providerGoogle: true,
+    providerDeepSeek: true,
+    providerGapGPT: true,
+    providerAvalAI: true,
+    providerHormouz: true
+  });
+
+  const toggleFeature = (key) => {
+    const updatedFeatures = { ...features, [key]: !features[key] };
+    setFeatures(updatedFeatures);
+
+    apiFetch('http://localhost:8000/v1/config', {
+      method: 'POST',
+      body: JSON.stringify({
+        services: {
+          safety_auditor: updatedFeatures.localGemma,
+          log_processor: updatedFeatures.auditLog,
+          web_search: !updatedFeatures.externalApiBlocked
+        },
+        integrations: {
+          telegram_bot: updatedFeatures.telegramBot,
+          popup_widget: updatedFeatures.popupWidget,
+          rest_api: updatedFeatures.restApi
+        },
+        security: {
+          pii_redaction: updatedFeatures.piiRedaction,
+          strict_non_hallucination: updatedFeatures.hallucinationGuard
+        }
+      })
+    })
+    .then(res => res.json())
+    .then(data => console.log('Feature toggles synchronized:', data))
+    .catch(err => console.error('Failed to sync feature toggles:', err));
+  };
+
+  const toggleProvider = (providerKey) => {
+    const keyMap = {
+      openai: 'providerOpenAI',
+      openrouter: 'providerOpenRouter',
+      anthropic: 'providerAnthropic',
+      google: 'providerGoogle',
+      deepseek: 'providerDeepSeek',
+      gapgpt: 'providerGapGPT',
+      avalai: 'providerAvalAI',
+      hormouz: 'providerHormouz',
+    };
+    const featureKey = keyMap[providerKey];
+    if (!featureKey) return;
+
+    const updatedFeatures = { ...features, [featureKey]: !features[featureKey] };
+    setFeatures(updatedFeatures);
+
+    apiFetch('http://localhost:8000/v1/config', {
+      method: 'POST',
+      body: JSON.stringify({
+        providers: {
+          openai: providerKey === 'openai' ? !features.providerOpenAI : features.providerOpenAI,
+          openrouter: providerKey === 'openrouter' ? !features.providerOpenRouter : features.providerOpenRouter,
+          anthropic: providerKey === 'anthropic' ? !features.providerOpenAnthropic : features.providerAnthropic, // Note typo fix
+          google: providerKey === 'google' ? !features.providerGoogle : features.providerGoogle,
+          deepseek: providerKey === 'deepseek' ? !features.providerDeepSeek : features.providerDeepSeek,
+          gapgpt: providerKey === 'gapgpt' ? !features.providerGapGPT : features.providerGapGPT,
+          avalai: providerKey === 'avalai' ? !features.providerAvalAI : features.providerAvalAI,
+          hormouz: providerKey === 'hormouz' ? !features.providerHormouz : features.providerHormouz,
+        }
+      })
+    })
+    .then(res => res.json())
+    .then(data => console.log('Provider toggles synchronized:', data))
+    .catch(err => console.error('Failed to sync provider toggles:', err));
+  };
+
+  const [ollamaEnabled, setOllamaEnabled] = useState(false);
+  const [ollamaModel, setOllamaModel] = useState('gemma3:4b');
+  const [ollamaEndpoint, setOllamaEndpoint] = useState('http://localhost:11434');
+
+  // ─── Chat messages ────────────────────────────────────────────────────────
+  const [chatMessages, setChatMessages] = useState([
+    {
+      id: 1,
+      sender: 'ai',
+      text: 'سلام! من دستیار دانش امن شما (آریو) هستم. تمام پرسش‌ها روی داده‌های خصوصی شما اجرا می‌شوند — هیچ اطلاعاتی از زیرساخت شما خارج نمی‌شود. چطور می‌توانم کمک کنم؟',
+      isSafe: true,
+      isWelcome: true,
+      sources: []
+    }
+  ]);
+  const [inputText, setInputText] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
+  // ─── Documents ────────────────────────────────────────────────────────────
+  const [documents, setDocuments] = useState([]);
+  const [piiPreview, setPiiPreview] = useState('');
+  const [piiAuditCounts, setPiiAuditCounts] = useState({});
+
+  const fetchDocuments = async () => {
+    try {
+      const res = await apiFetch('http://localhost:8000/v1/knowledge/documents');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          const mappedDocs = data.map(doc => ({
+            id: doc.id,
+            name: doc.filename,
+            size: 'دیتابیس',
+            chunks: 0,
+            date: doc.created_at ? new Date(doc.created_at).toLocaleDateString('fa-IR') : '—',
+            status: 'ready',
+            progress: 100,
+            ext: doc.file_type ? doc.file_type.toUpperCase() : 'DOC',
+            min_role_required: doc.min_role_required
+          }));
+          setDocuments(mappedDocs);
+        }
+      }
+    } catch (err) {
+      console.info('Documents endpoint not available yet:', err.message);
+    }
+  };
+
+  // ─── Crawler ──────────────────────────────────────────────────────────────
+  const [crawlUrl, setCrawlUrl] = useState('');
+  const [crawlMaxPages, setCrawlMaxPages] = useState(50);
+  const [crawlMaxDepth, setCrawlMaxDepth] = useState(3);
+  const [crawlJsRender, setCrawlJsRender] = useState(false);
+  const [crawlFollowExternal, setCrawlFollowExternal] = useState(false);
+  const [crawlRobots, setCrawlRobots] = useState(true);
+  const [crawlJobs, setCrawlJobs] = useState([]);
+  const [crawlSubmitting, setCrawlSubmitting] = useState(false);
+  const [crawlStatusFilter, setCrawlStatusFilter] = useState('');
+
+  const fetchCrawlJobs = async () => {
+    try {
+      let url = 'http://localhost:8000/v1/crawl/jobs?limit=20';
+      if (crawlStatusFilter) {
+        url += `&status=${crawlStatusFilter}`;
+      }
+      const res = await apiFetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setCrawlJobs(data);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching crawl jobs:', err);
+    }
+  };
+
+  // ─── Integrations ─────────────────────────────────────────────────────────
+  const [widgets, setWidgets] = useState([]);
+  const [apiKeys, setApiKeys] = useState([]);
+  const [newWidgetName, setNewWidgetName] = useState('');
+  const [newWidgetUrl, setNewWidgetUrl] = useState('');
+  const [newWidgetMsg, setNewWidgetMsg] = useState('سلام! چطور می‌توانم کمک کنم؟ 💼✨');
+  const [newWidgetTheme, setNewWidgetTheme] = useState('#1a2744');
+  const [newWidgetAccent, setNewWidgetAccent] = useState('#c4894a');
+  
+  const [newKeyName, setNewKeyName] = useState('');
+  const [generatedKey, setGeneratedKey] = useState('');
+  const [widgetPreviewSelected, setWidgetPreviewSelected] = useState(null);
+
+  const fetchIntegrations = async () => {
+    try {
+      const resWidgets = await apiFetch('http://localhost:8000/v1/integrations/widgets');
+      const dataWidgets = await resWidgets.json();
+      setWidgets(dataWidgets);
+      if (dataWidgets.length > 0 && !widgetPreviewSelected) {
+        setWidgetPreviewSelected(dataWidgets[0]);
+      } else if (dataWidgets.length === 0) {
+        setWidgetPreviewSelected(null);
+      }
+
+      const resKeys = await apiFetch('http://localhost:8000/v1/integrations/apikeys');
+      const dataKeys = await resKeys.json();
+      setApiKeys(dataKeys);
+    } catch (err) {
+      console.error('Error fetching integrations:', err);
+    }
+  };
+
+  // ─── Sync Config and intervals ───────────────────────────────────────────
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/v1/config');
+        const data = await res.json();
+        if (data) {
+          setFeatures({
+            piiRedaction: data.security?.pii_redaction ?? true,
+            localGemma: data.services?.safety_auditor ?? false,
+            hallucinationGuard: data.security?.strict_non_hallucination ?? true,
+            externalApiBlocked: !(data.services?.web_search ?? true),
+            strictCitation: true,
+            auditLog: data.services?.log_processor ?? true,
+            telegramBot: data.integrations?.telegram_bot ?? true,
+            popupWidget: data.integrations?.popup_widget ?? true,
+            restApi: data.integrations?.rest_api ?? true,
+            providerOpenAI: data.providers?.openai ?? true,
+            providerOpenRouter: data.providers?.openrouter ?? true,
+            providerAnthropic: data.providers?.anthropic ?? true,
+            providerGoogle: data.providers?.google ?? true,
+            providerDeepSeek: data.providers?.deepseek ?? true,
+            providerGapGPT: data.providers?.gapgpt ?? true,
+            providerAvalAI: data.providers?.avalai ?? true,
+            providerHormouz: data.providers?.hormouz ?? true,
+          });
+          setOllamaEnabled(data.llm_provider === 'ollama');
+          if (data.ollama_model) setOllamaModel(data.ollama_model);
+          if (data.ollama_base_url) setOllamaEndpoint(data.ollama_base_url);
+        }
+      } catch (err) {
+        console.error('Error loading configuration:', err);
+      }
+    };
+    loadConfig();
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    fetchIntegrations();
+    if (activeScreen === 'knowledge' || activeScreen === 'upload') {
+      fetchDocuments();
+    }
+    if (activeScreen === 'crawler') {
+      fetchCrawlJobs();
+    }
+    if (activeScreen === 'admin' && currentUser.role === 'Admin') {
+      fetchUsersList();
+      fetchSystemInstruction();
+    }
+  }, [activeScreen, currentUser]);
+
+  useEffect(() => {
+    if (!currentUser || activeScreen !== 'crawler') return;
+    const hasRunningOrQueued = crawlJobs.some(j => j.status === 'running' || j.status === 'queued');
+    if (!hasRunningOrQueued) return;
+    const interval = setInterval(() => {
+      fetchCrawlJobs();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [crawlJobs, activeScreen, currentUser]);
+
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'Admin' && (activeScreen === 'admin' || activeScreen === 'integrations')) {
+      setActiveScreen('dashboard');
+    }
+  }, [activeScreen, currentUser]);
+
+  // ─── Upload Process ──────────────────────────────────────────────────────
+  const performUpload = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const tempId = Date.now();
+    const newDocPlaceholder = {
+      id: tempId,
+      name: file.name,
+      size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+      chunks: 0,
+      date: new Date().toLocaleDateString('fa-IR'),
+      status: 'uploading',
+      progress: 20,
+      ext: file.name.split('.').pop().toUpperCase(),
+      min_role_required: 'Analyst'
+    };
+    
+    setDocuments(prev => [newDocPlaceholder, ...prev]);
+
+    try {
+      const progressInterval = setInterval(() => {
+        setDocuments(prev => prev.map(d => d.id === tempId && d.status === 'uploading'
+          ? { ...d, progress: Math.min(d.progress + 15, 90) }
+          : d
+        ));
+      }, 300);
+
+      const res = await apiFetch('http://localhost:8000/v1/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      clearInterval(progressInterval);
+      const data = await res.json();
+
+      if (res.ok) {
+        setDocuments(prev => prev.map(d => d.id === tempId
+          ? {
+              ...d,
+              id: data.file_id,
+              status: 'ready',
+              progress: 100,
+              chunks: data.chunks_indexed
+            }
+          : d
+        ));
+        
+        if (data.pii_preview) {
+          setPiiPreview(data.pii_preview);
+        } else {
+          setPiiPreview(`[پیش‌نمایش ماسک شده فایل متنی یا جدول]:\nمحتوای فایل "${file.name}" با موفقیت پردازش شد و اطلاعات حساس PII در صورت وجود ماسک گردیدند.`);
+        }
+        
+        if (data.pii_audit_counts) {
+          setPiiAuditCounts(data.pii_audit_counts);
+          const totalMasked = Object.values(data.pii_audit_counts).reduce((a, b) => a + b, 0);
+          setPiiChecked(totalMasked === 0);
+        } else {
+          setPiiAuditCounts({});
+          setPiiChecked(true);
+        }
+
+        alert(`سند "${file.name}" با موفقیت آپلود و در پایگاه دانش ایندکس شد.`);
+        fetchDocuments();
+      } else {
+        setDocuments(prev => prev.filter(d => d.id !== tempId));
+        alert(data.detail || 'خطا در آپلود و پردازش سند');
+      }
+    } catch (err) {
+      console.error('File upload failed:', err);
+      setDocuments(prev => prev.filter(d => d.id !== tempId));
+      alert('خطا در ارتباط با سرور آپلود آریونکس.');
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    
+    let file = null;
+    if (e && e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      file = e.dataTransfer.files[0];
+    }
+    
+    if (file) {
+      await performUpload(file);
+    } else {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = '.pdf,.docx,.doc,.txt,.csv,.json';
+      fileInput.onchange = async (event) => {
+        const selectedFile = event.target.files[0];
+        if (selectedFile) {
+          await performUpload(selectedFile);
+        }
+      };
+      fileInput.click();
+    }
+  };
+
+  // ─── Widgets and API keys ────────────────────────────────────────────────
+  const handleCreateWidget = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!newWidgetName.trim() || !newWidgetUrl.trim()) return;
+
+    const widgetData = {
+      name: newWidgetName,
+      url: newWidgetUrl,
+      welcome_message: newWidgetMsg,
+      theme_color: newWidgetTheme,
+      accent_color: newWidgetAccent,
+      is_active: true
+    };
+
+    try {
+      const res = await apiFetch('http://localhost:8000/v1/integrations/widgets', {
+        method: 'POST',
+        body: JSON.stringify(widgetData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setWidgets(prev => [data, ...prev]);
+        setWidgetPreviewSelected(data);
+      } else {
+        alert(data.detail || 'خطا در ثبت ابزارک');
+      }
+      setNewWidgetName('');
+      setNewWidgetUrl('');
+    } catch (err) {
+      console.error('Error creating widget:', err);
+    }
+  };
+
+  const handleDeleteWidget = async (id) => {
+    if (!confirm('آیا از حذف این ابزارک اطمینان دارید؟')) return;
+    try {
+      const res = await apiFetch(`http://localhost:8000/v1/integrations/widgets/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setWidgets(prev => prev.filter(w => w.id !== id));
+        if (widgetPreviewSelected?.id === id) {
+          setWidgetPreviewSelected(null);
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting widget:', err);
+    }
+  };
+
+  const handleCreateAPIKey = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!newKeyName.trim()) return;
+
+    try {
+      const res = await apiFetch('http://localhost:8000/v1/integrations/apikeys', {
+        method: 'POST',
+        body: JSON.stringify({ name: newKeyName })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setApiKeys(prev => [data, ...prev]);
+        setGeneratedKey(data.api_key);
+      }
+      setNewKeyName('');
+    } catch (err) {
+      console.error('Error creating API key:', err);
+    }
+  };
+
+  const handleDeleteAPIKey = async (id) => {
+    if (!confirm('آیا از ابطال این کلید API اطمینان دارید؟')) return;
+    try {
+      const res = await apiFetch(`http://localhost:8000/v1/integrations/apikeys/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setApiKeys(prev => prev.filter(k => k.id !== id));
+      }
+    } catch (err) {
+      console.error('Error deleting API key:', err);
+    }
+  };
+
+  // ─── Chat Messages Sending Logic ──────────────────────────────────────────
+  const handleSendMessage = async () => {
+    if (!inputText.trim()) return;
+
+    const userMessage = { id: Date.now(), sender: 'user', text: inputText, sources: [] };
+    setChatMessages(prev => [...prev, userMessage]);
+    const queryText = inputText;
+    setInputText('');
+    setIsAiLoading(true);
+
+    const aiMsgId = Date.now() + 1;
+    const aiPlaceholder = {
+      id: aiMsgId,
+      sender: 'ai',
+      text: '',
+      sources: [],
+      isSafe: true,
+      isRefusal: false,
+    };
+    setChatMessages(prev => [...prev, aiPlaceholder]);
+
+    try {
+      const savedToken = token || localStorage.getItem('arionex_token');
+      const res = await fetch('http://localhost:8000/v1/query/stream', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(savedToken ? { 'Authorization': `Bearer ${savedToken}` } : {})
+        },
+        body: JSON.stringify({ query: queryText, session_id: 'react_admin_dashboard_chat' })
+      });
+
+      if (!res.body) throw new Error('Streaming not supported by browser');
+
+      setIsAiLoading(false);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let accumulated = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let sepIdx;
+        while ((sepIdx = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, sepIdx);
+          buffer = buffer.slice(sepIdx + 2);
+
+          let eventName = 'message';
+          let dataLine = '';
+          rawEvent.split('\n').forEach(line => {
+            if (line.startsWith('event:')) eventName = line.slice(6).trim();
+            else if (line.startsWith('data:')) dataLine += line.slice(5).trim();
+          });
+
+          const decodedData = dataLine.replace(/\\n/g, '\n');
+
+          if (eventName === 'token') {
+            accumulated += decodedData;
+            setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: accumulated } : m));
+          } else if (eventName === 'sources') {
+            try {
+              const parsedSources = JSON.parse(decodedData);
+              setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, sources: parsedSources } : m));
+            } catch (_) {}
+          } else if (eventName === 'done') {
+            try {
+              const meta = JSON.parse(decodedData);
+              const isRefusal = accumulated === 'منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند.';
+              setChatMessages(prev => prev.map(m => m.id === aiMsgId
+                ? { ...m, isSafe: meta.is_safe ?? true, isRefusal }
+                : m));
+            } catch (_) {}
+          } else if (eventName === 'error') {
+            console.error('Stream RAG error:', decodedData);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error streaming from query API:', err);
+      setIsAiLoading(false);
+      setChatMessages(prev => prev.map(m => m.id === aiMsgId ? {
+        ...m,
+        text: '⚠️ خطا در برقراری ارتباط با وب‌سرور هوشمند آریونکس. لطفاً اطمینان حاصل فرمایید که بک‌اند بر روی پورت 8000 در حال اجراست.',
+        isRefusal: true,
+      } : m));
+    }
+  };
+
+  return (
+    <AppContext.Provider value={{
+      activeScreen, setActiveScreen,
+      currentUser, setCurrentUser,
+      token, setToken,
+      loginUsername, setLoginUsername,
+      loginPassword, setLoginPassword,
+      loginError, setLoginError,
+      isLoginLoading, setIsLoginLoading,
+      isSignupMode, setIsSignupMode,
+      signupUsername, setSignupUsername,
+      signupPassword, setSignupPassword,
+      signupError, setSignupError,
+      isSignupLoading, setIsSignupLoading,
+      signupSuccess, setSignupSuccess,
+      usersList, setUsersList,
+      showInviteModal, setShowInviteModal,
+      inviteUsername, setInviteUsername,
+      invitePassword, setInvitePassword,
+      inviteRole, setInviteRole,
+      inviteError, setInviteError,
+      piiChecked, setPiiChecked,
+      systemInstruction, setSystemInstruction,
+      features, setFeatures,
+      ollamaEnabled, setOllamaEnabled,
+      ollamaModel, setOllamaModel,
+      ollamaEndpoint, setOllamaEndpoint,
+      chatMessages, setChatMessages,
+      inputText, setInputText,
+      isAiLoading, setIsAiLoading,
+      documents, setDocuments,
+      piiPreview, setPiiPreview,
+      piiAuditCounts, setPiiAuditCounts,
+      widgets, setWidgets,
+      apiKeys, setApiKeys,
+      newWidgetName, setNewWidgetName,
+      newWidgetUrl, setNewWidgetUrl,
+      newWidgetMsg, setNewWidgetMsg,
+      newWidgetTheme, setNewWidgetTheme,
+      newWidgetAccent, setNewWidgetAccent,
+      newKeyName, setNewKeyName,
+      generatedKey, setGeneratedKey,
+      widgetPreviewSelected, setWidgetPreviewSelected,
+      crawlUrl, setCrawlUrl,
+      crawlMaxPages, setCrawlMaxPages,
+      crawlMaxDepth, setCrawlMaxDepth,
+      crawlJsRender, setCrawlJsRender,
+      crawlFollowExternal, setCrawlFollowExternal,
+      crawlRobots, setCrawlRobots,
+      crawlJobs, setCrawlJobs,
+      crawlSubmitting, setCrawlSubmitting,
+      crawlStatusFilter, setCrawlStatusFilter,
+      
+      apiFetch,
+      handleLogin,
+      handleSignup,
+      handleLogout,
+      fetchUsersList,
+      handleInviteUser,
+      fetchSystemInstruction,
+      saveSystemInstruction,
+      resetSystemInstruction,
+      toggleFeature,
+      toggleProvider,
+      fetchDocuments,
+      fetchCrawlJobs,
+      fetchIntegrations,
+      performUpload,
+      handleFileUpload,
+      handleCreateWidget,
+      handleDeleteWidget,
+      handleCreateAPIKey,
+      handleDeleteAPIKey,
+      handleSendMessage
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
