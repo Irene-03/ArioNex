@@ -763,13 +763,16 @@ export const AppProvider = ({ children }) => {
   };
 
   // ─── Chat Messages Sending Logic ──────────────────────────────────────────
-  const handleSendMessage = async () => {
-    if (!inputText.trim()) return;
+  const handleSendMessage = async (textOverride = null) => {
+    const textToSend = textOverride !== null ? textOverride : inputText;
+    if (!textToSend.trim()) return;
 
-    const userMessage = { id: Date.now(), sender: 'user', text: inputText, sources: [] };
+    const userMessage = { id: Date.now(), sender: 'user', text: textToSend, sources: [] };
     setChatMessages(prev => [...prev, userMessage]);
-    const queryText = inputText;
-    setInputText('');
+    const queryText = textToSend;
+    if (textOverride === null) {
+      setInputText('');
+    }
     setIsAiLoading(true);
 
     const aiMsgId = Date.now() + 1;
