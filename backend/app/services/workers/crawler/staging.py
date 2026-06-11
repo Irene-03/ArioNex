@@ -1,6 +1,7 @@
 import json
 import logging
 from datetime import datetime
+from psycopg2.extras import RealDictCursor
 from app.core.config import settings
 from app.core.database import get_db_connection
 from app.core.embeddings import get_embedding
@@ -64,7 +65,7 @@ def _is_job_cancelled(job_id: str) -> bool:
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT status FROM crawler_jobs WHERE job_id = %s", (job_id,))
             row = cur.fetchone()
             # Note: depending on the DB cursor settings (e.g. DictCursor vs RealDictCursor), we should check dict or tuple

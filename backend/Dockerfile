@@ -12,14 +12,7 @@ ENV PYTHONIOENCODING=utf-8
 
 WORKDIR /app
 
-# نصب پیش‌نیازهای فیزیکی سیستم‌عامل جهت کامپایل بدون نقص psycopg2 و hazm
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    gcc \
-    git \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+
 
 # کپی و نصب وابستگی‌های پایتونی پروژه
 COPY requirements.txt /app/

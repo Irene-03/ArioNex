@@ -19,6 +19,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import BackgroundTasks, HTTPException
+from psycopg2.extras import RealDictCursor
 
 from app.core.config import settings
 from app.core.database import get_db_connection
@@ -176,7 +177,7 @@ async def execute_get_crawl_status(job_id: str) -> CrawlJobResponse:
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 "SELECT * FROM crawler_jobs WHERE job_id = %s",
                 (job_id,)
@@ -211,7 +212,7 @@ async def execute_list_crawl_jobs(
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             if status_filter:
                 cur.execute(
                     "SELECT * FROM crawler_jobs WHERE status = %s ORDER BY created_at DESC LIMIT %s OFFSET %s",
@@ -247,7 +248,7 @@ async def execute_cancel_crawl_job(job_id: str) -> dict:
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 "SELECT status FROM crawler_jobs WHERE job_id = %s",
                 (job_id,)

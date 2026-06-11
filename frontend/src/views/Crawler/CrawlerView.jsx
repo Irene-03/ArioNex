@@ -20,7 +20,8 @@ export default function CrawlerView() {
     crawlSubmitting,
     setCrawlSubmitting,
     crawlStatusFilter,
-    setCrawlStatusFilter
+    setCrawlStatusFilter,
+    apiFetch
   } = useApp();
 
   return (
@@ -41,7 +42,7 @@ export default function CrawlerView() {
         </div>
         <div className="card" style={{borderTop: '3px solid var(--color-info)'}}>
           <div style={{fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px'}}>کل chunk‌های ایندکس</div>
-          <div style={{fontSize: '24px', fontWeight: '800', color: 'var(--navy)'}}>{crawlJobs.reduce((s, j) => s + j.chunks_indexed, 0)}</div>
+          <div style={{fontSize: '24px', fontWeight: '800', color: 'var(--navy)'}}>{crawlJobs.reduce((s, j) => s + (j.chunks_indexed || 0), 0)}</div>
         </div>
       </div>
 
@@ -59,9 +60,8 @@ export default function CrawlerView() {
               if (!crawlUrl.trim() || crawlSubmitting) return;
               setCrawlSubmitting(true);
               try {
-                const res = await fetch('http://localhost:8000/v1/crawl/start', {
+                const res = await apiFetch('http://localhost:8000/v1/crawl/start', {
                   method: 'POST',
-                  headers: {'Content-Type': 'application/json'},
                   body: JSON.stringify({
                     url: crawlUrl,
                     max_pages: crawlMaxPages,
@@ -228,7 +228,7 @@ export default function CrawlerView() {
                           {job.url}
                         </div>
                         <div style={{fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px', direction: 'ltr'}}>
-                          {job.job_id.substring(0, 20)}...
+                          {job.job_id ? job.job_id.substring(0, 20) : ''}...
                         </div>
                       </div>
                       <div style={{display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, marginRight: '10px'}}>
@@ -236,7 +236,7 @@ export default function CrawlerView() {
                         {(job.status === 'queued' || job.status === 'running') && (
                           <button
                             onClick={async () => {
-                              const res = await fetch(`http://localhost:8000/v1/crawl/${job.job_id}`, {method: 'DELETE'});
+                              const res = await apiFetch(`http://localhost:8000/v1/crawl/${job.job_id}`, {method: 'DELETE'});
                               if (res.ok) {
                                 setCrawlJobs(prev => prev.map(j => j.job_id === job.job_id ? {...j, status: 'cancelled'} : j));
                               }
@@ -253,7 +253,7 @@ export default function CrawlerView() {
                     {(job.status === 'running' || job.status === 'completed') && (
                       <div style={{marginBottom: '10px'}}>
                         <div className="prog-bar-wrap" style={{width: '100%'}}>
-                          <div className="prog-bar" style={{width: `${Math.min(progress, 100)}%`, background: job.status === 'completed' ? 'var(--color-success)' : 'linear-gradient(90deg, var(--copper), var(--copper-light))'}} />
+                          <div className="prog-bar" style={{width: `${Math.min(progress || 0, 100)}%`, background: job.status === 'completed' ? 'var(--color-success)' : 'linear-gradient(90deg, var(--copper), var(--copper-light))'}} />
                         </div>
                       </div>
                     )}
@@ -261,22 +261,22 @@ export default function CrawlerView() {
                     {/* آمار */}
                     <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', fontSize: '11.5px'}}>
                       <div style={{textAlign: 'center', background: '#fff', borderRadius: '4px', padding: '6px'}}>
-                        <div style={{fontWeight: '700', color: 'var(--navy)'}}>{job.pages_crawled}</div>
+                        <div style={{fontWeight: '700', color: 'var(--navy)'}}>{job.pages_crawled ?? 0}</div>
                         <div style={{color: 'var(--text-muted)'}}>صفحه کرال شد</div>
                       </div>
                       <div style={{textAlign: 'center', background: '#fff', borderRadius: '4px', padding: '6px'}}>
-                        <div style={{fontWeight: '700', color: 'var(--copper)'}}>{job.chunks_indexed}</div>
+                        <div style={{fontWeight: '700', color: 'var(--copper)'}}>{job.chunks_indexed ?? 0}</div>
                         <div style={{color: 'var(--text-muted)'}}>chunk ایندکس</div>
                       </div>
                       <div style={{textAlign: 'center', background: '#fff', borderRadius: '4px', padding: '6px'}}>
-                        <div style={{fontWeight: '700', color: job.pages_failed > 0 ? '#c62828' : 'var(--color-success)'}}>{job.pages_failed}</div>
+                        <div style={{fontWeight: '700', color: (job.pages_failed || 0) > 0 ? '#c62828' : 'var(--color-success)'}}>{job.pages_failed ?? 0}</div>
                         <div style={{color: 'var(--text-muted)'}}>صفحه ناموفق</div>
                       </div>
                     </div>
 
                     {/* تگ‌های تنظیمات */}
                     <div style={{display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap'}}>
-                      <span style={{fontSize: '10.5px', background: 'var(--gray-100)', padding: '2px 8px', borderRadius: '8px', color: 'var(--text-muted)'}}>عمق: {job.max_depth}</span>
+                      <span style={{fontSize: '10.5px', background: 'var(--gray-100)', padding: '2px 8px', borderRadius: '8px', color: 'var(--text-muted)'}}>عمق: {job.max_depth ?? 0}</span>
                       {job.js_render && <span style={{fontSize: '10.5px', background: 'rgba(196, 137, 74, 0.15)', padding: '2px 8px', borderRadius: '8px', color: 'var(--copper-dark)'}}>JS Render</span>}
                       {job.follow_external_domains && <span style={{fontSize: '10.5px', background: 'rgba(13, 71, 161, 0.1)', padding: '2px 8px', borderRadius: '8px', color: 'var(--navy)'}}>دامنه خارجی</span>}
                       {job.label && <span style={{fontSize: '10.5px', background: 'var(--gray-100)', padding: '2px 8px', borderRadius: '8px', color: 'var(--text-muted)', fontFamily: 'monospace', direction: 'ltr'}}>{job.label}</span>}

@@ -74,10 +74,10 @@ export default function UploadView() {
             )}
           </div>
           <div style={{fontSize: '12px', color: 'var(--text-muted)', marginTop: '10px'}}>
-            {Object.keys(piiAuditCounts).length > 0 ? (
+            {Object.keys(piiAuditCounts || {}).length > 0 ? (
               <span>
                 اقلام حساس فیلتر شده در آخرین فایل: {
-                  Object.entries(piiAuditCounts)
+                  Object.entries(piiAuditCounts || {})
                     .filter(([, v]) => v > 0)
                     .map(([k, v]) => `${PII_KEY_LABELS[k] || k}: ${v} مورد`)
                     .join(' | ')
