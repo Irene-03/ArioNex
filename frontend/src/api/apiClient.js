@@ -1,4 +1,38 @@
-export const createApiClient = (token, handleLogout) => {
+export const createApiClient = (token, refreshToken, handleLogout, onTokenRefresh) => {
+  let isRefreshing = false;
+  let refreshSubscribers = [];
+
+  const subscribeTokenRefresh = (cb) => {
+    refreshSubscribers.push(cb);
+  };
+
+  const onRefreshed = (newToken) => {
+    refreshSubscribers.forEach((cb) => cb(newToken));
+    refreshSubscribers = [];
+  };
+
+  const executeRefresh = async () => {
+    const currentRefreshToken = refreshToken || localStorage.getItem('arionex_refresh_token');
+    if (!currentRefreshToken) {
+      throw new Error('Refresh token not found');
+    }
+
+    const res = await fetch('http://localhost:8000/v1/auth/refresh', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refresh_token: currentRefreshToken }),
+    });
+
+    if (!res.ok) {
+      throw new Error('Refresh request failed');
+    }
+
+    const data = await res.json();
+    return data;
+  };
+
   return async (url, options = {}) => {
     const headers = {
       ...options.headers,
@@ -8,23 +42,66 @@ export const createApiClient = (token, handleLogout) => {
       headers['Content-Type'] = 'application/json';
     }
     
-    const currentToken = token || localStorage.getItem('arionex_token');
+    let currentToken = token || localStorage.getItem('arionex_token');
     if (currentToken) {
       headers['Authorization'] = `Bearer ${currentToken}`;
     }
     
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
-    
-    if (response.status === 401) {
-      if (handleLogout) {
-        handleLogout();
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+      });
+      
+      if (response.status === 401) {
+        const currentRefreshToken = refreshToken || localStorage.getItem('arionex_refresh_token');
+        if (!currentRefreshToken) {
+          if (handleLogout) handleLogout();
+          throw new Error('جلسه شما منقضی شده است. لطفاً مجدداً وارد شوید.');
+        }
+
+        if (!isRefreshing) {
+          isRefreshing = true;
+          try {
+            const data = await executeRefresh();
+            const newAccessToken = data.access_token;
+            const newRefreshToken = data.refresh_token;
+
+            localStorage.setItem('arionex_token', newAccessToken);
+            localStorage.setItem('arionex_refresh_token', newRefreshToken);
+
+            if (onTokenRefresh) {
+              onTokenRefresh(newAccessToken, newRefreshToken);
+            }
+
+            isRefreshing = false;
+            onRefreshed(newAccessToken);
+          } catch (err) {
+            isRefreshing = false;
+            if (handleLogout) handleLogout();
+            throw new Error('جلسه شما منقضی شده است. لطفاً مجدداً وارد شوید.');
+          }
+        }
+
+        const retryRequest = new Promise((resolve) => {
+          subscribeTokenRefresh((newToken) => {
+            const retryHeaders = {
+              ...headers,
+              'Authorization': `Bearer ${newToken}`,
+            };
+            resolve(fetch(url, { ...options, headers: retryHeaders }));
+          });
+        });
+
+        return retryRequest;
       }
-      throw new Error('جلسه شما منقضی شده است. لطفاً مجدداً وارد شوید.');
+      
+      return response;
+    } catch (err) {
+      if (err.message === 'جلسه شما منقضی شده است. لطفاً مجدداً وارد شوید.') {
+        throw err;
+      }
+      throw err;
     }
-    
-    return response;
   };
 };
