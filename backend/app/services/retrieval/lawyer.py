@@ -113,9 +113,9 @@ class LawyerAgent:
         
         try:
             llm = get_llm(temperature=0.0)  # دمای صفر برای دریافت نتیجه قطعی
-                
-                # پرامپت ممیز حقوقی
-                audit_prompt = f"""You are an expert enterprise compliance auditor (The Lawyer). Your job is to strictly audit the proposed RESPONSE to the USER QUERY against the list of corporate COMPLIANCE RULES.
+            
+            # پرامپت ممیز حقوقی
+            audit_prompt = f"""You are an expert enterprise compliance auditor (The Lawyer). Your job is to strictly audit the proposed RESPONSE to the USER QUERY against the list of corporate COMPLIANCE RULES.
 
 Evaluate if the proposed response violates any rule or restriction. 
 Return your analysis STRICTLY in JSON format. Do not include any explanations, code block ticks, or text outside the JSON.
@@ -136,11 +136,11 @@ USER QUERY:
 PROPOSED RESPONSE:
 {response}
 """
-                llm_response = llm.invoke(audit_prompt)
-                raw_text = llm_response.content.strip()
-                audit_result = _clean_and_parse_json(raw_text)
-            except Exception as e:
-                logger.error(f"[The Lawyer] LLM auditing failed: {str(e)}. Defaulting to compliant for safety.")
+            llm_response = llm.invoke(audit_prompt)
+            raw_text = llm_response.content.strip()
+            audit_result = _clean_and_parse_json(raw_text)
+        except Exception as e:
+            logger.error(f"[The Lawyer] LLM auditing failed: {str(e)}. Defaulting to compliant for safety.")
 
         # ۴. ذخیره گزارش ممیزی در جدول compliance_audit_logs جهت مانیتورینگ ادمین
         conn = None
