@@ -24,6 +24,7 @@ from app.helpers.audit_logger import log_audit_event
 from typing import AsyncGenerator, Optional
 
 logger = logging.getLogger("arionex.query_logic")
+_query_sessions = {}
 
 
 async def execute_query_logic(request: QueryRequest, current_user: Optional[dict] = None) -> QueryResponse:
@@ -75,8 +76,12 @@ async def execute_query_logic(request: QueryRequest, current_user: Optional[dict
             final_file_ids = allowed_file_ids
 
     try:
-        # فراخوانی موتور RAG
-        chat_history = []
+        # فراخوانی موتور RAG با تاریخچه نشست
+        session_id = request.session_id
+        if session_id not in _query_sessions:
+            _query_sessions[session_id] = []
+        chat_history = _query_sessions[session_id][-10:]
+
         result = synthesize_rag_response(
             user_input=request.query,
             chat_history=chat_history,
@@ -84,6 +89,10 @@ async def execute_query_logic(request: QueryRequest, current_user: Optional[dict
             k=4,
             file_ids=final_file_ids
         )
+
+        # به‌روزرسانی تاریخچه نشست
+        _query_sessions[session_id].append({"Human": request.query})
+        _query_sessions[session_id].append({"AI": result["answer"]})
 
         # ثبت در سیستم ممیزی مرکزی
         log_audit_event(
@@ -153,11 +162,16 @@ async def execute_query_stream_logic(request: QueryRequest, current_user: Option
         else:
             final_file_ids = allowed_file_ids
 
+    session_id = request.session_id
+    if session_id not in _query_sessions:
+        _query_sessions[session_id] = []
+    history = _query_sessions[session_id][-10:]
+
     accumulated_answer = ""
     try:
         async for event in synthesize_rag_response_stream(
             user_input=request.query,
-            chat_history=[],
+            chat_history=history,
             threshold=0.4,
             k=4,
             file_ids=final_file_ids
@@ -165,6 +179,10 @@ async def execute_query_stream_logic(request: QueryRequest, current_user: Option
             if event["event"] == "token":
                 accumulated_answer += event["data"]
             yield _sse_event(event["event"], event["data"])
+
+        # ثبت تاریخچه نشست
+        _query_sessions[session_id].append({"Human": request.query})
+        _query_sessions[session_id].append({"AI": accumulated_answer})
 
         # ثبت در سیستم ممیزی پس از پایان stream
         log_audit_event(
