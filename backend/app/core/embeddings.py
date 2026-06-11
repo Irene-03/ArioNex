@@ -52,7 +52,7 @@ def _validate_api_key(provider: str):
 
     if not key or key.strip() in ("", "mock_key") or "your-" in key:
         raise ValueError(
-            f"کلید API برای پروایدر '{provider}' تنظیم نشده است یا روی مقدار پیش‌فرض 'mock_key' قرار دارد. "
+            f"کلید API برای پروایدر '{provider}' تنظیم نشده است. "
             f"لطفاً ابتدا از پنل مدیریت یکپارچه‌سازی، کلید API معتبر برای آن ست کنید."
         )
 

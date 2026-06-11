@@ -338,7 +338,7 @@ def _warn_if_mock(api_key: str, provider_name: str) -> None:
     """
     if not api_key or api_key.strip() in ("mock_key", "") or "your-" in api_key:
         raise ValueError(
-            f"کلید API برای پروایدر '{provider_name}' تنظیم نشده است یا روی مقدار پیش‌فرض 'mock_key' قرار دارد. "
+            f"کلید API برای پروایدر '{provider_name}' تنظیم نشده است. "
             f"لطفاً ابتدا از پنل مدیریت یکپارچه‌سازی، کلید API معتبر برای آن ست کنید."
         )
 
