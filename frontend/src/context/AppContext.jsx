@@ -25,6 +25,7 @@ export const AppProvider = ({ children }) => {
     }
   });
   const [token, setToken] = useState(() => localStorage.getItem('arionex_token') || null);
+  const [refreshToken, setRefreshToken] = useState(() => localStorage.getItem('arionex_refresh_token') || null);
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -52,7 +53,9 @@ export const AppProvider = ({ children }) => {
   const handleLogout = () => {
     setCurrentUser(null);
     setToken(null);
+    setRefreshToken(null);
     localStorage.removeItem('arionex_token');
+    localStorage.removeItem('arionex_refresh_token');
     localStorage.removeItem('arionex_user');
     setActiveScreen('dashboard');
     setLoginUsername('');
@@ -60,7 +63,10 @@ export const AppProvider = ({ children }) => {
     setLoginError('');
   };
 
-  const apiFetch = createApiClient(token, handleLogout);
+  const apiFetch = createApiClient(token, refreshToken, handleLogout, (newToken, newRefreshToken) => {
+    setToken(newToken);
+    setRefreshToken(newRefreshToken);
+  });
 
   // ─── Auth Handlers ────────────────────────────────────────────────────────
   const handleLogin = async (e) => {
@@ -87,8 +93,10 @@ export const AppProvider = ({ children }) => {
       
       if (res.ok) {
         setToken(data.access_token);
+        setRefreshToken(data.refresh_token);
         setCurrentUser(data.user);
         localStorage.setItem('arionex_token', data.access_token);
+        localStorage.setItem('arionex_refresh_token', data.refresh_token);
         localStorage.setItem('arionex_user', JSON.stringify(data.user));
         
         fetchDocuments();
@@ -784,6 +792,7 @@ export const AppProvider = ({ children }) => {
       activeScreen, setActiveScreen,
       currentUser, setCurrentUser,
       token, setToken,
+      refreshToken, setRefreshToken,
       loginUsername, setLoginUsername,
       loginPassword, setLoginPassword,
       loginError, setLoginError,
