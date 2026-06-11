@@ -28,7 +28,6 @@ export default function Sidebar() {
           onClick={() => setActiveScreen('chat')}
         >
           <span>🤖</span> دستیار هوش مصنوعی
-          <span className="nav-badge">3</span>
         </div>
         <div 
           className={`nav-item ${activeScreen === 'knowledge' ? 'active' : ''}`}
@@ -65,7 +64,6 @@ export default function Sidebar() {
             onClick={() => setActiveScreen('integrations')}
           >
             <span>🔗</span> یکپارچه‌سازی
-            <span className="nav-badge" style={{background: 'var(--navy-light)'}}>3</span>
           </div>
         </div>
       )}
