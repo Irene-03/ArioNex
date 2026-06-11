@@ -30,80 +30,24 @@ class RuleExtractorWorker:
             
         logger.info(f"[Toggleable Service] Rule Extractor is ACTIVE. Processing rules for file_id={file_id}...")
 
-        active_provider = settings.llm_provider
-        active_key = (
-            settings.openrouter_api_key if active_provider == "openrouter"
-            else settings.openai_api_key
-        )
-        is_mock_key = not active_key or active_key in ("mock_key", "") or "your-" in active_key
-
         extracted_rules = []
 
-        if is_mock_key:
-            logger.info("[Toggleable Service] Mock LLM mode active. Generating Persian fallback rules...")
-            text_lower = text.lower()
-            if "مرخصی" in text_lower:
-                extracted_rules = [
-                    {
-                        "rule_code": "RULE-VAC-1",
-                        "clause": "سیاست مرخصی سالانه بر اساس سابقه کار کارمندان می‌باشد",
-                        "type": "POLICY",
-                        "description": "تخصیص مرخصی استحقاقی سالانه"
-                    }
-                ]
-            elif "محرمانه" in text_lower or "افشا" in text_lower:
-                extracted_rules = [
-                    {
-                        "rule_code": "RULE-CONF-2",
-                        "clause": "هرگونه افشای اطلاعات محرمانه تجاری بدون هماهنگی کتبی ممنوع است",
-                        "type": "CONSTRAINT",
-                        "description": "جلوگیری از درز اطلاعات مالی و محصولی"
-                    }
-                ]
-            elif "ساعت" in text_lower or "حضور" in text_lower:
-                extracted_rules = [
-                    {
-                        "rule_code": "RULE-TIME-3",
-                        "clause": "ساعات کاری رسمی شرکت از شنبه تا چهارشنبه ساعت ۸:۰۰ الی ۱۶:۳۰ می‌باشد",
-                        "type": "POLICY",
-                        "description": "مدیریت نظم حضور و غیاب کارکنان"
-                    }
-                ]
-            elif "دسترسی" in text_lower or "رمز" in text_lower:
-                extracted_rules = [
-                    {
-                        "rule_code": "RULE-SEC-4",
-                        "clause": "کاربران موظف به تغییر رمز عبور خود هر ۹۰ روز یک‌بار می‌باشند",
-                        "type": "CONSTRAINT",
-                        "description": "دستورالعمل امنیت حساب‌های کاربری"
-                    }
-                ]
-            else:
-                extracted_rules = [
-                    {
-                        "rule_code": "RULE-GEN-5",
-                        "clause": "رعایت کلیه دستورالعمل‌های انضباطی ابلاغ شده در سند الزامی است",
-                        "type": "POLICY",
-                        "description": "قوانین عمومی رفتاری سازمان"
-                    }
-                ]
-        else:
-            try:
-                from langchain_core.prompts import PromptTemplate
-                from app.prompts.extractor_prompts import RULE_EXTRACTION_TEMPLATE
-                from app.core.llm_factory import get_llm
+        try:
+            from langchain_core.prompts import PromptTemplate
+            from app.prompts.extractor_prompts import RULE_EXTRACTION_TEMPLATE
+            from app.core.llm_factory import get_llm
 
-                llm = get_llm(temperature=0.0)
-                prompt = PromptTemplate.from_template(RULE_EXTRACTION_TEMPLATE)
-                chain = prompt | llm
-                
-                response = chain.invoke({"text": text})
-                raw_response = response.content.strip()
-                extracted_data = _clean_and_parse_json(raw_response)
-                extracted_rules = extracted_data.get("rules", [])
-            except Exception as e:
-                logger.error(f"[Toggleable Service] Rule extraction via LLM failed: {str(e)}")
-                return []
+            llm = get_llm(temperature=0.0)
+            prompt = PromptTemplate.from_template(RULE_EXTRACTION_TEMPLATE)
+            chain = prompt | llm
+            
+            response = chain.invoke({"text": text})
+            raw_response = response.content.strip()
+            extracted_data = _clean_and_parse_json(raw_response)
+            extracted_rules = extracted_data.get("rules", [])
+        except Exception as e:
+            logger.error(f"[Toggleable Service] Rule extraction via LLM failed: {str(e)}")
+            return []
 
         conn = None
         try:
