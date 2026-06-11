@@ -57,3 +57,11 @@ class ConfigUpdateRequest(BaseModel):
         default=None,
         description="توکن ربات تلگرام جهت فعال‌سازی ربات تلگرام"
     )
+    openai_api_key: Optional[str] = Field(default=None, description="کلید API برای OpenAI")
+    openrouter_api_key: Optional[str] = Field(default=None, description="کلید API برای OpenRouter")
+    anthropic_api_key: Optional[str] = Field(default=None, description="کلید API برای Anthropic Claude")
+    google_api_key: Optional[str] = Field(default=None, description="کلید API برای Google Gemini")
+    deepseek_api_key: Optional[str] = Field(default=None, description="کلید API برای DeepSeek")
+    gapgpt_api_key: Optional[str] = Field(default=None, description="کلید API برای GapGPT")
+    avalai_api_key: Optional[str] = Field(default=None, description="کلید API برای AvalAI")
+    hormouz_api_key: Optional[str] = Field(default=None, description="کلید API برای Hormouz")

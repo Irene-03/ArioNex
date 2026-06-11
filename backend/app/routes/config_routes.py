@@ -21,6 +21,52 @@ logger = logging.getLogger("arionex.config_routes")
 router = APIRouter(prefix="/v1", tags=["Config — Feature Toggles"])
 
 
+def _mask_api_key(key: str) -> str:
+    if not key or key.strip() in ("mock_key", "") or "your-" in key:
+        return ""
+    if len(key) <= 12:
+        return "********"
+    return key[:6] + "..." + key[-4:]
+
+
+def _update_env_file(key: str, value: str):
+    import os
+    env_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+        ".env"
+    )
+    if not os.path.exists(env_path):
+        env_path = "/app/.env"
+        if not os.path.exists(env_path):
+            env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+
+    try:
+        lines = []
+        key_found = False
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+        new_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith(f"{key}="):
+                new_lines.append(f"{key}={value}\n")
+                key_found = True
+            else:
+                new_lines.append(line)
+
+        if not key_found:
+            new_lines.append(f"\n{key}={value}\n")
+
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+            
+        logger.info(f"Successfully updated environment variable {key} in {env_path}")
+    except Exception as e:
+        logger.error(f"Failed to update .env file for {key}: {str(e)}")
+
+
 @router.get(
     "/config",
     summary="دریافت پیکربندی فعال سیستم",
@@ -45,6 +91,16 @@ async def get_active_configuration():
         "ollama_base_url": getattr(settings, "ollama_base_url", "http://localhost:11434"),
         "cosine_threshold": getattr(settings, "cosine_threshold", 0.50),
         "telegram_bot_token": settings.telegram_bot_token,
+        "api_keys": {
+            "openai": _mask_api_key(settings.openai_api_key),
+            "openrouter": _mask_api_key(settings.openrouter_api_key),
+            "anthropic": _mask_api_key(settings.anthropic_api_key),
+            "google": _mask_api_key(settings.google_api_key),
+            "deepseek": _mask_api_key(settings.deepseek_api_key),
+            "gapgpt": _mask_api_key(settings.gapgpt_api_key),
+            "avalai": _mask_api_key(settings.avalai_api_key),
+            "hormouz": _mask_api_key(settings.hormouz_api_key),
+        }
     }
 
 
@@ -126,6 +182,23 @@ async def update_active_configuration(update: ConfigUpdateRequest):
             settings.llm_provider = update.llm_provider
             logger.info(f"LLM provider switched to: {update.llm_provider}")
 
+        # به‌روزرسانی کلیدهای API پروایدرها
+        api_keys_to_update = {
+            "openai_api_key": getattr(update, "openai_api_key", None),
+            "openrouter_api_key": getattr(update, "openrouter_api_key", None),
+            "anthropic_api_key": getattr(update, "anthropic_api_key", None),
+            "google_api_key": getattr(update, "google_api_key", None),
+            "deepseek_api_key": getattr(update, "deepseek_api_key", None),
+            "gapgpt_api_key": getattr(update, "gapgpt_api_key", None),
+            "avalai_api_key": getattr(update, "avalai_api_key", None),
+            "hormouz_api_key": getattr(update, "hormouz_api_key", None),
+        }
+
+        for key_name, key_val in api_keys_to_update.items():
+            if key_val is not None:
+                setattr(settings, key_name, key_val)
+                _update_env_file(key_name.upper(), key_val)
+
         logger.info("Administrative Feature Toggles updated successfully at runtime.")
         return {
             "status": "success",
@@ -139,6 +212,16 @@ async def update_active_configuration(update: ConfigUpdateRequest):
                 "ollama_model": getattr(settings, "ollama_model", "gemma3:4b"),
                 "ollama_base_url": getattr(settings, "ollama_base_url", "http://localhost:11434"),
                 "telegram_bot_token": settings.telegram_bot_token,
+                "api_keys": {
+                    "openai": _mask_api_key(settings.openai_api_key),
+                    "openrouter": _mask_api_key(settings.openrouter_api_key),
+                    "anthropic": _mask_api_key(settings.anthropic_api_key),
+                    "google": _mask_api_key(settings.google_api_key),
+                    "deepseek": _mask_api_key(settings.deepseek_api_key),
+                    "gapgpt": _mask_api_key(settings.gapgpt_api_key),
+                    "avalai": _mask_api_key(settings.avalai_api_key),
+                    "hormouz": _mask_api_key(settings.hormouz_api_key),
+                }
             },
         }
     except Exception as e:
