@@ -12,7 +12,7 @@
 /// </remarks>
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from app.schemas.query_schemas import QueryRequest, QueryResponse
 from app.logics.query_logic import execute_query_logic, execute_query_stream_logic
@@ -45,6 +45,7 @@ async def process_rag_query(
     description="پاسخ مدل را به صورت توکن‌به‌توکن از طریق Server-Sent Events ارسال می‌کند. کلاینت باید رویدادهای sources، token و done را مدیریت کند.",
 )
 async def stream_rag_query(
+    http_request: Request,
     request: QueryRequest,
     current_user: dict = Depends(get_current_user_or_api_key)
 ):
@@ -55,7 +56,7 @@ async def stream_rag_query(
     /// <returns>StreamingResponse با media-type text/event-stream</returns>
     """
     return StreamingResponse(
-        execute_query_stream_logic(request, current_user),
+        execute_query_stream_logic(request, current_user, http_request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

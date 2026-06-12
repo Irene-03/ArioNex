@@ -9,6 +9,17 @@ import os
 import unittest
 from unittest.mock import MagicMock, patch
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 # اضافه کردن مسیر پروژه جهت شناسایی پکیج app
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
@@ -110,11 +121,11 @@ class TestPhase8Agents(unittest.TestCase):
         print(" Lawyer Agent checks PASSED.\n")
 
     @patch("app.services.retrieval.query_router.synthesizer.get_llm")
-    @patch("app.services.retrieval.query_router.vector_search_agent")
-    @patch("app.services.retrieval.query_router.qna_agent")
-    @patch("app.services.retrieval.query_router.investigator_agent")
-    @patch("app.services.retrieval.query_router.lawyer_agent")
-    @patch("app.services.retrieval.query_router.get_db_connection")
+    @patch("app.services.retrieval.query_router.synthesizer.vector_search_agent")
+    @patch("app.services.retrieval.query_router.synthesizer.qna_agent")
+    @patch("app.services.retrieval.query_router.synthesizer.investigator_agent")
+    @patch("app.services.retrieval.query_router.synthesizer.lawyer_agent")
+    @patch("app.services.retrieval.query_router.synthesizer.get_db_connection")
     def test_query_router_integration_compliance_blocking(self, mock_get_db, mock_lawyer, mock_investigator, mock_qna, mock_vector, mock_get_llm):
         print("Testing Query Router Integration & Compliance Blocking...")
         

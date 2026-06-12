@@ -7,10 +7,14 @@ from app.core.llm_factory import get_llm
 from app.prompts.rag_prompts import RESPONDER_TEMPLATE, STANDARD_REFUSAL_MESSAGE
 from app.services.retrieval.query_rewriter import rewrite_query
 
-# Import via the parent query_router package to respect unit test mocks/patches
-from app.services.retrieval import query_router as qr
 from app.services.retrieval.query_router.router import route_query_intent
 from app.services.retrieval.query_router.web_search import _get_active_api_key, perform_tavily_web_search
+from app.services.retrieval.vector_search import vector_search_agent
+from app.services.retrieval.qna import qna_agent
+from app.services.retrieval.analyst import analyst_agent
+from app.services.retrieval.investigator import investigator_agent
+from app.services.retrieval.lawyer import lawyer_agent
+from app.core.database import get_db_connection
 
 logger = logging.getLogger("arionex.query_router")
 
@@ -28,7 +32,7 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
     logger.info(f"Routed query intent category: '{intent}'")
     
     if intent == "analyst":
-        analysis_result = qr.analyst_agent.execute_analysis(standalone_query)
+        analysis_result = analyst_agent.execute_analysis(standalone_query)
         
         if "DOUBTFUL ANSWER" in analysis_result:
             logger.warning("Analyst Agent failed to resolve the question with certainty. Falling back to document vector search.")
@@ -45,8 +49,8 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
                 "is_safe": True
             }
 
-    vector_results = qr.vector_search_agent.retrieve_context(standalone_query, threshold=threshold, k=k, file_ids=file_ids)
-    qna_results = qr.qna_agent.retrieve_context(standalone_query, threshold=threshold, k=k, file_ids=file_ids)
+    vector_results = vector_search_agent.retrieve_context(standalone_query, threshold=threshold, k=k, file_ids=file_ids)
+    qna_results = qna_agent.retrieve_context(standalone_query, threshold=threshold, k=k, file_ids=file_ids)
     
     all_results = vector_results + qna_results
     sorted_results = sorted(all_results, key=lambda x: x.get("similarity", 0), reverse=True)[:k]
@@ -75,7 +79,7 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
     formatted_context_list = []
     sources = []
     
-    graph_context = qr.investigator_agent.retrieve_graph_context(standalone_query, active_file_id)
+    graph_context = investigator_agent.retrieve_graph_context(standalone_query, active_file_id)
     if graph_context:
         formatted_context_list.append(graph_context)
     
@@ -99,7 +103,7 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
     if settings.services.rule_extractor and active_file_id:
         conn = None
         try:
-            conn = qr.get_db_connection()
+            conn = get_db_connection()
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT rule_code, clause FROM extracted_rules WHERE file_id = %s",
@@ -122,7 +126,7 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
     system_instruction = None
     conn = None
     try:
-        conn = qr.get_db_connection()
+        conn = get_db_connection()
         with conn.cursor() as cur:
             cur.execute("SELECT prompt FROM system_prompts WHERE key = 'default_system_instruction'")
             row = cur.fetchone()
@@ -170,7 +174,7 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
                 "is_safe": True
             }
             
-        audit_result = qr.lawyer_agent.audit_compliance(standalone_query, final_answer, active_file_id)
+        audit_result = lawyer_agent.audit_compliance(standalone_query, final_answer, active_file_id)
         if not audit_result.get("is_compliant", True):
             logger.warning(f"Lawyer Agent detected compliance violations: {audit_result.get('violations')}. Blocking response.")
             return {
@@ -219,7 +223,7 @@ async def synthesize_rag_response_stream(
     logger.info(f"Routed query intent category (stream): '{intent}'")
 
     if intent == "analyst":
-        analysis_result = qr.analyst_agent.execute_analysis(standalone_query)
+        analysis_result = analyst_agent.execute_analysis(standalone_query)
         if "DOUBTFUL ANSWER" not in analysis_result:
             if not analysis_result.strip() or analysis_result == "####":
                 yield {"event": "sources", "data": []}
@@ -235,8 +239,8 @@ async def synthesize_rag_response_stream(
             return
         logger.warning("Analyst Agent fallback to vector search in stream mode.")
 
-    vector_results = qr.vector_search_agent.retrieve_context(standalone_query, threshold=threshold, k=k, file_ids=file_ids)
-    qna_results = qr.qna_agent.retrieve_context(standalone_query, threshold=threshold, k=k, file_ids=file_ids)
+    vector_results = vector_search_agent.retrieve_context(standalone_query, threshold=threshold, k=k, file_ids=file_ids)
+    qna_results = qna_agent.retrieve_context(standalone_query, threshold=threshold, k=k, file_ids=file_ids)
     all_results = vector_results + qna_results
     sorted_results = sorted(all_results, key=lambda x: x.get("similarity", 0), reverse=True)[:k]
 
@@ -277,7 +281,7 @@ async def synthesize_rag_response_stream(
     if settings.services.rule_extractor and active_file_id:
         conn = None
         try:
-            conn = qr.get_db_connection()
+            conn = get_db_connection()
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT rule_code, clause FROM extracted_rules WHERE file_id = %s",
@@ -300,7 +304,7 @@ async def synthesize_rag_response_stream(
     system_instruction = None
     conn = None
     try:
-        conn = qr.get_db_connection()
+        conn = get_db_connection()
         with conn.cursor() as cur:
             cur.execute("SELECT prompt FROM system_prompts WHERE key = 'default_system_instruction'")
             row = cur.fetchone()

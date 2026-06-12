@@ -36,9 +36,9 @@ def test_synthesizer_propagates_value_error():
             {"content": "محتوای سند مرخصی کارمندان.", "label": "leave_policy.pdf", "sequence_id": 1, "similarity": 0.8, "file_id": 1}
         ]
         
-        with patch("app.services.retrieval.query_router.synthesizer.qr.vector_search_agent.retrieve_context", return_value=mock_retrieval), \
-             patch("app.services.retrieval.query_router.synthesizer.qr.qna_agent.retrieve_context", return_value=[]), \
-             patch("app.services.retrieval.query_router.synthesizer.qr.investigator_agent.retrieve_graph_context", return_value=None):
+        with patch("app.services.retrieval.query_router.synthesizer.vector_search_agent.retrieve_context", return_value=mock_retrieval), \
+             patch("app.services.retrieval.query_router.synthesizer.qna_agent.retrieve_context", return_value=[]), \
+             patch("app.services.retrieval.query_router.synthesizer.investigator_agent.retrieve_graph_context", return_value=None):
             
             try:
                 synthesize_rag_response(

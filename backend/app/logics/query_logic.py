@@ -14,14 +14,14 @@
 
 import json
 import logging
-from typing import AsyncGenerator
-from fastapi import HTTPException
+import asyncio
+from typing import AsyncGenerator, Optional
+from fastapi import HTTPException, Request
 
 from app.core.config import settings
 from app.schemas.query_schemas import QueryRequest, QueryResponse
 from app.services.retrieval.query_router import synthesize_rag_response, synthesize_rag_response_stream
 from app.helpers.audit_logger import log_audit_event
-from typing import AsyncGenerator, Optional
 
 logger = logging.getLogger("arionex.query_logic")
 _query_sessions = {}
@@ -118,7 +118,11 @@ async def execute_query_logic(request: QueryRequest, current_user: Optional[dict
         raise HTTPException(status_code=500, detail=f"Internal RAG engine failure: {str(e)}")
 
 
-async def execute_query_stream_logic(request: QueryRequest, current_user: Optional[dict] = None) -> AsyncGenerator[str, None]:
+async def execute_query_stream_logic(
+    request: QueryRequest,
+    current_user: Optional[dict] = None,
+    http_request: Optional[Request] = None
+) -> AsyncGenerator[str, None]:
     """
     /// <summary>
     /// نسخه streaming منطق پرسش با اعمال قوانین سطح دسترسی اسناد (ACL)
@@ -172,28 +176,49 @@ async def execute_query_stream_logic(request: QueryRequest, current_user: Option
 
     accumulated_answer = ""
     try:
-        async for event in synthesize_rag_response_stream(
-            user_input=request.query,
-            chat_history=history,
-            threshold=0.4,
-            k=4,
-            file_ids=final_file_ids
-        ):
-            if event["event"] == "token":
-                accumulated_answer += event["data"]
-            yield _sse_event(event["event"], event["data"])
+        # Enforce a 60-second execution/inactivity timeout on the stream
+        async with asyncio.timeout(60.0):
+            async for event in synthesize_rag_response_stream(
+                user_input=request.query,
+                chat_history=history,
+                threshold=0.4,
+                k=4,
+                file_ids=final_file_ids
+            ):
+                # Active cancellation check
+                if http_request and await http_request.is_disconnected():
+                    logger.warning("Streaming client disconnected actively. Aborting generation task.")
+                    break
 
-        # ثبت تاریخچه نشست
-        _query_sessions[session_id].append({"Human": request.query})
-        _query_sessions[session_id].append({"AI": accumulated_answer})
+                if event["event"] == "token":
+                    # Cap accumulated response memory buffer at 100k characters to prevent memory exhaustion leaks
+                    if len(accumulated_answer) < 100000:
+                        accumulated_answer += event["data"]
+                    else:
+                        if not accumulated_answer.endswith("... [Answer Truncated]"):
+                            accumulated_answer += "... [Answer Truncated]"
+                            logger.warning("Stream response output exceeded 100k char limit. Truncating audit record.")
 
-        # ثبت در سیستم ممیزی پس از پایان stream
-        log_audit_event(
-            user_name=username,
-            user_role=role,
-            query_text=request.query,
-            response_text=accumulated_answer,
-        )
+                yield _sse_event(event["event"], event["data"])
+
+        # Check if the client did not disconnect before saving session history & auditing
+        if not (http_request and await http_request.is_disconnected()):
+            # ثبت تاریخچه نشست
+            _query_sessions[session_id].append({"Human": request.query})
+            _query_sessions[session_id].append({"AI": accumulated_answer})
+
+            # ثبت در سیستم ممیزی پس از پایان stream
+            log_audit_event(
+                user_name=username,
+                user_role=role,
+                query_text=request.query,
+                response_text=accumulated_answer,
+            )
+            yield _sse_event("done", {"is_safe": True})
+
+    except TimeoutError as te:
+        logger.error(f"Stream RAG timeout: {str(te)}")
+        yield _sse_event("error", "Streaming request timed out.")
         yield _sse_event("done", {"is_safe": True})
     except Exception as e:
         logger.error(f"Stream RAG error: {str(e)}")
