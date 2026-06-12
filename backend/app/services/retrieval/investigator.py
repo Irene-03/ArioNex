@@ -39,9 +39,22 @@ class InvestigatorAgent:
         /// <returns>رشته کانتکست ساختاریافته گرافی به زبان فارسی</returns>
         /// </summary>
         """
+        # Soft Enable: حتی اگر toggle خاموش باشد، اگر داده در دیتابیس وجود داشته باشد کار می‌کنیم
         if not self.is_enabled:
-            logger.info("[The Investigator] Graph search is disabled. Skipping.")
-            return ""
+            # بررسی وجود داده پیش از skip کردن کامل
+            try:
+                conn_check = get_db_connection()
+                with conn_check.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM extracted_entities")
+                    count = cur.fetchone()[0]
+                conn_check.close()
+                if count == 0:
+                    logger.info("[The Investigator] Graph search is disabled and no entities in DB. Skipping.")
+                    return ""
+                logger.info(f"[The Investigator] Toggle is off but {count} entities found in DB. Activating soft-enable.")
+            except Exception:
+                return ""
+
 
         logger.info(f"[The Investigator] Extracting graph context for query: '{query}' (file_id={file_id})")
 

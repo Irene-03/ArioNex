@@ -62,9 +62,20 @@ class LawyerAgent:
         /// <returns>دیکشنری شامل وضعیت انطباق، جزئیات نقض قوانین، و گزارش متنی</returns>
         /// </summary>
         """
-        # اگر کل ماژول خاموش است، ممیزی را بای‌پاس می‌کنیم
+        # Soft Enable: حتی اگر toggle خاموش باشد، اگر قوانین در دیتابیس موجود باشند ممیزی را اجرا می‌کنیم
         if not self.is_enabled:
-            return {"is_compliant": True, "violations": [], "audit_report": ""}
+            # بررسی سریع وجود قوانین کلی قبل از skip کردن
+            try:
+                conn_check = get_db_connection()
+                with conn_check.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM extracted_rules")
+                    total_rules = cur.fetchone()[0]
+                conn_check.close()
+                if total_rules == 0:
+                    return {"is_compliant": True, "violations": [], "audit_report": ""}
+                logger.info(f"[The Lawyer] Toggle is off but {total_rules} rules found in DB. Activating soft-enable audit.")
+            except Exception:
+                return {"is_compliant": True, "violations": [], "audit_report": ""}
 
         # ۱. بررسی سریع وجود قوانین برای این فایل (بای‌پاس سریع در صورت نبود قانون)
         rules_count = self.get_rules_count(file_id)

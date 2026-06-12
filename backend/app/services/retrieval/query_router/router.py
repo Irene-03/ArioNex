@@ -1,25 +1,28 @@
+"""
+/// <summary>
+/// [DEPRECATED] ماژول تشخیص مسیر پرسش — routing حذف شده است
+/// </summary>
+/// <remarks>
+/// این ماژول برای حفظ سازگاری با import‌های موجود نگه داشته شده اما دیگر در
+/// synthesizer.py فراخوانی نمی‌شود.
+/// 
+/// دلیل حذف routing:
+///   - در یک سیستم RAG واقعی، embedding خودش شباهت معنایی را تشخیص می‌دهد
+///   - keyword matching ساده می‌تواند route اشتباه بدهد (مثل "قوانین مجموع جرایم" → analyst)
+///   - یک مسیر واحد بدون فرض درباره محتوای داده کاربر کار می‌کند
+/// </remarks>
+"""
 import logging
 
 logger = logging.getLogger("arionex.query_router")
 
+
 def route_query_intent(query: str) -> str:
     """
     /// <summary>
-    /// تعیین هوشمند مسیر جستجو بر اساس کلیدواژه‌های پرسش
+    /// [DEPRECATED] این تابع دیگر استفاده نمی‌شود — routing حذف شده است
     /// </summary>
-    /// <param name="query">پرسش مستقل کاربر</param>
-    /// <returns>رشته‌ای نشان‌دهنده دسته‌بندی مسیر ('analyst' یا 'rag')</returns>
+    /// <returns>همیشه 'rag' برمی‌گرداند</returns>
     """
-    query_lower = query.lower()
-    
-    # کلمات کلیدی محاسباتی، جداول، حسابداری و آماری مالی
-    structured_keywords = [
-        "بدهکار", "بستانکار", "مجموع", "میانگین", "سند", "حساب", "چک", 
-        "فاکتور", "تعداد تیکت", "groupby", "جمع ستون", "تراکنش"
-    ]
-    
-    for kw in structured_keywords:
-        if kw in query_lower:
-            return "analyst"
-            
+    logger.debug("route_query_intent called but routing is disabled. Returning 'rag' always.")
     return "rag"

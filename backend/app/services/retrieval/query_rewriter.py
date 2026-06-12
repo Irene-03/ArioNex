@@ -10,9 +10,10 @@
 """
 
 import logging
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from app.core.config import settings
+from app.core.llm_factory import get_llm
+from app.services.retrieval.query_router.web_search import _get_active_api_key
 
 logger = logging.getLogger("arionex.query_rewriter")
 
@@ -65,31 +66,33 @@ def rewrite_query(user_input: str, chat_history: list) -> str:
     """
     if not chat_history:
         return user_input
-        
-    # در صورت عدم وجود کلید واقعی، برای ممانعت از کرش از بازنویسی صرف نظر کرده و خود ورودی را برمی‌گردانیم
-    if not settings.openai_api_key:
-        logger.info("OpenAI API key is not configured. Skipping query rewriting and returning original user query.")
-        return user_input
-        
-    try:
-        llm = ChatOpenAI(
-            model_name=settings.model_name,
-            temperature=0,
-            openai_api_key=settings.openai_api_key
+
+    # بررسی کلید API برای provider فعال سیستم (نه فقط OpenAI)
+    active_provider = settings.llm_provider
+    active_key = _get_active_api_key(active_provider)
+    if not active_key or active_key.strip() == "" or "your-" in active_key:
+        logger.info(
+            f"Active LLM provider '{active_provider}' has no valid API key. "
+            "Skipping query rewriting and returning original user query."
         )
-        
+        return user_input
+
+    try:
+        # استفاده از get_llm فکتوری — پشتیبانی از هر provider فعال
+        llm = get_llm(temperature=0)
+
         prompt = PromptTemplate.from_template(STANDALONE_TEMPLATE)
         chain = prompt | llm
-        
+
         formatted_history = format_chat_history(chat_history)
         response = chain.invoke({
             "chat_history": formatted_history,
             "user_input": user_input
         })
-        
+
         rewritten = response.content.strip()
-        logger.info(f"Query rewritten successfully. Original: '{user_input}' -> Rewritten: '{rewritten}'")
+        logger.info(f"Query rewritten successfully via '{active_provider}'. Original: '{user_input}' -> Rewritten: '{rewritten}'")
         return rewritten
     except Exception as e:
-        logger.error(f"Failed to rewrite query via OpenAI: {str(e)}. Using original query as fallback.")
+        logger.error(f"Failed to rewrite query via '{active_provider}': {str(e)}. Using original query as fallback.")
         return user_input

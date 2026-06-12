@@ -32,16 +32,6 @@ logger = logging.getLogger("arionex.analyst")
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
 
-# پیدا کردن آدرس پیش‌فرض دیتای حسابداری دمو جهت سازگاری کامل
-DEFAULT_DEMO_DATA_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-    "raw data for start",
-    "arionex-demo",
-    "langgraph_agent",
-    "Data",
-    "accounting_data.csv"
-)
-
 # ۲. کلاس اصلی پیاده‌سازی عامل تحلیلگر داده
 class AnalystAgent:
     """
@@ -51,30 +41,75 @@ class AnalystAgent:
     """
     def __init__(self):
         self.is_enabled = settings.services.structured_data_analytics
-        self.df = None
-        self._load_data()
 
-    def _load_data(self) -> None:
+    def _resolve_dataframe(self, file_id: int = None, custom_file_path: str = None) -> pd.DataFrame:
         """
         /// <summary>
-        /// لود کردن پیش‌فرض دیتابیس حسابداری تراکنش‌ها به پانداس
+        /// بارگذاری DataFrame از فایل واقعی کاربر یا آخرین فایل ساختاریافته در دیتابیس
         /// </summary>
+        /// <param name="file_id">شناسه فایل ساختاریافته (اختیاری)</param>
+        /// <param name="custom_file_path">مسیر فایل مستقیم (اختیاری — اولویت بالاتر)</param>
+        /// <returns>DataFrame لود شده یا None در صورت عدم موفقیت</returns>
         """
+        from app.services.workers.structured_processor import structured_processor
+        from app.core.database import get_db_connection
+
+        # اولویت ۱: مسیر فیزیکی مستقیم
+        if custom_file_path and os.path.exists(custom_file_path):
+            try:
+                df = pd.read_csv(custom_file_path)
+                logger.info(f"Analyst Agent loaded DataFrame from custom_file_path: {custom_file_path}")
+                return df
+            except Exception as e:
+                logger.error(f"Failed to load custom CSV: {str(e)}")
+
+        # اولویت ۲: file_id مشخص — دریافت از MinIO/Local
+        if file_id:
+            try:
+                conn = get_db_connection()
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT filename FROM documents WHERE id = %s AND file_type = 'csv'",
+                        (file_id,)
+                    )
+                    row = cur.fetchone()
+                conn.close()
+                if row:
+                    filename = row[0]
+                    local_path = structured_processor.get_local_path_for_analysis(file_id, filename)
+                    df = pd.read_csv(local_path)
+                    logger.info(f"Analyst Agent loaded DataFrame for file_id={file_id}: {filename} ({len(df)} rows)")
+                    return df
+                else:
+                    logger.warning(f"No CSV document found with file_id={file_id} in documents table.")
+            except Exception as e:
+                logger.error(f"Failed to resolve file_id={file_id} to DataFrame: {str(e)}")
+
+        # اولویت ۳: آخرین فایل ساختاریافته آپلود شده در دیتابیس
         try:
-            if os.path.exists(DEFAULT_DEMO_DATA_PATH):
-                self.df = pd.read_csv(DEFAULT_DEMO_DATA_PATH)
-                logger.info(f"Analyst Agent loaded default demo accounting data with {len(self.df)} records.")
-            else:
-                # در صورت عدم وجود دیتای مالی دمو، یک DataFrame خالی ایجاد می‌کنیم
-                self.df = pd.DataFrame(columns=["تاریخ", "نوع سند", "شماره سند", "شرح", "حساب", "بدهکار", "بستانکار"])
-                logger.warning("Demo accounting data file was not found. Loaded empty DataFrame.")
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, filename FROM documents WHERE file_type = 'csv' ORDER BY created_at DESC LIMIT 1"
+                )
+                row = cur.fetchone()
+            conn.close()
+            if row:
+                latest_id, latest_filename = row
+                local_path = structured_processor.get_local_path_for_analysis(latest_id, latest_filename)
+                df = pd.read_csv(local_path)
+                logger.info(f"Analyst Agent loaded latest CSV: file_id={latest_id}, {latest_filename} ({len(df)} rows)")
+                return df
         except Exception as e:
-            logger.error(f"Failed to load accounting data: {str(e)}")
-            self.df = None
+            logger.warning(f"No CSV files found in database for analyst: {str(e)}")
+
+        # هیچ فایلی پیدا نشد
+        return None
 
     def get_column_names(self) -> list:
-        if self.df is not None:
-            return self.df.columns.tolist()
+        df = self._resolve_dataframe()
+        if df is not None:
+            return df.columns.tolist()
         return []
 
     def get_tools(self, df_instance: pd.DataFrame) -> list:
@@ -141,30 +176,26 @@ class AnalystAgent:
 
         return [analyze_df_tool, column_sum_tool, groupby_agg_tool, filter_rows_tool, python_tool]
 
-    def execute_analysis(self, query: str, custom_file_path: str = None) -> str:
+    def execute_analysis(self, query: str, file_id: int = None, custom_file_path: str = None) -> str:
         """
         /// <summary>
         /// اجرای گراف محاسباتی LangGraph روی دیتای تراکنش‌ها جهت پاسخ‌دهی به فرمول‌ها
         /// </summary>
         /// <param name="query">پرسش محاسباتی کاربر</param>
-        /// <param name="custom_file_path">مسیر فایل دلخواه در صورتی که کاربر سند خاصی انتخاب کند</param>
+        /// <param name="file_id">شناسه فایل CSV آپلود شده کاربر (اختیاری — اگر نباشد آخرین فایل استفاده می‌شود)</param>
+        /// <param name="custom_file_path">مسیر فایل مستقیم روی دیسک (اختیاری — اولویت بالاتر از file_id)</param>
         /// <returns>رشته متنی پاسخ نهایی</returns>
         """
         if not self.is_enabled:
             logger.info("Analyst Agent is disabled in config.yaml. Skipping data calculations.")
             return "DOUBTFUL ANSWER: Structured Data Analytics service is currently disabled."
-            
-        # ۱. لود فایل دلخواه در صورت ارسال مسیر جدید
-        df_to_use = self.df
-        if custom_file_path and os.path.exists(custom_file_path):
-            try:
-                df_to_use = pd.read_csv(custom_file_path)
-                logger.info(f"Loaded custom file for analysis: {custom_file_path}")
-            except Exception as e:
-                logger.error(f"Failed to load custom CSV for analysis: {str(e)}")
-                
-        if df_to_use is None:
-            return "DOUBTFUL ANSWER: No structural dataframe is loaded."
+
+        # ۱. بارگذاری DataFrame از فایل واقعی کاربر
+        df_to_use = self._resolve_dataframe(file_id=file_id, custom_file_path=custom_file_path)
+
+        if df_to_use is None or df_to_use.empty:
+            logger.warning("Analyst Agent: No structured data found. Cannot perform analysis.")
+            return "DOUBTFUL ANSWER: No structured dataframe is available. Please upload a CSV file first."
 
         # ۲. پیکربندی ابزارها و مدل LLM از طریق Factory
         tools_list = self.get_tools(df_to_use)

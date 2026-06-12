@@ -134,6 +134,9 @@ class QnaDocumentProcessor:
             return {
                 "status": "success",
                 "chunks_count": records_indexed,
+                "total_rows": len(df),
+                "question_column": question_col,
+                "answer_column": answer_col,
                 "storage_url": archive_url
             }
         except Exception as e:

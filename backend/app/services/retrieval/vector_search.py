@@ -44,11 +44,15 @@ class VectorSearchAgent:
             
         logger.info(f"Librarian Agent starting similarity search for query: '{query}'")
         
-        # ۱. استخراج بردار امبدینگ ۳۰۷۲ بعدی برای جستار جدید
-        embedding = get_embedding(query)
-        
-        # در صورت تست محلی و عدم وجود API واقعی OpenAI، بردار صفر بازمی‌گردد که جستجو نتیجه کاذب خواهد داد
-        # برای پیشگیری از کرش، کوئری را اجرا می‌کنیم
+        # ۱. استخراج بردار امبدینگ برای جستار — در صورت خطا، لیست خالی برمی‌گردد
+        try:
+            embedding = get_embedding(query)
+        except Exception as emb_err:
+            logger.error(
+                f"Librarian Agent failed to generate query embedding: {str(emb_err)}. "
+                "Aborting vector search to prevent zero-vector false matches."
+            )
+            return []
         
         # ۲. ساخت بند فیلتر بر اساس شناسه اسناد در صورت وجود
         filter_clause = ""
