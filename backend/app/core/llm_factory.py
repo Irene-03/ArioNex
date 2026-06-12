@@ -118,6 +118,7 @@ def _create_openrouter_llm(model: str, temperature: float):
             "HTTP-Referer": "https://arionex.ai",
             "X-Title": "ArioNex Enterprise AI",
         },
+        max_tokens=1024,
     )
 
 
@@ -136,6 +137,7 @@ def _create_openai_llm(model: str, temperature: float):
         model_name=model,
         temperature=temperature,
         openai_api_key=api_key,
+        max_tokens=1024,
     )
 
 
@@ -163,6 +165,7 @@ def _create_anthropic_llm(model: str, temperature: float):
         model_name=model,
         temperature=temperature,
         anthropic_api_key=api_key,
+        max_tokens=1024,
     )
 
 
@@ -190,6 +193,7 @@ def _create_google_llm(model: str, temperature: float):
         model=model,
         temperature=temperature,
         google_api_key=api_key,
+        max_output_tokens=1024,
     )
 
 
@@ -213,6 +217,7 @@ def _create_deepseek_llm(model: str, temperature: float):
         temperature=temperature,
         openai_api_key=api_key,
         openai_api_base="https://api.deepseek.com/v1",
+        max_tokens=1024,
     )
 
 
@@ -235,6 +240,7 @@ def _create_gapgpt_llm(model: str, temperature: float):
         temperature=temperature,
         openai_api_key=api_key,
         openai_api_base="https://api.gapgpt.app/v1",
+        max_tokens=1024,
     )
 
 
@@ -257,6 +263,7 @@ def _create_avalai_llm(model: str, temperature: float):
         temperature=temperature,
         openai_api_key=api_key,
         openai_api_base="https://api.avalai.ir/v1",
+        max_tokens=1024,
     )
 
 
@@ -283,6 +290,7 @@ def _create_hormouz_llm(model: str, temperature: float):
         openai_api_key=api_key,
         openai_api_base="https://api.hormouz.net/v1",
         streaming=True,
+        max_tokens=1024,
     )
 
 
@@ -310,6 +318,7 @@ def _create_ollama_llm(model: str, temperature: float):
             model=ollama_model,
             temperature=temperature,
             base_url=ollama_base,
+            num_predict=1024,
         )
     except ImportError:
         pass
@@ -321,6 +330,7 @@ def _create_ollama_llm(model: str, temperature: float):
             model=ollama_model,
             temperature=temperature,
             base_url=ollama_base,
+            num_predict=1024,
         )
     except ImportError:
         raise ImportError(

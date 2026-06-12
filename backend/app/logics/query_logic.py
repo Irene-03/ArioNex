@@ -23,8 +23,33 @@ from app.schemas.query_schemas import QueryRequest, QueryResponse
 from app.services.retrieval.query_router import synthesize_rag_response, synthesize_rag_response_stream
 from app.helpers.audit_logger import log_audit_event
 
+from collections import OrderedDict
+
+class LRUCache(OrderedDict):
+    """
+    /// <summary>
+    /// کش کمکی کمترین استفاده اخیر (Least Recently Used Cache) برای محدودسازی نشست‌های فعال در حافظه جهت جلوگیری از حمله DoS سرریز حافظه
+    /// </summary>
+    """
+    def __init__(self, maxsize=1000, *args, **kwargs):
+        self.maxsize = maxsize
+        super().__init__(*args, **kwargs)
+
+    def __getitem__(self, key):
+        value = super().__getitem__(key)
+        self.move_to_end(key)
+        return value
+
+    def __setitem__(self, key, value):
+        if key in self:
+            self.move_to_end(key)
+        super().__setitem__(key, value)
+        if len(self) > self.maxsize:
+            oldest = next(iter(self))
+            del self[oldest]
+
 logger = logging.getLogger("arionex.query_logic")
-_query_sessions = {}
+_query_sessions = LRUCache(maxsize=1000)
 
 
 async def execute_query_logic(request: QueryRequest, current_user: Optional[dict] = None) -> QueryResponse:

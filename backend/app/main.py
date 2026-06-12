@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.database import init_db
+from app.helpers.rate_limiter import RateLimitMiddleware
 from app.routes import query_router, upload_router, config_router, widget_router, integration_router, crawler_router, auth_router, knowledge_router
 from app.services.integrations.telegram_bot import start_telegram_bot_service, stop_telegram_bot_service
 
@@ -101,6 +102,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# اعمال محدودیت نرخ درخواست‌ها جهت جلوگیری از حملات DoS (محدودیت ۳۰ درخواست در دقیقه)
+app.add_middleware(RateLimitMiddleware, requests_limit=30, window_seconds=60)
 
 # ثبت روترهای مستقل بر اساس موضوع
 app.include_router(query_router)

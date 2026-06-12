@@ -83,14 +83,9 @@ def get_embedding(text: str) -> list[float]:
         else:
             # پیش‌فرض: OpenAI یا هر endpoint سازگار
             return _embed_with_openai(text)
-    except ValueError as ve:
-        raise ve
     except Exception as e:
-        logger.error(
-            f"Embedding generation failed (provider={provider}): {str(e)}. "
-            f"Falling back to zero-vector of dimension {dim}."
-        )
-        return [0.0] * dim
+        logger.error(f"Embedding generation failed (provider={provider}): {str(e)}")
+        raise e
 
 
 def _embed_with_openai(text: str) -> list[float]:

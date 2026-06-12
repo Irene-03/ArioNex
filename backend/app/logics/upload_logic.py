@@ -51,9 +51,21 @@ async def execute_upload_logic(file: UploadFile) -> dict:
     temp_path = os.path.join(temp_dir, filename)
 
     try:
-        # ۱. ذخیره فیزیکی فایل آپلود شده
+        # ۱. ذخیره فیزیکی فایل آپلود شده با اعمال محدودیت حجم فایل (حداکثر ۲۰ مگابایت)
+        MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+        total_size = 0
         with open(temp_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            while True:
+                chunk = await file.read(8192)
+                if not chunk:
+                    break
+                total_size += len(chunk)
+                if total_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="حجم فایل آپلود شده بیش از حد مجاز (۲۰ مگابایت) است."
+                    )
+                buffer.write(chunk)
 
         file_id = get_next_file_id()
 
