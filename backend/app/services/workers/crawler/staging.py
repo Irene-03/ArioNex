@@ -165,16 +165,39 @@ def _commit_staged_data(job_id: str, label: str) -> int:
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor() as cur:
-                logger.info(f"[CrawlerJob:{job_id}] Performing Blue-Green index switch for label '{label}'")
-                cur.execute("DELETE FROM pg_supervisor WHERE label = %s", (label,))
-                cur.execute("UPDATE pg_supervisor SET label = %s WHERE label = %s", (label, temp_label))
-                conn.commit()
+            conn.autocommit = False
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM pg_supervisor WHERE label = %s", (temp_label,))
+                    row = cur.fetchone()
+                    if isinstance(row, dict):
+                        temp_count = list(row.values())[0]
+                    elif isinstance(row, (tuple, list)):
+                        temp_count = row[0]
+                    else:
+                        temp_count = int(row) if row is not None else 0
+
+                    if temp_count == 0:
+                        logger.warning(
+                            f"[CrawlerJob:{job_id}] No temporary records found for label '{temp_label}'. "
+                            f"Aborting Blue-Green switch to prevent live index deletion."
+                        )
+                        raise ValueError(f"No temporary crawled data found for job {job_id}")
+
+                    logger.info(
+                        f"[CrawlerJob:{job_id}] Performing Blue-Green index switch for label '{label}'. "
+                        f"Replacing live index with {temp_count} new chunks."
+                    )
+                    cur.execute("DELETE FROM pg_supervisor WHERE label = %s", (label,))
+                    cur.execute("UPDATE pg_supervisor SET label = %s WHERE label = %s", (label, temp_label))
             logger.info(f"[CrawlerJob:{job_id}] Successfully performed Blue-Green switch. Committed {total_indexed} chunks.")
         except Exception as switch_err:
             logger.error(f"[CrawlerJob:{job_id}] Blue-Green switch transaction failed: {str(switch_err)}")
             if conn:
-                conn.rollback()
+                try:
+                    conn.rollback()
+                except Exception as rollback_err:
+                    logger.error(f"Rollback failed: {str(rollback_err)}")
             raise switch_err
         finally:
             if conn:
