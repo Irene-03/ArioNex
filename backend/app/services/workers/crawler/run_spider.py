@@ -87,6 +87,7 @@ class ArioNexSpider(scrapy.Spider):
         self.pages_crawled = 0
         self.chunks_total = 0
         self.pages_failed = 0
+        self.is_cancelled = False
         self.load_initial_stats()
 
     def load_initial_stats(self):
@@ -120,6 +121,7 @@ class ArioNexSpider(scrapy.Spider):
             await asyncio.sleep(2.0)
             if _is_job_cancelled(self.job_id):
                 self.logger.info("Cancellation detected in database poll. Initiating clean Scrapy shutdown...")
+                self.is_cancelled = True
                 self.crawler.engine.close_spider(self, reason="cancelled")
                 break
 
@@ -131,6 +133,15 @@ class ArioNexSpider(scrapy.Spider):
             yield scrapy.Request(url, callback=self.parse)
 
     def parse(self, response):
+        if self.is_cancelled:
+            return
+
+        if _is_job_cancelled(self.job_id):
+            self.is_cancelled = True
+            self.logger.info("Cancellation detected during page parse. Closing spider...")
+            self.crawler.engine.close_spider(self, reason="cancelled")
+            return
+
         if self.pages_crawled >= self.max_pages:
             self.logger.info("Reached max pages limit. Closing spider...")
             self.crawler.engine.close_spider(self, reason="max_pages")

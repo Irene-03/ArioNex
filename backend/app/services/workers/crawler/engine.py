@@ -94,6 +94,40 @@ class CrawlerService:
             "run_spider.py"
         )
 
+        # Pre-execution validation for JS render dependencies (Playwright & Chromium)
+        if js_render:
+            try:
+                import playwright
+            except ImportError:
+                logger.error(f"[CrawlerJob:{job_id}] Playwright is not installed in the python environment.")
+                _update_job_in_db(
+                    job_id,
+                    status="failed",
+                    error_message="Playwright is not installed in the python environment. Run 'pip install playwright'."
+                )
+                return
+
+            try:
+                from playwright.async_api import async_playwright
+                async with async_playwright() as p:
+                    executable = p.chromium.executable_path
+                    if not os.path.exists(executable):
+                        logger.warning(f"[CrawlerJob:{job_id}] Playwright Chromium executable not found at {executable}. Attempting auto-installation...")
+                        install_proc = await asyncio.create_subprocess_exec(
+                            sys.executable, "-m", "playwright", "install", "chromium"
+                        )
+                        await install_proc.wait()
+                        if install_proc.returncode != 0:
+                            raise RuntimeError(f"Playwright installation exited with non-zero code {install_proc.returncode}")
+            except Exception as e:
+                logger.error(f"[CrawlerJob:{job_id}] Playwright Chromium check/installation failed: {str(e)}")
+                _update_job_in_db(
+                    job_id,
+                    status="failed",
+                    error_message=f"Playwright Chromium browser is not installed and auto-installation failed: {str(e)}. Run 'playwright install chromium' on the server."
+                )
+                return
+
         # Launch the Scrapy crawler in a separate Python process
         try:
             process = await asyncio.create_subprocess_exec(
@@ -110,8 +144,41 @@ class CrawlerService:
                 "--label", label or "",
                 "--widget-id", str(widget_id or 0),
             )
-            # Wait for Scrapy process to complete
-            await process.wait()
+            
+            # Wait for Scrapy process to complete with timeout
+            timeout_seconds = getattr(settings.crawler, "job_timeout_seconds", 3600)
+            try:
+                await asyncio.wait_for(process.wait(), timeout=float(timeout_seconds))
+            except asyncio.TimeoutError:
+                logger.warning(f"[CrawlerJob:{job_id}] Job exceeded timeout of {timeout_seconds} seconds. Terminating subprocess...")
+                try:
+                    process.terminate()
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[CrawlerJob:{job_id}] Subprocess did not terminate. Killing...")
+                        process.kill()
+                        await process.wait()
+                except Exception as kill_err:
+                    logger.error(f"[CrawlerJob:{job_id}] Error while terminating/killing subprocess: {str(kill_err)}")
+                
+                _update_job_in_db(
+                    job_id,
+                    status="failed",
+                    error_message=f"Crawl job timed out after {timeout_seconds} seconds."
+                )
+                return
+
+            # Check return code
+            if process.returncode != 0:
+                if not _is_job_cancelled(job_id):
+                    logger.error(f"[CrawlerJob:{job_id}] Subprocess exited with non-zero code {process.returncode}")
+                    _update_job_in_db(
+                        job_id,
+                        status="failed",
+                        error_message=f"Scrapy subprocess exited with error code {process.returncode}. Please check server/worker logs."
+                    )
+                    return
         except Exception as proc_err:
             logger.error(f"[CrawlerJob:{job_id}] Subprocess execution failed: {str(proc_err)}")
             _update_job_in_db(job_id, status="failed", error_message=f"Subprocess start failure: {str(proc_err)}")

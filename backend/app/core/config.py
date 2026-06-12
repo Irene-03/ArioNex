@@ -84,6 +84,7 @@ class CrawlerSettings(BaseSettings):
     default_concurrency: int = 5
     request_delay_ms: int = 300
     proxy_pool: list[str] = []
+    job_timeout_seconds: int = 3600
 
 class SecuritySettings(BaseSettings):
     """
