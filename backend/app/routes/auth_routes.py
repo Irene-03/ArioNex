@@ -24,7 +24,26 @@ from app.core.database import get_db_connection
 logger = logging.getLogger("arionex.auth_routes")
 router = APIRouter(prefix="/v1/auth", tags=["Auth — User Authentication"])
 
-SECRET_KEY = "arionex_secure_jwt_alternative_secret_key_2026"
+import secrets
+from app.core.config import settings
+
+# Load keys from configuration or generate them in development environment
+SECRET_KEY = settings.jwt_secret_key
+if not SECRET_KEY:
+    if settings.env == "development":
+        SECRET_KEY = secrets.token_urlsafe(32)
+        logger.warning(f"Using auto-generated development JWT_SECRET_KEY: {SECRET_KEY}")
+    else:
+        raise ValueError("JWT_SECRET_KEY must be set in production environment")
+
+PASSWORD_SALT = settings.password_salt
+if not PASSWORD_SALT:
+    if settings.env == "development":
+        PASSWORD_SALT = secrets.token_urlsafe(16)
+        logger.warning("Using auto-generated development PASSWORD_SALT")
+    else:
+        raise ValueError("PASSWORD_SALT must be set in production environment")
+
 TOKEN_EXPIRY_SECONDS = 86400  # 24 Hours
 
 # -------------------------------------------------------------------
@@ -33,9 +52,13 @@ TOKEN_EXPIRY_SECONDS = 86400  # 24 Hours
 security_bearer = HTTPBearer(auto_error=False)
 
 def hash_password(password: str) -> str:
-    """هش کردن رمز عبور با الگوریتم SHA-256 و نمک ثابت"""
-    salt = "arionex_secure_salt_2026"
-    return hashlib.sha256((password + salt).encode('utf-8')).hexdigest()
+    """هش کردن رمز عبور با الگوریتم امن PBKDF2"""
+    return hashlib.pbkdf2_hmac(
+        'sha256',
+        password.encode('utf-8'),
+        PASSWORD_SALT.encode('utf-8'),
+        100000
+    ).hex()
 
 def create_session_token(payload: dict, expires_in: int = 86400, token_type: str = "access") -> str:
     """تولید توکن نشست ایمن با الگوریتم HMAC-SHA256"""
@@ -220,7 +243,17 @@ async def login_user(payload: UserLogin):
             
             pwd_hash, role = row
             if hash_password(payload.password) != pwd_hash:
-                raise HTTPException(status_code=401, detail="نام کاربری یا رمز عبور اشتباه است.")
+                # Fallback check for legacy SHA-256 hash using legacy salt
+                legacy_salt = "arionex_secure_salt_2026"
+                legacy_hash = hashlib.sha256((payload.password + legacy_salt).encode('utf-8')).hexdigest()
+                if legacy_hash == pwd_hash:
+                    # Upgrade legacy user to PBKDF2
+                    logger.info(f"Auto-migrating legacy password hash for user '{payload.username}' to PBKDF2.")
+                    new_hash = hash_password(payload.password)
+                    cur.execute("UPDATE users SET password_hash = %s WHERE username = %s", (new_hash, payload.username))
+                    conn.commit()
+                else:
+                    raise HTTPException(status_code=401, detail="نام کاربری یا رمز عبور اشتباه است.")
             
             # تولید توکن‌های نشست (۲ ساعت برای دسترسی، ۷ روز برای رفرش)
             access_token = create_session_token({"username": payload.username, "role": role}, expires_in=7200, token_type="access")

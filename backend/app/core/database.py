@@ -231,9 +231,9 @@ def init_db() -> None:
                 cur.execute(query)
             
             # ثبت کاربر ادمین پیش‌فرض در صورت عدم وجود (پسورد: admin123)
-            import hashlib
+            from app.routes.auth_routes import hash_password
             admin_username = "admin"
-            admin_pwd_hash = hashlib.sha256(("admin123" + "arionex_secure_salt_2026").encode('utf-8')).hexdigest()
+            admin_pwd_hash = hash_password("admin123")
             cur.execute(
                 """
                 INSERT INTO users (username, password_hash, role)

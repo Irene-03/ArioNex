@@ -146,7 +146,11 @@ class Settings(BaseSettings):
     telegram_bot_token: str = Field(default="", validation_alias="TELEGRAM_BOT_TOKEN")
     redis_url: str = Field(default="redis://localhost:6379/0", validation_alias="REDIS_URL")
     
-    redis_url: str = Field(default="redis://localhost:6379/0", validation_alias="REDIS_URL")
+    # Security, Environment, and CORS Settings
+    jwt_secret_key: str = Field(default="", validation_alias="JWT_SECRET_KEY")
+    password_salt: str = Field(default="", validation_alias="PASSWORD_SALT")
+    env: str = Field(default="development", validation_alias="ENV")
+    cors_allowed_origins: str = Field(default="", validation_alias="CORS_ALLOWED_ORIGINS")
     
     # تنظیمات داینامیک لود شده از config.yaml
     services: ServiceToggles = ServiceToggles()

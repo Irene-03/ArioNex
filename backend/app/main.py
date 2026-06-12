@@ -94,13 +94,23 @@ async def value_error_exception_handler(request: Request, exc: ValueError):
         content={"detail": str(exc)},
     )
 
+# دریافت لیست دامنه‌های مجاز از تنظیمات سیستم
+ALLOWED_ORIGINS = [origin.strip() for origin in settings.cors_allowed_origins.split(",") if origin.strip()]
+if not ALLOWED_ORIGINS:
+    if settings.env == "development":
+        ALLOWED_ORIGINS = ["http://localhost:5173", "http://localhost:3000"]
+    else:
+        raise ValueError("CORS_ALLOWED_ORIGINS must be set in production")
+
 # پیکربندی CORS برای اتصال به فرانت‌اند ری‌اکت و ابزارک‌های پاپ‌آپ وب‌سایت‌ها
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # در محیط واقعی با دامنه‌های مشخص محدود می‌شود
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "x-api-key"],
+    expose_headers=["X-Total-Count"],
+    max_age=3600,
 )
 
 # اعمال محدودیت نرخ درخواست‌ها جهت جلوگیری از حملات DoS (محدودیت ۳۰ درخواست در دقیقه)
@@ -117,18 +127,88 @@ app.include_router(auth_router)
 app.include_router(knowledge_router)
 
 
+async def check_postgres() -> bool:
+    try:
+        from app.core.database import get_db_connection
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"PostgreSQL health check failed: {str(e)}")
+        return False
+
+async def check_redis() -> bool:
+    try:
+        import redis
+        r = redis.Redis.from_url(settings.redis_url, socket_connect_timeout=2)
+        return bool(r.ping())
+    except Exception as e:
+        logger.error(f"Redis health check failed: {str(e)}")
+        return False
+
+async def check_minio() -> dict:
+    try:
+        from app.core.minio_client import storage_manager
+        if getattr(storage_manager, "is_fallback", False):
+            return {"status": "degraded", "message": "Using local fallback storage"}
+        storage_manager.client.list_buckets()
+        return {"status": "healthy"}
+    except Exception as e:
+        logger.error(f"MinIO health check failed: {str(e)}")
+        return {"status": "unhealthy", "error": str(e)}
+
+@app.get("/health/liveness", tags=["System Status"])
+async def liveness_check():
+    """
+    /// <summary>
+    /// اندپوینت بررسی زنده بودن سیستم (Liveness Probe)
+    /// </summary>
+    """
+    return {"status": "alive"}
+
+@app.get("/health/readiness", tags=["System Status"])
+async def readiness_check():
+    """
+    /// <summary>
+    /// اندپوینت بررسی آماده‌باش بودن سیستم (Readiness Probe)
+    /// </summary>
+    """
+    from fastapi import HTTPException
+    postgres_ok = await check_postgres()
+    if not postgres_ok:
+        raise HTTPException(status_code=503, detail="PostgreSQL is not available")
+    return {"status": "ready", "checks": {"postgres": "healthy"}}
+
 @app.get("/health", tags=["System Status"])
 async def health_check():
     """
     /// <summary>
-    /// اندپوینت بررسی سلامت و وضعیت زنده بودن بک‌اند سیستم
+    /// اندپوینت تفصیلی بررسی سلامت سیستم و وابستگی‌ها (Detailed Health Check)
     /// </summary>
-    /// <returns>یک دیکشنری شامل وضعیت سیستم، provider فعال و ماژول‌های فعال</returns>
     """
+    from datetime import datetime
+    postgres_ok = await check_postgres()
+    redis_ok = await check_redis() if settings.redis_url else None
+    minio_status = await check_minio()
+    
+    overall_status = "healthy"
+    if not postgres_ok:
+        overall_status = "unhealthy"
+    elif minio_status["status"] == "degraded" or minio_status["status"] == "unhealthy":
+        overall_status = "degraded"
+
     return {
-        "status": "online",
+        "status": overall_status,
         "service": "ArioNex AI Assistant API",
         "version": "1.1.0",
+        "timestamp": datetime.utcnow().isoformat(),
+        "checks": {
+            "postgres": "healthy" if postgres_ok else "unhealthy",
+            "redis": "healthy" if redis_ok else ("not_configured" if redis_ok is None else "unhealthy"),
+            "minio": minio_status,
+        },
         "llm": {
             "provider": settings.llm_provider,
             "model": settings.model_name,
