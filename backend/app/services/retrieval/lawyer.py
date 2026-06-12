@@ -139,6 +139,8 @@ PROPOSED RESPONSE:
             llm_response = llm.invoke(audit_prompt)
             raw_text = llm_response.content.strip()
             audit_result = _clean_and_parse_json(raw_text)
+        except ValueError as ve:
+            raise ve
         except Exception as e:
             logger.error(f"[The Lawyer] LLM auditing failed: {str(e)}. Defaulting to compliant for safety.")
 

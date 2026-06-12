@@ -17,8 +17,9 @@
 
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.logging import setup_logging
@@ -83,6 +84,14 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+@app.exception_handler(ValueError)
+async def value_error_exception_handler(request: Request, exc: ValueError):
+    logger.warning(f"ValueError caught globally: {str(exc)}")
+    return JSONResponse(
+        status_code=400,
+        content={"detail": str(exc)},
+    )
 
 # پیکربندی CORS برای اتصال به فرانت‌اند ری‌اکت و ابزارک‌های پاپ‌آپ وب‌سایت‌ها
 app.add_middleware(

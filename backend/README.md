@@ -49,7 +49,7 @@ TAVILY_API_KEY=                     # اختیاری — برای جستجوی �
 TELEGRAM_BOT_TOKEN=                 # اختیاری
 ```
 
-> 📌 **Mock Mode**: اگر `OPENROUTER_API_KEY` یا `OPENAI_API_KEY` را تنظیم نکنید، سیستم به‌صورت خودکار وارد حالت **Mock** می‌شود — پاسخ‌ها شبیه‌سازی‌شده‌اند ولی همه endpoint‌ها کار می‌کنند.
+> ⚠️ **عدم وجود کلید API**: اگر `OPENROUTER_API_KEY` یا `OPENAI_API_KEY` را تنظیم نکنید، سیستم در اجرای مدل‌های زبانی با خطای `HTTP 400` روبرو شده و پیام عدم پیکربندی کلید را نمایش می‌دهد.
 
 ---
 
@@ -135,7 +135,7 @@ curl -X POST http://localhost:8000/v1/query \
   }'
 ```
 
-**پاسخ نمونه (Mock Mode):**
+**پاسخ نمونه:**
 ```json
 {
   "answer": "بر اساس گزارش موجود در sample.pdf: ...",
@@ -307,7 +307,7 @@ backend/app/
 | مشکل | راه‌حل |
 |------|--------|
 | `Connection refused` روی پورت 5432 | PostgreSQL را راه‌اندازی کنید |
-| پاسخ mock — بدون RAG واقعی | `OPENROUTER_API_KEY` یا `OPENAI_API_KEY` را تنظیم کنید |
+| عدم دریافت پاسخ RAG و دریافت خطای 400 | کلیدهای API مربوطه را در فایل `.env` یا از پنل مدیریت ست کنید. |
 | خطای `pgvector` هنگام startup | افزونه pgvector را نصب کنید: `CREATE EXTENSION vector;` |
 | MinIO error در لاگ | طبیعی است — سیستم به fallback محلی می‌رود |
 | `Module not found: langchain_anthropic` | `pip install langchain-anthropic` را اجرا کنید |

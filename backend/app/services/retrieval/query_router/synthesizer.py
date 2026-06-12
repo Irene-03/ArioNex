@@ -189,6 +189,8 @@ def synthesize_rag_response(user_input: str, chat_history: list, threshold: floa
             "is_safe": True
         }
         
+    except ValueError as ve:
+        raise ve
     except Exception as e:
         logger.error(f"Final LLM responder synthesis failed: {str(e)}. Emitting refusal.")
         return {
@@ -349,6 +351,8 @@ async def synthesize_rag_response_stream(
         logger.info("Successfully streamed RAG response.")
         yield {"event": "done", "data": {"is_safe": True}}
 
+    except ValueError as ve:
+        raise ve
     except Exception as e:
         logger.error(f"Stream LLM responder failed: {str(e)}. Emitting refusal.")
         yield {"event": "error", "data": str(e)}

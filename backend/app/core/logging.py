@@ -20,6 +20,18 @@ def setup_logging() -> None:
     /// فرمت خروجی لاگ‌ها شامل زمان، نام فایل، سطح لاگ و پیام لاگ به زبان انگلیسی است.
     /// </remarks>
     """
+    # Reconfigure stdout and stderr to handle UTF-8 Persian/Arabic text correctly on Windows/etc.
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+    if hasattr(sys.stderr, "reconfigure"):
+        try:
+            sys.stderr.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
     logging.basicConfig(
         level=logging.INFO,
         format="[%(asctime)s] [%(levelname)s] [%(name)s:%(lineno)d] - %(message)s",

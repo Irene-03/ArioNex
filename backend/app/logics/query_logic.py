@@ -110,6 +110,9 @@ async def execute_query_logic(request: QueryRequest, current_user: Optional[dict
 
     except HTTPException:
         raise
+    except ValueError as ve:
+        logger.warning(f"Configuration/Validation error during query processing: {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         logger.error(f"Error processing API query: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal RAG engine failure: {str(e)}")
