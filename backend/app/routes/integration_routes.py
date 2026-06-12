@@ -213,8 +213,9 @@ async def list_apikeys():
                 APIKeyResponse(
                     id=row[0],
                     name=row[1],
-                    # ماسک کردن کلید به صورت anx_live_...xxxx برای امنیت در لیست
-                    api_key=row[2][:12] + "..." + row[2][-4:],
+                    # Since keys are stored hashed in DB, we return a masked token placeholder
+                    # We can use the last 4 characters of the SHA-256 hash to help identify it safely
+                    api_key="anx_live_****************" + row[2][-4:],
                     is_active=row[3],
                     created_at=str(row[4]),
                     last_used_at=str(row[5]) if row[5] else None
@@ -235,6 +236,10 @@ async def create_apikey(payload: APIKeyCreate):
         # تولید یک توکن رندوم امن با پیشوند آریونکس
         token = "anx_live_" + secrets.token_hex(24)
         
+        # Hash the token using SHA-256 for secure database storage
+        import hashlib
+        hashed_token = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        
         conn = get_db_connection()
         with conn.cursor() as cur:
             cur.execute(
@@ -243,14 +248,14 @@ async def create_apikey(payload: APIKeyCreate):
                 VALUES (%s, %s, TRUE)
                 RETURNING id, name, api_key, is_active, created_at
                 """,
-                (payload.name, token)
+                (payload.name, hashed_token)
             )
             row = cur.fetchone()
             conn.commit()
             return APIKeyResponse(
                 id=row[0],
                 name=row[1],
-                api_key=row[2],  # اینجا کلید کامل را فقط یکبار برمی‌گردانیم تا کپی شود
+                api_key=token,  # Return raw token to the user exactly once
                 is_active=row[3],
                 created_at=str(row[4])
             )

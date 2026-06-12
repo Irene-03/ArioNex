@@ -57,12 +57,31 @@ async def verify_api_key(
                     detail="برای استفاده از این بخش نیاز به ارسال کلید دسترسی در هدر x-api-key یا Authorization دارید."
                 )
 
-            # بررسی وجود و فعال بودن کلید
+            # 1. Look up using hashed token
+            import hashlib
+            hashed_token = hashlib.sha256(token.encode("utf-8")).hexdigest()
             cur.execute(
                 "SELECT id, name, is_active FROM api_keys WHERE api_key = %s",
-                (token,)
+                (hashed_token,)
             )
             row = cur.fetchone()
+            
+            # 2. Backward compatibility fallback for legacy plaintext keys
+            if not row:
+                cur.execute(
+                    "SELECT id, name, is_active FROM api_keys WHERE api_key = %s",
+                    (token,)
+                )
+                row = cur.fetchone()
+                if row:
+                    # Auto-migrate legacy key to SHA-256 hash
+                    legacy_id = row[0]
+                    logger.info(f"Auto-migrating legacy API key ID {legacy_id} to SHA-256 hash.")
+                    cur.execute(
+                        "UPDATE api_keys SET api_key = %s WHERE id = %s",
+                        (hashed_token, legacy_id)
+                    )
+                    conn.commit()
             
             if not row:
                 raise HTTPException(
@@ -144,11 +163,30 @@ async def get_current_user_or_api_key(
                 }
                 
             # اگر توکن نشست نبود، بررسی می‌کنیم کلید API معتبر است یا خیر
+            import hashlib
+            hashed_token = hashlib.sha256(token.encode("utf-8")).hexdigest()
             cur.execute(
                 "SELECT id, name, is_active FROM api_keys WHERE api_key = %s",
-                (token,)
+                (hashed_token,)
             )
             row = cur.fetchone()
+            
+            # Backward compatibility fallback for legacy plaintext keys
+            if not row:
+                cur.execute(
+                    "SELECT id, name, is_active FROM api_keys WHERE api_key = %s",
+                    (token,)
+                )
+                row = cur.fetchone()
+                if row:
+                    # Auto-migrate legacy key to SHA-256 hash
+                    legacy_id = row[0]
+                    logger.info(f"Auto-migrating legacy API key ID {legacy_id} to SHA-256 hash.")
+                    cur.execute(
+                        "UPDATE api_keys SET api_key = %s WHERE id = %s",
+                        (hashed_token, legacy_id)
+                    )
+                    conn.commit()
             if row:
                 key_id, name, is_active = row
                 if not is_active:

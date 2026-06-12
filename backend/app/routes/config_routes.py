@@ -13,6 +13,7 @@
 """
 
 import logging
+import os
 from fastapi import APIRouter, HTTPException
 from app.core.config import settings
 from app.schemas.config_schemas import ConfigUpdateRequest
@@ -30,7 +31,6 @@ def _mask_api_key(key: str) -> str:
 
 
 def _update_env_file(key: str, value: str):
-    import os
     env_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
         ".env"
@@ -40,6 +40,7 @@ def _update_env_file(key: str, value: str):
         if not os.path.exists(env_path):
             env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
 
+    tmp_path = env_path + ".tmp"
     try:
         lines = []
         key_found = False
@@ -59,11 +60,20 @@ def _update_env_file(key: str, value: str):
         if not key_found:
             new_lines.append(f"\n{key}={value}\n")
 
-        with open(env_path, "w", encoding="utf-8") as f:
+        # Atomic write using a temp file and flushing it to disk
+        with open(tmp_path, "w", encoding="utf-8") as f:
             f.writelines(new_lines)
-            
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.replace(tmp_path, env_path)
         logger.info(f"Successfully updated environment variable {key} in {env_path}")
     except Exception as e:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
         logger.error(f"Failed to update .env file for {key}: {str(e)}")
 
 
@@ -196,6 +206,9 @@ async def update_active_configuration(update: ConfigUpdateRequest):
 
         for key_name, key_val in api_keys_to_update.items():
             if key_val is not None:
+                # Do not overwrite actual key if incoming value is masked or empty
+                if "..." in key_val or "***" in key_val or "********" in key_val or key_val.strip() == "":
+                    continue
                 setattr(settings, key_name, key_val)
                 _update_env_file(key_name.upper(), key_val)
 
