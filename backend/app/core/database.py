@@ -220,6 +220,23 @@ def init_db() -> None:
             violations TEXT,
             audit_report TEXT
         );
+        """,
+        # ۱۵. جدول دسته‌بندی‌ها (Categories Table)
+        """
+        CREATE TABLE IF NOT EXISTS categories (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            is_active BOOLEAN DEFAULT TRUE
+        );
+        """,
+        # ۱۶. جدول فیلدهای سفارشی‌سازی (Customization Fields Table)
+        """
+        CREATE TABLE IF NOT EXISTS customization_fields (
+            id SERIAL PRIMARY KEY,
+            field_name VARCHAR(255) NOT NULL,
+            is_active BOOLEAN DEFAULT TRUE
+        );
         """
     ]
     
@@ -257,6 +274,44 @@ def init_db() -> None:
                 (default_prompt,)
             )
 
+            # بررسی و سید دسته‌بندی‌ها در صورت خالی بودن جدول
+            cur.execute("SELECT COUNT(*) FROM categories;")
+            if cur.fetchone()[0] == 0:
+                default_cats = [
+                    (1, "کارگزاری ایساتیس پویا، ثبت نام غیرحضوری، اعتبار معاملاتی، معاملات اختیارمعامله، لینک سامانه‌ کارگزاری"),
+                    (2, "کد مشتقه کالایی"),
+                    (3, "کد بورس کالا اشخاص حقیقی"),
+                    (4, "سامانه آنلاین پلاس، پیش سفارش عرضه اولیه"),
+                    (5, "کارگزار ناظر، تغییر کارگزار ناظر"),
+                    (6, "سهام عدالت، انتقال سهام متوفیان، انحصار وراثت"),
+                    (7, "خطای مانده حساب، تسویه T+1 و T+2، خطای پنل آنلاین"),
+                    (8, "افزایش سرمایه، تجدید ارزیابی دارایی‌، آورده نقدی و حق تقدم، تبدیل حق تقدم به سهم"),
+                    (9, "گواهی سپرده کالایی، بورس کالا، مزایای گواهی سپرده"),
+                    (10, "قرارداد اختیار معامله، ابزارهای مشتقه، تأثیر اقدامات شرکتی بر اختیار معامله"),
+                    (11, "تغییر شماره حساب"),
+                    (12, "بازار جبرانی، تمدید زمان معاملات، دامنه نوسان بازار"),
+                    (13, "تسویه نقدی، تسویه فیزیکی")
+                ]
+                cur.executemany(
+                    "INSERT INTO categories (id, name) VALUES (%s, %s);",
+                    default_cats
+                )
+                logger.info("Seeded 13 default categories into database.")
+
+            # بررسی و سید فیلدهای سفارشی‌سازی در صورت خالی بودن جدول
+            cur.execute("SELECT COUNT(*) FROM customization_fields;")
+            if cur.fetchone()[0] == 0:
+                default_fields = [
+                    ("cloud saves",),
+                    ("Workshop",),
+                    ("Steam",)
+                ]
+                cur.executemany(
+                    "INSERT INTO customization_fields (field_name) VALUES (%s);",
+                    default_fields
+                )
+                logger.info("Seeded default customization fields into database.")
+
             conn.commit()
         logger.info("Database and Extensions Initialized Successfully.")
     except Exception as e:
@@ -266,3 +321,4 @@ def init_db() -> None:
     finally:
         if conn:
             conn.close()
+

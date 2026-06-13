@@ -27,34 +27,24 @@ class VectorSearchAgent:
         # بررسی روشن بودن کارگر اسناد در تنظیمات ویژگی‌ها
         self.is_enabled = settings.services.unstructured_document_processor
 
-    def retrieve_context(self, query: str, threshold: float = 0.5, k: int = 4, file_ids: list[int] = None) -> list[dict]:
+    def retrieve_categorical(self, query: str, threshold: float = 0.3, k: int = 5, file_ids: list[int] = None) -> list[dict]:
         """
         /// <summary>
-        /// بازیابی معنایی قطعات متنی مرتبط با جستار کاربر از جداول pg_supervisor و pg_dummy
+        /// بازیابی معنایی قطعات از جدول pg_supervisor با فیلتر دسته‌بندی / شناسه فایل
         /// </summary>
-        /// <param name="query">جستار بازنویسی شده مستقل کاربر</param>
-        /// <param name="threshold">حد آستانه شباهت کسینوسی کسینوسی (پیش‌فرض: ۰.۵)</param>
-        /// <param name="k">حداکثر تعداد چانک‌های بازیابی شده (پیش‌فرض: ۴)</param>
-        /// <param name="file_ids">لیست شناسه‌های فایل محدودکننده برای سرور RAG فیلتر شده</param>
-        /// <returns>لیستی از دیکشنری‌های چانک‌های بازیابی شده به همراه متادیتا</returns>
         """
         if not self.is_enabled:
-            logger.info("Librarian Agent is disabled in config.yaml. Skipping document vector retrieval.")
+            logger.info("Librarian Agent is disabled. Skipping document vector retrieval.")
             return []
             
-        logger.info(f"Librarian Agent starting similarity search for query: '{query}'")
+        logger.info(f"Librarian Agent starting categorical search for query: '{query}'")
         
-        # ۱. استخراج بردار امبدینگ برای جستار — در صورت خطا، لیست خالی برمی‌گردد
         try:
             embedding = get_embedding(query)
         except Exception as emb_err:
-            logger.error(
-                f"Librarian Agent failed to generate query embedding: {str(emb_err)}. "
-                "Aborting vector search to prevent zero-vector false matches."
-            )
+            logger.error(f"Librarian Agent failed to generate query embedding: {str(emb_err)}")
             return []
-        
-        # ۲. ساخت بند فیلتر بر اساس شناسه اسناد در صورت وجود
+            
         filter_clause = ""
         params = [embedding]
         
@@ -65,7 +55,6 @@ class VectorSearchAgent:
             
         params.append(k)
         
-        # ۳. اجرای پرس‌وجو روی جدول pg_supervisor با محاسبه فاصله کسینوسی (<=>)
         sql = f"""
         SELECT content, label, file_id, sequence_id,
                1 - (embedding <=> %s::vector) AS similarity
@@ -78,7 +67,6 @@ class VectorSearchAgent:
         
         results = []
         conn = None
-        
         try:
             conn = get_db_connection()
             with conn.cursor() as cur:
@@ -87,8 +75,6 @@ class VectorSearchAgent:
                 
             for row in rows:
                 content, label, file_id, seq_id, similarity = row
-                
-                # اعمال حد آستانه شباهت جهت جلوگیری از ورود اطلاعات نامربوط
                 if similarity >= threshold:
                     results.append({
                         "content": content,
@@ -98,43 +84,82 @@ class VectorSearchAgent:
                         "similarity": similarity,
                         "source_type": "document"
                     })
-                    
-            logger.info(f"Librarian Agent retrieved {len(results)} chunks from pg_supervisor above threshold {threshold}.")
-            
-            # ۴. در صورت نیاز به نتایج بیشتر و خالی بودن نتایج، جدول pg_dummy را نیز بررسی می‌کنیم
-            if len(results) < k:
-                remaining_k = k - len(results)
-                dummy_sql = """
-                SELECT content, 
-                       1 - (embedding <=> %s::vector) AS similarity
-                FROM pg_dummy
-                ORDER BY similarity DESC
-                LIMIT %s
-                """
-                with conn.cursor() as cur:
-                    cur.execute(dummy_sql, [embedding, remaining_k])
-                    dummy_rows = cur.fetchall()
-                    
-                for d_row in dummy_rows:
-                    content, similarity = d_row
-                    if similarity >= threshold:
-                        results.append({
-                            "content": content,
-                            "label": "dummy_general",
-                            "file_id": 0,
-                            "sequence_id": 0,
-                            "similarity": similarity,
-                            "source_type": "general"
-                        })
-                        
+            logger.info(f"Librarian Agent categorical search retrieved {len(results)} chunks above threshold {threshold}.")
         except Exception as e:
-            logger.error(f"Librarian Agent database operation failed: {str(e)}")
-            # اجازه می‌دهیم سیستم بدون کرش آرایه خالی برگرداند
+            logger.error(f"Librarian Agent categorical search database operation failed: {str(e)}")
         finally:
             if conn:
                 conn.close()
                 
         return results
 
+    def retrieve_general(self, query: str, threshold: float = 0.3, k: int = 5) -> list[dict]:
+        """
+        /// <summary>
+        /// بازیابی معنایی قطعات عمومی از جدول pg_dummy
+        /// </summary>
+        """
+        if not self.is_enabled:
+            return []
+            
+        logger.info(f"Librarian Agent starting general search for query: '{query}'")
+        
+        try:
+            embedding = get_embedding(query)
+        except Exception as emb_err:
+            logger.error(f"Librarian Agent failed to generate query embedding: {str(emb_err)}")
+            return []
+            
+        sql = """
+        SELECT content, 
+               1 - (embedding <=> %s::vector) AS similarity
+        FROM pg_dummy
+        ORDER BY similarity DESC
+        LIMIT %s
+        """
+        
+        results = []
+        conn = None
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute(sql, [embedding, k])
+                rows = cur.fetchall()
+                
+            for row in rows:
+                content, similarity = row
+                if similarity >= threshold:
+                    results.append({
+                        "content": content,
+                        "label": "dummy_general",
+                        "file_id": 0,
+                        "sequence_id": 0,
+                        "similarity": similarity,
+                        "source_type": "general"
+                    })
+            logger.info(f"Librarian Agent general search retrieved {len(results)} chunks above threshold {threshold}.")
+        except Exception as e:
+            logger.error(f"Librarian Agent general search database operation failed: {str(e)}")
+        finally:
+            if conn:
+                conn.close()
+                
+        return results
+
+    def retrieve_context(self, query: str, threshold: float = 0.5, k: int = 4, file_ids: list[int] = None) -> list[dict]:
+        """
+        /// <summary>
+        /// بازیابی ترکیبی (سازگاری عقب‌رو)
+        /// </summary>
+        """
+        categorical = self.retrieve_categorical(query, threshold=threshold, k=k, file_ids=file_ids)
+        if len(categorical) >= k:
+            return categorical[:k]
+            
+        remaining = k - len(categorical)
+        general = self.retrieve_general(query, threshold=threshold, k=remaining)
+        return categorical + general
+
 # نمونه سراسری عامل جستجوی برداری اسناد
 vector_search_agent = VectorSearchAgent()
+

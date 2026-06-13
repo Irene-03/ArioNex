@@ -25,7 +25,7 @@ class QnAAgent:
         # بررسی روشن بودن ماژول در تنظیمات ویژگی‌ها
         self.is_enabled = settings.services.qna_processor
 
-    def retrieve_context(self, query: str, threshold: float = 0.5, k: int = 4, file_ids: list[int] = None) -> list[dict]:
+    def retrieve_context(self, query: str, threshold: float = 0.5, k: int = 4, file_ids: list[int] = None, filters: dict = None) -> list[dict]:
         """
         /// <summary>
         /// بازیابی معنایی و تطبیق مستقیم الگوهای Q&A از جدول qna_query
@@ -34,6 +34,7 @@ class QnAAgent:
         /// <param name="threshold">حد آستانه شباهت کسینوسی (پیش‌فرض: ۰.۵)</param>
         /// <param name="k">تعداد رکوردهای بازگشتی (پیش‌فرض: ۴)</param>
         /// <param name="file_ids">شناسه‌های فایل محدودکننده RAG</param>
+        /// <param name="filters">فیلترهای سفارشی‌سازی داینامیک</param>
         /// <returns>لیستی از الگوهای پرسش و پاسخ متناظر یافت شده فوق آستانه</returns>
         """
         if not self.is_enabled:
@@ -45,14 +46,31 @@ class QnAAgent:
         # ۱. استخراج امبدینگ ۳۰۷۲ تایی برای جستار ورودی
         embedding = get_embedding(query)
         
-        # ۲. فیلترینگ داینامیک بر اساس شناسه‌ها
+        # ۲. فیلترینگ داینامیک بر اساس شناسه‌ها و فیلترهای سفارشی
         filter_clause = ""
         params = [embedding]
         
         if file_ids:
             placeholders = ",".join(["%s"] * len(file_ids))
-            filter_clause = f"AND file_id IN ({placeholders})"
+            filter_clause += f" AND file_id IN ({placeholders})"
             params.extend(file_ids)
+            
+        if filters:
+            for column, value in filters.items():
+                if value:
+                    if not isinstance(value, (list, tuple)):
+                        value = [value]
+                    if column == "content":
+                        like_clauses = []
+                        for val in value:
+                            like_clauses.append(f"{column} ILIKE %s")
+                            params.append(f"%{val}%")
+                        if like_clauses:
+                            filter_clause += f" AND ({' OR '.join(like_clauses)})"
+                    else:
+                        placeholders = ",".join(["%s"] * len(value))
+                        filter_clause += f" AND {column} IN ({placeholders})"
+                        params.extend(value)
             
         params.append(k)
         
@@ -98,6 +116,7 @@ class QnAAgent:
                 conn.close()
                 
         return results
+
 
 # نمونه سراسری عامل جستجوی Q&A
 qna_agent = QnAAgent()

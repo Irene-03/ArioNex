@@ -112,7 +112,8 @@ async def execute_query_logic(request: QueryRequest, current_user: Optional[dict
             chat_history=chat_history,
             threshold=0.4,
             k=4,
-            file_ids=final_file_ids
+            file_ids=final_file_ids,
+            session_id=session_id
         )
 
         # به‌روزرسانی تاریخچه نشست
@@ -208,7 +209,8 @@ async def execute_query_stream_logic(
                 chat_history=history,
                 threshold=0.4,
                 k=4,
-                file_ids=final_file_ids
+                file_ids=final_file_ids,
+                session_id=session_id
             ):
                 # Active cancellation check
                 if http_request and await http_request.is_disconnected():

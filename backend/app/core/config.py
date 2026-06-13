@@ -37,6 +37,11 @@ class ServiceToggles(BaseSettings):
     rule_extractor: bool = False
     neo4j: bool = False
     safety_auditor: bool = False
+    check_structure: bool = False
+    check_categories: bool = False
+    greeting: bool = False
+    customization: bool = False
+
 
 class ProviderToggles(BaseSettings):
     """

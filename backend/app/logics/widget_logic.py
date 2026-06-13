@@ -62,7 +62,8 @@ async def execute_widget_logic(request: QueryRequest) -> QueryResponse:
             chat_history=history,
             threshold=0.4,
             k=4,
-            file_ids=request.file_ids
+            file_ids=request.file_ids,
+            session_id=session_id
         )
 
         # ۳. به‌روزرسانی تاریخچه نشست
@@ -116,6 +117,7 @@ async def execute_widget_stream_logic(request: QueryRequest) -> AsyncGenerator[s
             chat_history=history,
             threshold=0.4,
             k=4,
+            session_id=session_id
         ):
             if event["event"] == "token":
                 accumulated_answer += event["data"]

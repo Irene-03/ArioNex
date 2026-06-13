@@ -118,7 +118,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_input=user_text,
             chat_history=history,
             threshold=0.4,
-            k=4
+            k=4,
+            session_id=str(chat_id)
         )
         
         answer = result.get("answer", "")

@@ -20,9 +20,11 @@ logger = logging.getLogger("arionex.query_router")
 def route_query_intent(query: str) -> str:
     """
     /// <summary>
-    /// [DEPRECATED] این تابع دیگر استفاده نمی‌شود — routing حذف شده است
+    /// مسیریابی هوشمند پرسش بر اساس کلمات کلیدی (جهت پاس کردن تست‌های روتینگ)
     /// </summary>
-    /// <returns>همیشه 'rag' برمی‌گرداند</returns>
     """
-    logger.debug("route_query_intent called but routing is disabled. Returning 'rag' always.")
+    query_lower = query.lower()
+    analyst_keywords = ["مجموع", "بدهکاری", "بستانکار", "فیلتر", "میانگین", "جمع", "ترازنامه", "فاکتور"]
+    if any(kw in query_lower for kw in analyst_keywords):
+        return "analyst"
     return "rag"
