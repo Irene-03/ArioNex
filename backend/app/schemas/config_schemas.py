@@ -69,3 +69,11 @@ class ConfigUpdateRequest(BaseModel):
         default=None,
         description="مدل Embedding برای Hormouz — مثال: openai/text-embedding-3-large"
     )
+    embedding_provider: Optional[str] = Field(
+        default=None,
+        description="تغییر پروایدر امبدینگ فعال — مثال: openai, google, hormouz, openrouter"
+    )
+    embedding_model: Optional[str] = Field(
+        default=None,
+        description="تغییر مدل امبدینگ فعال"
+    )

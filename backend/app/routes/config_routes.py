@@ -193,6 +193,16 @@ async def update_active_configuration(update: ConfigUpdateRequest):
             _update_env_file("HORMOUZ_EMBEDDING_MODEL", update.hormouz_embedding_model)
             logger.info(f"Hormouz embedding model set to: {update.hormouz_embedding_model}")
 
+        if update.embedding_provider:
+            settings.embedding_provider = update.embedding_provider
+            _update_env_file("EMBEDDING_PROVIDER", update.embedding_provider)
+            logger.info(f"Embedding provider set to: {update.embedding_provider}")
+
+        if update.embedding_model:
+            settings.embedding_model = update.embedding_model
+            _update_env_file("EMBEDDING_MODEL", update.embedding_model)
+            logger.info(f"Embedding model set to: {update.embedding_model}")
+
         # تغییر provider فعال
         if update.llm_provider:
             settings.llm_provider = update.llm_provider
@@ -230,6 +240,8 @@ async def update_active_configuration(update: ConfigUpdateRequest):
                 "llm_provider": settings.llm_provider,
                 "ollama_model": getattr(settings, "ollama_model", "gemma3:4b"),
                 "ollama_base_url": getattr(settings, "ollama_base_url", "http://localhost:11434"),
+                "embedding_provider": settings.embedding_provider,
+                "embedding_model": settings.embedding_model,
                 "hormouz_embedding_model": settings.hormouz_embedding_model,
                 "telegram_bot_token": settings.telegram_bot_token,
                 "api_keys": {

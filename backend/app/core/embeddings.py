@@ -75,6 +75,7 @@ def get_embedding(text: str) -> list[float]:
         return [0.0] * dim
 
     provider = settings.embedding_provider
+    logger.info(f"Using embedding provider: {provider}")
 
     try:
         _validate_api_key(provider)
