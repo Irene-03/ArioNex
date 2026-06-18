@@ -155,9 +155,14 @@ def _extract_page_content(html: str, url: str) -> dict:
     body_text = ""
     
     if res:
-        title = res.get("title") or ""
-        description = res.get("description") or ""
-        body_text = res.get("text") or ""
+        if isinstance(res, dict):
+            title = res.get("title") or ""
+            description = res.get("description") or ""
+            body_text = res.get("text") or ""
+        else:
+            title = getattr(res, "title", "") or ""
+            description = getattr(res, "description", "") or ""
+            body_text = getattr(res, "text", "") or ""
 
     # Fallback to BeautifulSoup if body text is empty
     if not body_text.strip():

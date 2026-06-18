@@ -43,7 +43,9 @@ from app.services.workers.crawler.utils import (
 )
 from app.services.workers.crawler.staging import _update_job_in_db, _is_job_cancelled
 
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("arionex.scrapy_spider")
+logger.setLevel(logging.DEBUG)
 
 
 class RotateProxyMiddleware:

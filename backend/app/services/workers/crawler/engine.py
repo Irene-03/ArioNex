@@ -192,17 +192,21 @@ class CrawlerService:
                 )
                 return
 
-            # لاگ stdout اسپایدر برای debugging
+            # ========== لاگ کامل خروجی ==========
             if stdout_data:
-                logger.debug(f"[CrawlerJob:{job_id}] Spider stdout: {stdout_data.decode('utf-8', errors='replace')[:2000]}")
+                stdout_str = stdout_data.decode('utf-8', errors='replace')
+                logger.info(f"[CrawlerJob:{job_id}] ===== Spider STDOUT =====\n{stdout_str[:5000]}")
+                
+            if stderr_data:
+                stderr_str = stderr_data.decode('utf-8', errors='replace')
+                logger.error(f"[CrawlerJob:{job_id}] ===== Spider STDERR =====\n{stderr_str[:5000]}")
 
             # Check return code
             if process.returncode != 0:
                 if not _is_job_cancelled(job_id):
                     error_output = stderr_data.decode('utf-8', errors='replace') if stderr_data else "No error output captured"
                     logger.error(
-                        f"[CrawlerJob:{job_id}] Subprocess exited with non-zero code {process.returncode}. "
-                        f"Stderr: {error_output[:1000]}"
+                        f"[CrawlerJob:{job_id}] Subprocess exited with non-zero code {process.returncode}."
                     )
                     _update_job_in_db(
                         job_id,
