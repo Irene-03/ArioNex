@@ -80,25 +80,31 @@ export default function ChatView() {
                   {msg.sender === 'user' ? 'AK' : 'AN'}
                 </div>
                 
-                <div>
-                  {msg.sender === 'ai' && !msg.isWelcome && (
+                <div style={{flex: 1, minWidth: 0}}>
+                  {msg.sender === 'ai' && !msg.isWelcome && msg.text && (
                     <div className="safety-tag">
                       <span>🔒</span> {msg.isRefusal ? 'حفاظت عدم توهم فعال' : 'پاسخ معتبر RAG · تأیید شده توسط مخزن دانش'}
                     </div>
                   )}
                   
-                  <div 
-                    className={`msg-bubble ${msg.sender === 'user' ? 'user-bubble' : 'ai-bubble'}`}
-                    style={{ 
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      lineHeight: '1.8',
-                      direction: 'rtl',
-                      fontFamily: 'inherit'
-                    }}
-                  >
-                    {msg.text}
-                  </div>
+                  {/* فقط اگر متن وجود دارد نمایش بده */}
+                  {msg.text && (
+                    <div className={`msg-bubble ${msg.sender === 'user' ? 'user-bubble' : 'ai-bubble'}`}>
+                      {msg.text}
+                    </div>
+                  )}
+
+                  {/* اگر متن خالی است و در حال بارگذاری است، نشانگر تایپ نمایش داده شود */}
+                  {!msg.text && msg.isLoading && (
+                    <div className="ai-bubble loading-bubble">
+                      <div className="typing-indicator">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </div>
+                      <span className="loading-text">دستیار در حال تایپ...</span>
+                    </div>
+                  )}
 
                   {/* نمایش استناد به منابع در چت */}
                   {msg.sources && msg.sources.length > 0 && (
@@ -113,17 +119,6 @@ export default function ChatView() {
                 </div>
               </div>
             ))}
-            
-            {isAiLoading && (
-              <div className="msg msg-ai">
-                <div className="msg-avatar ai-av">AN</div>
-                <div>
-                  <div className="ai-bubble pulse" style={{padding: '12px 24px'}}>
-                    در حال بررسی و بازیابی پاسخ امن از پایگاه اسناد آریونکس...
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* فیلد ارسال پیام چت */}

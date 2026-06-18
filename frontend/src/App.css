@@ -952,3 +952,182 @@
   text-shadow: 0 0 8px rgba(196, 137, 74, 0.5);
 }
 
+/* =============================================================================
+   💬 CHAT TYPING ANIMATION & UI ENHANCEMENTS
+   ============================================================================= */
+
+/* ===== انیمیشن تایپ ===== */
+.typing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.typing-indicator span {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--gold, #c4894a);
+  border-radius: 50%;
+  animation: typing-bounce 1.4s ease-in-out infinite;
+}
+
+.typing-indicator span:nth-child(1) {
+  animation-delay: 0s;
+}
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
+.loading-bubble {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px !important;
+  background: var(--gray-50, #f5f5f5) !important;
+  border: 1px solid var(--gray-200, #e5e5e5) !important;
+  border-radius: 16px !important;
+  min-height: 48px;
+}
+
+.loading-text {
+  font-size: 13px;
+  color: var(--text-muted, #888);
+  font-weight: 500;
+}
+
+/* ===== حذف باکس خالی ===== */
+.msg-ai .ai-bubble:empty {
+  display: none;
+}
+
+/* ===== انیمیشن ظهور پاسخ ===== */
+.msg-ai .ai-bubble {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== بهبود Source Tags ===== */
+.source-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  animation: fadeInUp 0.3s ease-out 0.2s both;
+}
+
+.source-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(196, 137, 74, 0.1);
+  border: 1px solid rgba(196, 137, 74, 0.2);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--gold, #c4894a);
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.source-tag:hover {
+  background: rgba(196, 137, 74, 0.2);
+  transform: translateY(-1px);
+}
+
+/* ===== بهبود Safety Tag ===== */
+.safety-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(52, 199, 89, 0.1);
+  border: 1px solid rgba(52, 199, 89, 0.2);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--color-success, #34c759);
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+/* ===== بهبود Bubble ===== */
+.ai-bubble {
+  background: white !important;
+  border: 1px solid var(--gray-200, #e5e5e5) !important;
+  border-radius: 16px !important;
+  padding: 14px 20px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+  max-width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.8;
+  direction: rtl;
+}
+
+.user-bubble {
+  background: var(--navy, #1a2744) !important;
+  color: white !important;
+  border-radius: 16px !important;
+  padding: 14px 20px !important;
+  max-width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.8;
+}
+
+/* ===== بهبود فاصله پیامها ===== */
+.msg {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.msg-avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.user-av {
+  background: var(--navy, #1a2744);
+  color: white;
+}
+
+.ai-av {
+  background: var(--gold, #c4894a);
+  color: white;
+}
+
+

@@ -956,6 +956,7 @@ export const AppProvider = ({ children }) => {
       sources: [],
       isSafe: true,
       isRefusal: false,
+      isLoading: true,
     };
     setChatMessages(prev => [...prev, aiPlaceholder]);
 
@@ -1005,7 +1006,7 @@ export const AppProvider = ({ children }) => {
           if (eventName === 'token') {
             // decodedData قبلاً شامل فاصلههاست، فقط اضافه میکنیم
             accumulated = accumulated + decodedData;
-            setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: accumulated } : m));
+            setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: accumulated, isLoading: false } : m));
           } else if (eventName === 'sources') {
             try {
               const parsedSources = JSON.parse(decodedData);
@@ -1016,7 +1017,7 @@ export const AppProvider = ({ children }) => {
               const meta = JSON.parse(decodedData);
               const isRefusal = accumulated === 'منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند.';
               setChatMessages(prev => prev.map(m => m.id === aiMsgId
-                ? { ...m, isSafe: meta.is_safe ?? true, isRefusal }
+                ? { ...m, isSafe: meta.is_safe ?? true, isRefusal, isLoading: false }
                 : m));
             } catch (_) {}
           } else if (eventName === 'error') {
@@ -1024,7 +1025,8 @@ export const AppProvider = ({ children }) => {
             setChatMessages(prev => prev.map(m => m.id === aiMsgId ? {
               ...m,
               text: `⚠️ خطا: ${decodedData}`,
-              isRefusal: true
+              isRefusal: true,
+              isLoading: false
             } : m));
           }
         }
@@ -1036,6 +1038,7 @@ export const AppProvider = ({ children }) => {
         ...m,
         text: '⚠️ خطا در برقراری ارتباط با وب‌سرور هوشمند آریونکس. لطفاً اطمینان حاصل فرمایید که بک‌اند بر روی پورت 8000 در حال اجراست.',
         isRefusal: true,
+        isLoading: false,
       } : m));
     }
   };
