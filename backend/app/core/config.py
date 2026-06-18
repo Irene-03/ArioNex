@@ -247,6 +247,14 @@ def load_settings() -> Settings:
                     settings_obj.embedding_provider = yaml_data["embedding_provider"]
                 if "embedding_model" in yaml_data:
                     settings_obj.embedding_model = yaml_data["embedding_model"]
+                if "proxy_url" in yaml_data:
+                    settings_obj.proxy_url = yaml_data["proxy_url"]
+                if "fallback_embedding_provider" in yaml_data:
+                    settings_obj.fallback_embedding_provider = yaml_data["fallback_embedding_provider"]
+                if "llm_provider" in yaml_data:
+                    settings_obj.llm_provider = yaml_data["llm_provider"]
+                if "model_name" in yaml_data:
+                    settings_obj.model_name = yaml_data["model_name"]
                     
             logger.info("Successfully loaded dynamic feature toggles from config.yaml")
         except Exception as e:
