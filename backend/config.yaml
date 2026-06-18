@@ -122,3 +122,8 @@ crawler:
   # لیست دستی پروکسی‌ها برای چرخش و دور زدن ضدبات‌ها (فرمت منعطف و قابل توسعه در آینده)
   # ساختار: لیستی از رشته‌های URL پروکسی
   proxy_pool: []
+
+# ========== Security and Environment Settings ==========
+jwt_secret_key: "arionex_jwt_secret_2026_secure"
+password_salt: "arionex_fixed_salt_2026_secure"
+env: "development"

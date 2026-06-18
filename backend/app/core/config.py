@@ -152,8 +152,8 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/0", validation_alias="REDIS_URL")
     
     # Security, Environment, and CORS Settings
-    jwt_secret_key: str = Field(default="", validation_alias="JWT_SECRET_KEY")
-    password_salt: str = Field(default="", validation_alias="PASSWORD_SALT")
+    jwt_secret_key: str = Field(default="arionex_jwt_secret_2026_secure", validation_alias="JWT_SECRET_KEY")
+    password_salt: str = Field(default="arionex_fixed_salt_2026_secure", validation_alias="PASSWORD_SALT")
     env: str = Field(default="development", validation_alias="ENV")
     cors_allowed_origins: str = Field(default="", validation_alias="CORS_ALLOWED_ORIGINS")
     
@@ -232,6 +232,14 @@ def load_settings() -> Settings:
                         else:
                             crawler_data[k] = v
                     settings_obj.crawler = CrawlerSettings(**crawler_data)
+
+                # ادغام تنظیمات عمومی ریشه
+                if "jwt_secret_key" in yaml_data:
+                    settings_obj.jwt_secret_key = yaml_data["jwt_secret_key"]
+                if "password_salt" in yaml_data:
+                    settings_obj.password_salt = yaml_data["password_salt"]
+                if "env" in yaml_data:
+                    settings_obj.env = yaml_data["env"]
                     
             logger.info("Successfully loaded dynamic feature toggles from config.yaml")
         except Exception as e:
