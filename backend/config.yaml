@@ -84,6 +84,8 @@ providers:
     enabled: true
   hormouz:
     enabled: true
+  ollama:
+    enabled: true
 
 # ----------------------------------------------------
 # تنظیمات موتور کرالر وب (Web Crawler Engine Settings)
@@ -123,10 +125,13 @@ crawler:
   # ساختار: لیستی از رشته‌های URL پروکسی
   proxy_pool: []
 
-# ========== Security and Environment Settings ==========
+# ========== LLM and Embedding Providers ==========
 jwt_secret_key: "arionex_jwt_secret_2026_secure"
 password_salt: "arionex_fixed_salt_2026_secure"
 env: "development"
 hormouz_embedding_model: "openai/text-embedding-3-large"
 embedding_provider: "hormouz"
-llm_provider: "hormouz"
+llm_provider: "ollama"
+model_name: "gemma3:4b"
+ollama_base_url: "http://localhost:11434"
+ollama_model: "gemma3:4b"

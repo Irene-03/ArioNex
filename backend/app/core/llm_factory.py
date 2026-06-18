@@ -299,24 +299,16 @@ def _create_hormouz_llm(model: str, temperature: float):
 
 def _create_ollama_llm(model: str, temperature: float):
     """
-    /// <summary>
-    /// ساخت LLM محلی از طریق Ollama — بدون نیاز به API key یا اینترنت
-    /// </summary>
-    /// <remarks>
-    /// Ollama یک سرور محلی برای اجرای مدل‌های LLM است.
-    /// نیاز به نصب: pip install langchain-ollama  (یا langchain-community)
-    /// نصب Ollama: https://ollama.com
-    /// دستور pull مدل: ollama pull gemma3:4b
-    /// مدل‌های پیشنهادی: gemma3:4b, gemma3:12b, gemma2:2b, llama3.2:3b, qwen2.5:3b
-    /// </remarks>
+    ساخت LLM محلی از طریق Ollama
     """
-    # تعیین مدل و endpoint
     ollama_model = getattr(settings, 'ollama_model', None) or model or 'gemma3:4b'
     ollama_base = getattr(settings, 'ollama_base_url', 'http://localhost:11434')
-
+    
+    # لاگ برای دیباگ
+    logger.info(f"🖥️ Ollama LLM: model='{ollama_model}', base_url='{ollama_base}'")
+    
     try:
         from langchain_ollama import ChatOllama
-        logger.info(f"Ollama LLM: using langchain-ollama, model='{ollama_model}'")
         return ChatOllama(
             model=ollama_model,
             temperature=temperature,
@@ -324,23 +316,19 @@ def _create_ollama_llm(model: str, temperature: float):
             num_predict=1024,
         )
     except ImportError:
-        pass
-
-    try:
-        from langchain_community.chat_models import ChatOllama as CommChatOllama
-        logger.info(f"Ollama LLM (community): model='{ollama_model}'")
-        return CommChatOllama(
-            model=ollama_model,
-            temperature=temperature,
-            base_url=ollama_base,
-            num_predict=1024,
-        )
-    except ImportError:
-        raise ImportError(
-            "Ollama LangChain integration not installed.\n"
-            "Run: pip install langchain-ollama\n"
-            "Or:  pip install langchain-community"
-        )
+        try:
+            from langchain_community.chat_models import ChatOllama as CommChatOllama
+            return CommChatOllama(
+                model=ollama_model,
+                temperature=temperature,
+                base_url=ollama_base,
+                num_predict=1024,
+            )
+        except ImportError:
+            raise ImportError(
+                "Ollama LangChain integration not installed.\n"
+                "Run: pip install langchain-ollama"
+            )
 
 
 def _warn_if_mock(api_key: str, provider_name: str) -> None:

@@ -166,26 +166,24 @@ async def update_active_configuration(update: ConfigUpdateRequest):
                 if k == "ollama":
                     if bool(v):
                         settings.llm_provider = "ollama"
-                        logger.info("LLM provider switched to Ollama (local mode).")
+                        _update_env_file("LLM_PROVIDER", "ollama")
+                        logger.info("✅ LLM provider switched to Ollama (local mode).")
                     else:
-                        # Find fallback provider
-                        fallback = "openrouter"
-                        for p_name in ["openrouter", "openai", "deepseek", "google", "anthropic", "gapgpt", "avalai", "hormouz"]:
-                            if getattr(settings.providers, p_name, False):
-                                fallback = p_name
-                                break
-                        settings.llm_provider = fallback
-                        logger.info(f"Ollama disabled. LLM provider fell back to: {fallback}")
+                        settings.llm_provider = "hormouz"
+                        _update_env_file("LLM_PROVIDER", "hormouz")
+                        logger.info("Ollama disabled. LLM provider fell back to: hormouz")
                 elif hasattr(settings.providers, k):
                     setattr(settings.providers, k, bool(v))
 
         # تنظیمات Ollama — مدل و آدرس سرور
         if update.ollama_model:
             settings.ollama_model = update.ollama_model
+            _update_env_file("OLLAMA_MODEL", update.ollama_model)
             logger.info(f"Ollama model set to: {update.ollama_model}")
 
         if update.ollama_base_url:
             settings.ollama_base_url = update.ollama_base_url
+            _update_env_file("OLLAMA_BASE_URL", update.ollama_base_url)
             logger.info(f"Ollama base URL set to: {update.ollama_base_url}")
 
         if update.hormouz_embedding_model:
@@ -206,6 +204,7 @@ async def update_active_configuration(update: ConfigUpdateRequest):
         # تغییر provider فعال
         if update.llm_provider:
             settings.llm_provider = update.llm_provider
+            _update_env_file("LLM_PROVIDER", update.llm_provider)
             logger.info(f"LLM provider switched to: {update.llm_provider}")
 
         # به‌روزرسانی کلیدهای API پروایدرها

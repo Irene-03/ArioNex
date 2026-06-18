@@ -57,6 +57,7 @@ class ProviderToggles(BaseSettings):
     gapgpt: bool = True
     avalai: bool = True
     hormouz: bool = True
+    ollama: bool = True
 
 class IntegrationToggles(BaseSettings):
     """
@@ -132,6 +133,12 @@ class Settings(BaseSettings):
     embedding_provider: str = Field(default="openai", validation_alias="EMBEDDING_PROVIDER")
     embedding_model: str = Field(default="text-embedding-3-large", validation_alias="EMBEDDING_MODEL")
     hormouz_embedding_model: str = Field(default="openai/text-embedding-3-large", validation_alias="HORMOUZ_EMBEDDING_MODEL")
+
+    # -------------------------------------------------------
+    # تنظیمات سرور محلی Ollama
+    # -------------------------------------------------------
+    ollama_model: str = Field(default="gemma3:4b", validation_alias="OLLAMA_MODEL")
+    ollama_base_url: str = Field(default="http://localhost:11434", validation_alias="OLLAMA_BASE_URL")
 
     # -------------------------------------------------------
     # تنظیمات سایر سرویس‌ها
@@ -255,6 +262,10 @@ def load_settings() -> Settings:
                     settings_obj.llm_provider = yaml_data["llm_provider"]
                 if "model_name" in yaml_data:
                     settings_obj.model_name = yaml_data["model_name"]
+                if "ollama_model" in yaml_data:
+                    settings_obj.ollama_model = yaml_data["ollama_model"]
+                if "ollama_base_url" in yaml_data:
+                    settings_obj.ollama_base_url = yaml_data["ollama_base_url"]
                     
             logger.info("Successfully loaded dynamic feature toggles from config.yaml")
         except Exception as e:
