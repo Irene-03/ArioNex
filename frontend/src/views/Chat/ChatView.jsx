@@ -102,7 +102,7 @@ export default function ChatView() {
                         <span></span>
                         <span></span>
                       </div>
-                      <span className="loading-text">دستیار در حال تایپ...</span>
+                      <span className="loading-text">دستیار در حال فکر...</span>
                     </div>
                   )}
 
