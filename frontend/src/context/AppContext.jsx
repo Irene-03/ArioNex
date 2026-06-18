@@ -991,14 +991,20 @@ export const AppProvider = ({ children }) => {
           let eventName = 'message';
           let dataLine = '';
           rawEvent.split('\n').forEach(line => {
-            if (line.startsWith('event:')) eventName = line.slice(6).trim();
-            else if (line.startsWith('data:')) dataLine += line.slice(5).trim();
+            if (line.startsWith('event:')) {
+              eventName = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              let data = line.slice(5);
+              if (data.startsWith(' ')) data = data.slice(1);
+              dataLine += data;
+            }
           });
 
           const decodedData = dataLine.replace(/\\n/g, '\n');
 
           if (eventName === 'token') {
-            accumulated += decodedData;
+            // decodedData قبلاً شامل فاصلههاست، فقط اضافه میکنیم
+            accumulated = accumulated + decodedData;
             setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: accumulated } : m));
           } else if (eventName === 'sources') {
             try {

@@ -87,14 +87,17 @@ export default function ChatView() {
                     </div>
                   )}
                   
-                  <div className={`msg-bubble ${msg.sender === 'user' ? 'user-bubble' : 'ai-bubble'}`} 
-                       style={{whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: '1.8'}}>
-                    {msg.text.split('\n').map((line, i) => (
-                      <React.Fragment key={i}>
-                        {line}
-                        {i < msg.text.split('\n').length - 1 && <br />}
-                      </React.Fragment>
-                    ))}
+                  <div 
+                    className={`msg-bubble ${msg.sender === 'user' ? 'user-bubble' : 'ai-bubble'}`}
+                    style={{ 
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      lineHeight: '1.8',
+                      direction: 'rtl',
+                      fontFamily: 'inherit'
+                    }}
+                  >
+                    {msg.text}
                   </div>
 
                   {/* نمایش استناد به منابع در چت */}
