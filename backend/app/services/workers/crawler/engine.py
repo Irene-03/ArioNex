@@ -83,16 +83,15 @@ class CrawlerService:
         effective_label = label or f"crawled:{base_domain}"
 
         # Resolve jobs directory at backend/jobs
-        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-        jobs_dir = os.path.join(backend_dir, "jobs")
+        from pathlib import Path
+        backend_dir = Path(__file__).resolve().parent.parent.parent.parent.parent
+        app_dir = backend_dir / "app"
+        jobs_dir = str(backend_dir / "jobs")
         os.makedirs(jobs_dir, exist_ok=True)
         jobdir_path = os.path.join(jobs_dir, job_id)
 
         # Build path to the run_spider.py script
-        run_spider_script = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "run_spider.py"
-        )
+        run_spider_script = str(Path(__file__).resolve().parent / "run_spider.py")
 
         if not os.path.exists(run_spider_script):
             error_msg = f"run_spider.py not found at {run_spider_script}"
@@ -102,10 +101,15 @@ class CrawlerService:
 
         # تنظیم PYTHONPATH برای اینکه subprocess بتواند ماژول‌های پروژه را import کند
         env = os.environ.copy()
-        if 'PYTHONPATH' in env:
-            env['PYTHONPATH'] = f"{backend_dir}{os.pathsep}{env['PYTHONPATH']}"
+        pythonpath = f"{backend_dir}{os.pathsep}{app_dir}"
+        if 'PYTHONPATH' in env and env['PYTHONPATH']:
+            env['PYTHONPATH'] = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}"
         else:
-            env['PYTHONPATH'] = backend_dir
+            env['PYTHONPATH'] = pythonpath
+
+        # در محیط داکر، ریشه با /app هم ارجاع می‌شود
+        if os.path.exists("/app") and "/app" not in env['PYTHONPATH']:
+            env['PYTHONPATH'] = f"/app{os.pathsep}{env['PYTHONPATH']}"
 
         # Pre-execution validation for JS render dependencies (Playwright & Chromium)
         if js_render:
@@ -159,7 +163,7 @@ class CrawlerService:
                 env=env,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=backend_dir,
+                cwd=str(backend_dir),
             )
 
             # Wait for Scrapy process to complete with timeout

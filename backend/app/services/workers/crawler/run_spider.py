@@ -1,11 +1,26 @@
+import sys
+import os
+from pathlib import Path
+
+# Ensures sys.path includes backend root so imports work
+current_dir = Path(__file__).resolve().parent
+backend_dir = current_dir.parent.parent.parent.parent  # backend/
+app_dir = backend_dir / "app"
+
+paths_to_add = [
+    str(backend_dir),
+    str(app_dir),
+]
+for path in paths_to_add:
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
 import argparse
 import asyncio
 import hashlib
 import json
 import logging
-import os
 import random
-import sys
 from urllib.parse import urlparse
 
 import scrapy
@@ -13,11 +28,6 @@ from scrapy import signals
 from scrapy.crawler import CrawlerProcess
 from scrapy.settings import Settings
 from scrapy.http import HtmlResponse
-
-# Ensures sys.path includes backend root so imports work
-backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
 
 from app.core.config import settings
 from app.core.minio_client import storage_manager
