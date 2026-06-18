@@ -401,20 +401,27 @@ def _create_openai_embedding(model: str):
     """
     from openai import OpenAI
 
-    # تعیین base_url بر اساس provider تنظیم‌شده
     provider = settings.embedding_provider
     if provider == "openrouter":
-        client = OpenAI(
-            api_key=settings.openrouter_api_key,
-            base_url="https://openrouter.ai/api/v1",
-        )
+        api_key = settings.openrouter_api_key
+        base_url = "https://openrouter.ai/api/v1"
     elif provider == "hormouz":
-        client = OpenAI(
-            api_key=settings.hormouz_api_key,
-            base_url="https://api.hormouz.net/v1",
-        )
+        api_key = settings.hormouz_api_key
+        base_url = "https://api.hormouz.net/v1"
+    elif provider == "deepseek":
+        api_key = settings.deepseek_api_key
+        base_url = "https://api.deepseek.com/v1"
     else:
-        client = OpenAI(api_key=settings.openai_api_key)
+        api_key = settings.openai_api_key
+        base_url = None
+
+    if not api_key or api_key.strip() == "" or "your-" in api_key:
+        raise ValueError(
+            f"کلید API برای پروایدر '{provider}' تنظیم نشده است. "
+            f"لطفاً از پنل مدیریت، کلید API معتبر برای آن ست کنید."
+        )
+
+    client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
 
     def embed(text: str) -> list:
         response = client.embeddings.create(model=model, input=text)

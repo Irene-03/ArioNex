@@ -131,6 +131,7 @@ class Settings(BaseSettings):
     # -------------------------------------------------------
     embedding_provider: str = Field(default="openai", validation_alias="EMBEDDING_PROVIDER")
     embedding_model: str = Field(default="text-embedding-3-large", validation_alias="EMBEDDING_MODEL")
+    hormouz_embedding_model: str = Field(default="openai/text-embedding-3-large", validation_alias="HORMOUZ_EMBEDDING_MODEL")
 
     # -------------------------------------------------------
     # تنظیمات سایر سرویس‌ها
@@ -240,6 +241,8 @@ def load_settings() -> Settings:
                     settings_obj.password_salt = yaml_data["password_salt"]
                 if "env" in yaml_data:
                     settings_obj.env = yaml_data["env"]
+                if "hormouz_embedding_model" in yaml_data:
+                    settings_obj.hormouz_embedding_model = yaml_data["hormouz_embedding_model"]
                     
             logger.info("Successfully loaded dynamic feature toggles from config.yaml")
         except Exception as e:

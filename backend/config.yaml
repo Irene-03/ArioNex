@@ -127,3 +127,4 @@ crawler:
 jwt_secret_key: "arionex_jwt_secret_2026_secure"
 password_salt: "arionex_fixed_salt_2026_secure"
 env: "development"
+hormouz_embedding_model: "openai/text-embedding-3-large"

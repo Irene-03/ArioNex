@@ -65,3 +65,7 @@ class ConfigUpdateRequest(BaseModel):
     gapgpt_api_key: Optional[str] = Field(default=None, description="کلید API برای GapGPT")
     avalai_api_key: Optional[str] = Field(default=None, description="کلید API برای AvalAI")
     hormouz_api_key: Optional[str] = Field(default=None, description="کلید API برای Hormouz")
+    hormouz_embedding_model: Optional[str] = Field(
+        default=None,
+        description="مدل Embedding برای Hormouz — مثال: openai/text-embedding-3-large"
+    )

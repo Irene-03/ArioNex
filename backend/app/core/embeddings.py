@@ -37,7 +37,13 @@ def _get_embedding_dimension() -> int:
     /// </summary>
     /// <returns>تعداد ابعاد بردار (پیش‌فرض: ۳۰۷۲)</returns>
     """
-    return _EMBEDDING_DIMENSIONS.get(settings.embedding_model, 3072)
+    model = settings.embedding_model
+    if settings.embedding_provider == "hormouz":
+        model = settings.hormouz_embedding_model
+
+    # حذف پیشوند پروایدر در صورت وجود (مانند openai/ یا deepseek/)
+    model_name = model.split("/")[-1] if "/" in model else model
+    return _EMBEDDING_DIMENSIONS.get(model_name, 3072)
 
 
 def _validate_api_key(provider: str):
@@ -62,12 +68,6 @@ def get_embedding(text: str) -> list[float]:
     /// <summary>
     /// تولید بردار ویژگی (Embedding) برای متن ورودی با استفاده از provider انتخاب‌شده
     /// </summary>
-    /// <param name="text">متن ورودی برای embedding</param>
-    /// <returns>لیستی از اعداد اعشاری — طول بستگی به مدل انتخاب‌شده دارد</returns>
-    /// <remarks>
-    /// در صورت خطا یا mock mode، بردار صفر با طول مناسب برمی‌گردد.
-    /// این رفتار graceful degradation امکان تست بدون API key را فراهم می‌کند.
-    /// </remarks>
     """
     dim = _get_embedding_dimension()
 
@@ -80,8 +80,9 @@ def get_embedding(text: str) -> list[float]:
         _validate_api_key(provider)
         if provider == "google":
             return _embed_with_google(text)
+        elif provider == "hormouz":
+            return _embed_with_hormouz(text)
         else:
-            # پیش‌فرض: OpenAI یا هر endpoint سازگار
             return _embed_with_openai(text)
     except Exception as e:
         logger.error(f"Embedding generation failed (provider={provider}): {str(e)}")
@@ -99,20 +100,16 @@ def get_embedding(text: str) -> list[float]:
 def _embed_with_openai(text: str) -> list[float]:
     """
     /// <summary>
-    /// تولید embedding از طریق OpenAI API یا هر endpoint سازگار با OpenAI (Hormouz, OpenRouter ...)
+    /// تولید embedding از طریق OpenAI API یا هر endpoint سازگار با OpenAI (OpenRouter ...)
     /// </summary>
     """
     from openai import OpenAI
 
     provider = settings.embedding_provider
     model = settings.embedding_model
-    dim = _get_embedding_dimension()
 
     # انتخاب کلید و base_url بر اساس provider فعال
-    if provider == "hormouz":
-        api_key = settings.hormouz_api_key
-        base_url = "https://api.hormouz.net/v1"
-    elif provider == "openrouter":
+    if provider == "openrouter":
         api_key = settings.openrouter_api_key
         base_url = "https://openrouter.ai/api/v1"
     else:
@@ -121,6 +118,25 @@ def _embed_with_openai(text: str) -> list[float]:
 
     # تولید امبدینگ با کلاینت OpenAI
     client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
+    response = client.embeddings.create(model=model, input=text)
+    return response.data[0].embedding
+
+
+def _embed_with_hormouz(text: str) -> list[float]:
+    """
+    /// <summary>
+    /// تولید embedding از طریق Hormouz API
+    /// </summary>
+    """
+    from openai import OpenAI
+
+    api_key = settings.hormouz_api_key
+    model = settings.hormouz_embedding_model or settings.embedding_model
+
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://api.hormouz.net/v1",
+    )
     response = client.embeddings.create(model=model, input=text)
     return response.data[0].embedding
 
@@ -140,7 +156,6 @@ def _embed_with_google(text: str) -> list[float]:
 
     api_key = settings.google_api_key
     model = settings.embedding_model
-    dim = _get_embedding_dimension()
 
     genai.configure(api_key=api_key)
     result = genai.embed_content(model=model, content=text)

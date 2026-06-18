@@ -97,6 +97,7 @@ async def get_active_configuration():
         "model_name": settings.model_name,
         "embedding_provider": settings.embedding_provider,
         "embedding_model": settings.embedding_model,
+        "hormouz_embedding_model": settings.hormouz_embedding_model,
         "ollama_model": getattr(settings, "ollama_model", "gemma3:4b"),
         "ollama_base_url": getattr(settings, "ollama_base_url", "http://localhost:11434"),
         "cosine_threshold": getattr(settings, "cosine_threshold", 0.50),
@@ -187,6 +188,11 @@ async def update_active_configuration(update: ConfigUpdateRequest):
             settings.ollama_base_url = update.ollama_base_url
             logger.info(f"Ollama base URL set to: {update.ollama_base_url}")
 
+        if update.hormouz_embedding_model:
+            settings.hormouz_embedding_model = update.hormouz_embedding_model
+            _update_env_file("HORMOUZ_EMBEDDING_MODEL", update.hormouz_embedding_model)
+            logger.info(f"Hormouz embedding model set to: {update.hormouz_embedding_model}")
+
         # تغییر provider فعال
         if update.llm_provider:
             settings.llm_provider = update.llm_provider
@@ -224,6 +230,7 @@ async def update_active_configuration(update: ConfigUpdateRequest):
                 "llm_provider": settings.llm_provider,
                 "ollama_model": getattr(settings, "ollama_model", "gemma3:4b"),
                 "ollama_base_url": getattr(settings, "ollama_base_url", "http://localhost:11434"),
+                "hormouz_embedding_model": settings.hormouz_embedding_model,
                 "telegram_bot_token": settings.telegram_bot_token,
                 "api_keys": {
                     "openai": _mask_api_key(settings.openai_api_key),
