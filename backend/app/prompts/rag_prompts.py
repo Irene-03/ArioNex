@@ -35,7 +35,7 @@ Key instructions for the AI assistant:
     1. Use the below CONTEXT (delimited with XML tags) to answer the QUESTION.
     2. If CONTEXT does not provide enough information to answer the QUESTION, the output must be exactly the four characters: "####"
     3. Don't try to make up an answer.
-    4. Respond in Persian.
+    4. Match the language of the response with the language of the QUESTION (e.g. if the user asks in English, respond in English; if in Persian, respond in Persian).
 
 Compliance Constraints:
 {compliance_constraints}
