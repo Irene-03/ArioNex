@@ -94,6 +94,19 @@ class CrawlerService:
             "run_spider.py"
         )
 
+        if not os.path.exists(run_spider_script):
+            error_msg = f"run_spider.py not found at {run_spider_script}"
+            logger.error(f"[CrawlerJob:{job_id}] {error_msg}")
+            _update_job_in_db(job_id, status="failed", error_message=error_msg)
+            return
+
+        # تنظیم PYTHONPATH برای اینکه subprocess بتواند ماژول‌های پروژه را import کند
+        env = os.environ.copy()
+        if 'PYTHONPATH' in env:
+            env['PYTHONPATH'] = f"{backend_dir}{os.pathsep}{env['PYTHONPATH']}"
+        else:
+            env['PYTHONPATH'] = backend_dir
+
         # Pre-execution validation for JS render dependencies (Playwright & Chromium)
         if js_render:
             try:
@@ -143,12 +156,18 @@ class CrawlerService:
                 "--respect-robots", str(respect_robots),
                 "--label", label or "",
                 "--widget-id", str(widget_id or 0),
+                env=env,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=backend_dir,
             )
-            
+
             # Wait for Scrapy process to complete with timeout
             timeout_seconds = getattr(settings.crawler, "job_timeout_seconds", 3600)
             try:
-                await asyncio.wait_for(process.wait(), timeout=float(timeout_seconds))
+                stdout_data, stderr_data = await asyncio.wait_for(
+                    process.communicate(), timeout=float(timeout_seconds)
+                )
             except asyncio.TimeoutError:
                 logger.warning(f"[CrawlerJob:{job_id}] Job exceeded timeout of {timeout_seconds} seconds. Terminating subprocess...")
                 try:
@@ -161,7 +180,7 @@ class CrawlerService:
                         await process.wait()
                 except Exception as kill_err:
                     logger.error(f"[CrawlerJob:{job_id}] Error while terminating/killing subprocess: {str(kill_err)}")
-                
+
                 _update_job_in_db(
                     job_id,
                     status="failed",
@@ -169,14 +188,22 @@ class CrawlerService:
                 )
                 return
 
+            # لاگ stdout اسپایدر برای debugging
+            if stdout_data:
+                logger.debug(f"[CrawlerJob:{job_id}] Spider stdout: {stdout_data.decode('utf-8', errors='replace')[:2000]}")
+
             # Check return code
             if process.returncode != 0:
                 if not _is_job_cancelled(job_id):
-                    logger.error(f"[CrawlerJob:{job_id}] Subprocess exited with non-zero code {process.returncode}")
+                    error_output = stderr_data.decode('utf-8', errors='replace') if stderr_data else "No error output captured"
+                    logger.error(
+                        f"[CrawlerJob:{job_id}] Subprocess exited with non-zero code {process.returncode}. "
+                        f"Stderr: {error_output[:1000]}"
+                    )
                     _update_job_in_db(
                         job_id,
                         status="failed",
-                        error_message=f"Scrapy subprocess exited with error code {process.returncode}. Please check server/worker logs."
+                        error_message=f"Scrapy subprocess error (code {process.returncode}): {error_output[:500]}"
                     )
                     return
         except Exception as proc_err:

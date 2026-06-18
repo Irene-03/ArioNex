@@ -16,6 +16,7 @@
 import uuid
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import BackgroundTasks, HTTPException
@@ -27,6 +28,10 @@ from app.schemas.crawler_schemas import CrawlStartRequest, CrawlStartResponse, C
 from app.tasks.crawler_task import run_crawler_task
 
 logger = logging.getLogger("arionex.crawler_logic")
+
+# تعریف مسیر ریشه backend به صورت ثابت برای استفاده در تمام توابع
+_BACKEND_ROOT = Path(__file__).parent.parent.parent
+_JOBS_DIR = _BACKEND_ROOT / "jobs"
 
 
 def _create_job_in_db(
@@ -76,10 +81,8 @@ def _row_to_job_response(row: dict) -> CrawlJobResponse:
     /// تبدیل رکورد دیتابیس به مدل پاسخ Pydantic
     /// </summary>
     """
-    import os
-    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    jobs_dir = os.path.join(backend_dir, "jobs")
-    jobdir_exists = os.path.isdir(os.path.join(jobs_dir, row["job_id"]))
+    jobdir_path = _JOBS_DIR / row["job_id"]
+    jobdir_exists = jobdir_path.is_dir()
     resume_available = row["status"] in ("cancelled", "failed") and jobdir_exists
 
     return CrawlJobResponse(
@@ -322,10 +325,8 @@ async def execute_resume_crawl(job_id: str) -> CrawlStartResponse:
         )
 
     # Check if jobdir exists
-    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    jobs_dir = os.path.join(backend_dir, "jobs")
-    jobdir_path = os.path.join(jobs_dir, job_id)
-    if not os.path.isdir(jobdir_path):
+    jobdir_path = _JOBS_DIR / job_id
+    if not jobdir_path.is_dir():
         raise HTTPException(
             status_code=400,
             detail="No crawl state found to resume. The crawl must be started from scratch."
@@ -406,16 +407,15 @@ async def execute_delete_jobdir(job_id: str) -> dict:
             detail="Cannot delete job state for a running or queued crawl. Please cancel the job first."
         )
 
-    # Resolve paths
-    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    jobs_dir = os.path.join(backend_dir, "jobs")
-    jobdir_path = os.path.join(jobs_dir, job_id)
+    # Resolve paths with pathlib
+    jobdir_path = _JOBS_DIR / job_id
 
     # 1. Delete jobdir recursively
     deleted_dir = False
-    if os.path.exists(jobdir_path):
+    if jobdir_path.exists():
         try:
-            shutil.rmtree(jobdir_path, ignore_errors=True)
+            import shutil
+            shutil.rmtree(str(jobdir_path), ignore_errors=True)
             deleted_dir = True
             logger.info(f"Deleted job state directory: {jobdir_path}")
         except Exception as err:

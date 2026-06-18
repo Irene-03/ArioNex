@@ -1,8 +1,7 @@
 import json
 import logging
 from datetime import datetime
-from psycopg2.extras import RealDictCursor
-from app.core.config import settings
+from psycopg2.extras import execute_batch
 from app.core.database import get_db_connection
 from app.core.embeddings import get_embedding
 from app.core.minio_client import storage_manager
@@ -62,15 +61,17 @@ def _index_chunks_in_db(chunks: list, label: str, source_url: str, job_id: str) 
 
 
 def _is_job_cancelled(job_id: str) -> bool:
+    """
+    بررسی لغو شدن job از دیتابیس.
+    از cursor معمولی (tuple) استفاده می‌کند برای یکنواختی.
+    """
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor() as cur:
             cur.execute("SELECT status FROM crawler_jobs WHERE job_id = %s", (job_id,))
             row = cur.fetchone()
-            # Note: depending on the DB cursor settings (e.g. DictCursor vs RealDictCursor), we should check dict or tuple
-            # The codebase uses RealDictCursor in database.py, so it returns dict-like objects
-            if row and row["status"] == "cancelled":
+            if row and row[0] == "cancelled":
                 return True
     except Exception as e:
         logger.error(f"Failed to check job cancellation for {job_id}: {str(e)}")
@@ -135,24 +136,29 @@ def _commit_staged_data(job_id: str, label: str) -> int:
             if not chunks_to_insert:
                 continue
 
+            # تهیه embedding برای هر chunk
             embeddings_data = []
             for item in chunks_to_insert:
                 emb = _get_embedding_with_retry(item["content"])
                 embeddings_data.append((item["content"], emb, temp_label, 0, item["sequence_id"]))
 
+            # استفاده از execute_batch به جای executemany برای سازگاری کامل با type vector در psycopg2
             conn = None
             try:
                 conn = get_db_connection()
                 with conn.cursor() as cur:
-                    cur.executemany(
+                    execute_batch(
+                        cur,
                         """
                         INSERT INTO pg_supervisor (content, embedding, label, file_id, sequence_id)
                         VALUES (%s, %s::vector, %s, %s, %s)
                         """,
-                        embeddings_data
+                        embeddings_data,
+                        page_size=50
                     )
                     conn.commit()
                 total_indexed += len(embeddings_data)
+                logger.info(f"[CrawlerJob:{job_id}] Indexed {len(embeddings_data)} chunks in micro-batch {i // batch_size + 1}")
             except Exception as db_err:
                 logger.error(f"[CrawlerJob:{job_id}] Staging insert failed in micro-batch: {str(db_err)}")
                 if conn:
