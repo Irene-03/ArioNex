@@ -54,6 +54,33 @@ AI Assistant Response:
 """
 
 # -------------------------------------------------------------------
+# ۲-ب. پرامپت پاسخ‌دهنده بدون قانون سخت‌گیرانه (Open Responder - no #### guard)
+# -------------------------------------------------------------------
+RESPONDER_TEMPLATE_OPEN = """System Instruction:
+{system_instruction}
+
+Key instructions for the AI assistant:
+    1. Use the below CONTEXT (delimited with XML tags) to answer the QUESTION.
+    2. If CONTEXT does not provide enough information to answer the QUESTION, respond based on your own knowledge to the best of your ability.
+    3. Match the language of the response with the language of the QUESTION (e.g. if the user asks in English, respond in English; if in Persian, respond in Persian).
+
+Compliance Constraints:
+{compliance_constraints}
+
+<CONTEXT>
+{reranked_text}
+</CONTEXT>
+
+Conversation history (retain a concise summary of context to avoid repetition or contradictions):
+{chat_history}
+
+QUESTION:
+{user_input}
+
+AI Assistant Response:
+"""
+
+# -------------------------------------------------------------------
 # ۳. متن امتناع استاندارد فارسی (Standard Persian Refusal Message)
 # -------------------------------------------------------------------
 STANDARD_REFUSAL_MESSAGE = "منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند."

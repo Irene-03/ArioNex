@@ -14,6 +14,7 @@ from app.prompts.rag_prompts import (
     CHECK_CATEGORIES_TEMPLATE,
     STANDALONE_TEMPLATE,
     RESPONDER_TEMPLATE,
+    RESPONDER_TEMPLATE_OPEN,
     CUSTOMIZATION_TEMPLATE
 )
 from app.services.retrieval.query_router.web_search import _get_active_api_key, perform_tavily_web_search
@@ -87,7 +88,8 @@ def standalone_chain():
 
 def responder_chain():
     llm = get_llm(temperature=0.1)
-    responder_prompt = PromptTemplate.from_template(RESPONDER_TEMPLATE)
+    template = RESPONDER_TEMPLATE_OPEN if not settings.security.strict_non_hallucination else RESPONDER_TEMPLATE
+    responder_prompt = PromptTemplate.from_template(template)
     chain = responder_prompt | llm
     return RunnableWithMessageHistory(
         chain,
@@ -220,11 +222,18 @@ def synthesize_rag_response(
                 "sources": [{"name": "accounting_data.csv", "page": "تحلیل آماری حسابداری"}],
                 "is_safe": True
             }
-        else:
+        elif settings.security.strict_non_hallucination:
             logger.warning("Analyst Agent failed to resolve query. Emitting standard refusal.")
             return {
                 "answer": STANDARD_REFUSAL_MESSAGE,
                 "sources": [],
+                "is_safe": True
+            }
+        else:
+            logger.info("Analyst Agent failed to resolve query. Hallucination guard disabled, returning analyst result anyway.")
+            return {
+                "answer": analyst_result,
+                "sources": [{"name": "accounting_data.csv", "page": "تحلیل آماری حسابداری"}],
                 "is_safe": True
             }
 
@@ -337,12 +346,14 @@ def synthesize_rag_response(
         sorted_results = sorted(web_results, key=lambda x: x.get("similarity", 0), reverse=True)[:k]
 
     if not sorted_results:
-        logger.warning("Zero relevant context retrieved across all agents. Refusing to answer.")
-        return {
-            "answer": STANDARD_REFUSAL_MESSAGE,
-            "sources": [],
-            "is_safe": True
-        }
+        if settings.security.strict_non_hallucination:
+            logger.warning("Zero relevant context retrieved across all agents. Refusing to answer.")
+            return {
+                "answer": STANDARD_REFUSAL_MESSAGE,
+                "sources": [],
+                "is_safe": True
+            }
+        logger.info("Zero relevant context retrieved. Hallucination guard disabled, proceeding with empty context.")
 
     # مرتب‌سازی قطعات متوالی متعلق به یک سند بر اساس sequence_id (حفظ پیوستگی معنایی)
     seq_items = [item for item in sorted_results if item.get("file_id") and item.get("sequence_id")]
@@ -423,26 +434,32 @@ def synthesize_rag_response(
         final_answer = response.content.strip()
 
         if final_answer == "####" or not final_answer:
-            logger.warning("Responder LLM outputted refusal placeholder '####'. Emitting standard Persian refusal.")
-            return {
-                "answer": STANDARD_REFUSAL_MESSAGE,
-                "sources": [],
-                "is_safe": True
-            }
+            if settings.security.strict_non_hallucination:
+                logger.warning("Responder LLM outputted refusal placeholder '####'. Emitting standard Persian refusal.")
+                return {
+                    "answer": STANDARD_REFUSAL_MESSAGE,
+                    "sources": [],
+                    "is_safe": True
+                }
+            logger.info("Responder LLM outputted refusal placeholder but guard is disabled. Returning as-is.")
+            final_answer = final_answer if final_answer else "I don't have enough information to answer that."
 
         # ممیزی قوانین
-        audit_result = lawyer_agent.audit_compliance(standalone_query, final_answer, active_file_id)
-        if not audit_result.get("is_compliant", True):
-            logger.warning(f"Lawyer Agent detected compliance violations: {audit_result.get('violations')}. Blocking response.")
-            return {
-                "answer": STANDARD_REFUSAL_MESSAGE,
-                "sources": [],
-                "is_safe": False
-            }
+        if settings.security.strict_non_hallucination:
+            audit_result = lawyer_agent.audit_compliance(standalone_query, final_answer, active_file_id)
+            if not audit_result.get("is_compliant", True):
+                logger.warning(f"Lawyer Agent detected compliance violations: {audit_result.get('violations')}. Blocking response.")
+                return {
+                    "answer": STANDARD_REFUSAL_MESSAGE,
+                    "sources": [],
+                    "is_safe": False
+                }
 
-        report = audit_result.get("audit_report")
-        if report:
-            final_answer += f"\n\n⚖️ **گزارش انطباق قوانین (ArioNex Lawyer Audit):**\n*{report}*"
+            report = audit_result.get("audit_report")
+            if report:
+                final_answer += f"\n\n⚖️ **گزارش انطباق قوانین (ArioNex Lawyer Audit):**\n*{report}*"
+        else:
+            logger.info("Hallucination guard disabled, skipping lawyer audit.")
 
         logger.info("Successfully generated audited RAG response.")
         return {
@@ -454,9 +471,16 @@ def synthesize_rag_response(
     except ValueError as ve:
         raise ve
     except Exception as e:
-        logger.error(f"Final LLM responder synthesis failed: {str(e)}. Emitting refusal.")
+        if settings.security.strict_non_hallucination:
+            logger.error(f"Final LLM responder synthesis failed: {str(e)}. Emitting refusal.")
+            return {
+                "answer": STANDARD_REFUSAL_MESSAGE,
+                "sources": [],
+                "is_safe": True
+            }
+        logger.error(f"Final LLM responder synthesis failed: {str(e)}. Guard disabled, returning error message.")
         return {
-            "answer": STANDARD_REFUSAL_MESSAGE,
+            "answer": f"An error occurred while generating the response: {str(e)}",
             "sources": [],
             "is_safe": True
         }
@@ -536,8 +560,11 @@ async def synthesize_rag_response_stream(
         yield {"event": "sources", "data": [{"name": "accounting_data.csv", "page": "تحلیل آماری حسابداری"}]}
         if "DOUBTFUL ANSWER" not in analyst_result:
             yield {"event": "token", "data": analyst_result}
-        else:
+        elif settings.security.strict_non_hallucination:
             yield {"event": "token", "data": STANDARD_REFUSAL_MESSAGE}
+        else:
+            logger.info("Analyst Agent (stream) produced doubtful answer but guard disabled. Returning anyway.")
+            yield {"event": "token", "data": analyst_result}
         return
 
     # ۵. دسته‌بندی موضوعی
@@ -649,10 +676,12 @@ async def synthesize_rag_response_stream(
         sorted_results = sorted(web_results, key=lambda x: x.get("similarity", 0), reverse=True)[:k]
 
     if not sorted_results:
-        yield {"event": "sources", "data": []}
-        yield {"event": "token", "data": STANDARD_REFUSAL_MESSAGE}
-        yield {"event": "done", "data": {"is_safe": True}}
-        return
+        if settings.security.strict_non_hallucination:
+            yield {"event": "sources", "data": []}
+            yield {"event": "token", "data": STANDARD_REFUSAL_MESSAGE}
+            yield {"event": "done", "data": {"is_safe": True}}
+            return
+        logger.info("Zero relevant context in stream, guard disabled. Proceeding with empty context.")
 
     # حفظ پیوستگی معنایی
     seq_items = [item for item in sorted_results if item.get("file_id") and item.get("sequence_id")]
@@ -723,8 +752,13 @@ async def synthesize_rag_response_stream(
             yield {"event": "token", "data": piece}
 
         if accumulated.strip() == "####" or not accumulated.strip():
-            logger.warning("Stream responder produced refusal placeholder. Emitting standard refusal.")
-            yield {"event": "token", "data": STANDARD_REFUSAL_MESSAGE}
+            if settings.security.strict_non_hallucination:
+                logger.warning("Stream responder produced refusal placeholder. Emitting standard refusal.")
+                yield {"event": "token", "data": STANDARD_REFUSAL_MESSAGE}
+            else:
+                logger.info("Stream responder produced refusal placeholder but guard disabled. Passing through.")
+                if not accumulated.strip():
+                    yield {"event": "token", "data": "I don't have enough information to answer that."}
 
         logger.info("Successfully streamed RAG response.")
         yield {"event": "done", "data": {"is_safe": True}}
@@ -732,7 +766,12 @@ async def synthesize_rag_response_stream(
     except ValueError as ve:
         raise ve
     except Exception as e:
-        logger.error(f"Stream LLM responder failed: {str(e)}. Emitting refusal.")
-        yield {"event": "error", "data": str(e)}
-        yield {"event": "token", "data": STANDARD_REFUSAL_MESSAGE}
+        if settings.security.strict_non_hallucination:
+            logger.error(f"Stream LLM responder failed: {str(e)}. Emitting refusal.")
+            yield {"event": "error", "data": str(e)}
+            yield {"event": "token", "data": STANDARD_REFUSAL_MESSAGE}
+        else:
+            logger.error(f"Stream LLM responder failed: {str(e)}. Guard disabled, returning error message.")
+            yield {"event": "error", "data": str(e)}
+            yield {"event": "token", "data": f"An error occurred while generating the response: {str(e)}"}
         yield {"event": "done", "data": {"is_safe": True}}

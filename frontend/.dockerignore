@@ -1,7 +1,16 @@
 node_modules
 dist
+dist-ssr
+build
 .git
 .github
 .gitignore
 Dockerfile
+.dockerignore
 README.md
+LICENSE
+.vscode
+.idea
+*.log
+npm-debug.log*
+.DS_Store

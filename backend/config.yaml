@@ -30,11 +30,11 @@ services:
 
   # استخراج‌کننده موجودیت‌ها (بخش گراف دانش)
   entity_extractor:
-    enabled: true
+    enabled: false
 
   # استخراج‌کننده قوانین کسب‌وکار (بخش گراف دانش)
   rule_extractor:
-    enabled: true
+    enabled: false
 
   # دیتابیس گرافی نئو فور جی (Neo4j)
   neo4j:
@@ -64,7 +64,7 @@ security:
     
   # قانون سخت‌گیرانه عدم توهم و الزام استناد دقیق به منابع
   strict_non_hallucination:
-    enabled: true
+    enabled: false
 
 # وضعیت فعال/غیرفعال بودن پروایدرهای هوش مصنوعی
 providers:
@@ -131,7 +131,7 @@ password_salt: "arionex_fixed_salt_2026_secure"
 env: "development"
 hormouz_embedding_model: "openai/text-embedding-3-large"
 embedding_provider: "hormouz"
-llm_provider: "ollama"
-model_name: "gemma3:4b"
+llm_provider: "hormouz"
+model_name: "openai/gpt-4o-mini"
 ollama_base_url: "http://localhost:11434"
 ollama_model: "gemma3:4b"

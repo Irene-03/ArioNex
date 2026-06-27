@@ -252,7 +252,7 @@ export const AppProvider = ({ children }) => {
   const [features, setFeatures] = useState({
     piiRedaction: true,
     localGemma: true,
-    hallucinationGuard: true,
+    hallucinationGuard: false,
     externalApiBlocked: true,
     strictCitation: true,
     auditLog: true,
@@ -651,7 +651,7 @@ export const AppProvider = ({ children }) => {
           setFeatures({
             piiRedaction: data.security?.pii_redaction ?? true,
             localGemma: data.services?.safety_auditor ?? false,
-            hallucinationGuard: data.security?.strict_non_hallucination ?? true,
+            hallucinationGuard: data.security?.strict_non_hallucination ?? false,
             externalApiBlocked: !(data.services?.web_search ?? true),
             strictCitation: true,
             auditLog: data.services?.log_processor ?? true,

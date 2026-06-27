@@ -1,4 +1,6 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useApp } from '../../context/AppContext';
 
 export default function ChatView() {
@@ -90,7 +92,15 @@ export default function ChatView() {
                   {/* فقط اگر متن وجود دارد نمایش بده */}
                   {msg.text && (
                     <div className={`msg-bubble ${msg.sender === 'user' ? 'user-bubble' : 'ai-bubble'}`}>
-                      {msg.text}
+                      {msg.sender === 'ai' ? (
+                        <div className="markdown-body">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {msg.text}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        msg.text
+                      )}
                     </div>
                   )}
 

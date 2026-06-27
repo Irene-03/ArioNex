@@ -99,7 +99,7 @@ class SecuritySettings(BaseSettings):
     /// </summary>
     """
     pii_redaction: bool = True
-    strict_non_hallucination: bool = True
+    strict_non_hallucination: bool = False
 
 class Settings(BaseSettings):
     """

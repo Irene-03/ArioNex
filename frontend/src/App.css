@@ -289,6 +289,141 @@
   direction: rtl;
 }
 
+/* ===== رندر Markdown داخل پیام‌های هوش مصنوعی ===== */
+.ai-bubble .markdown-body {
+  white-space: normal !important;
+  direction: rtl;
+}
+
+.ai-bubble .markdown-body > *:first-child {
+  margin-top: 0;
+}
+.ai-bubble .markdown-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.ai-bubble .markdown-body p {
+  margin: 0 0 10px;
+  white-space: normal;
+}
+.ai-bubble .markdown-body p:last-child {
+  margin-bottom: 0;
+}
+
+.ai-bubble .markdown-body strong {
+  font-weight: 800;
+  color: var(--navy);
+}
+.ai-bubble .markdown-body em {
+  font-style: italic;
+}
+
+.ai-bubble .markdown-body h1,
+.ai-bubble .markdown-body h2,
+.ai-bubble .markdown-body h3,
+.ai-bubble .markdown-body h4 {
+  font-weight: 800;
+  color: var(--navy);
+  margin: 16px 0 8px;
+  line-height: 1.4;
+}
+.ai-bubble .markdown-body h1 { font-size: 18px; }
+.ai-bubble .markdown-body h2 { font-size: 16px; }
+.ai-bubble .markdown-body h3 { font-size: 15px; }
+.ai-bubble .markdown-body h4 { font-size: 14px; }
+.ai-bubble .markdown-body h1:first-child,
+.ai-bubble .markdown-body h2:first-child,
+.ai-bubble .markdown-body h3:first-child,
+.ai-bubble .markdown-body h4:first-child {
+  margin-top: 0;
+}
+
+.ai-bubble .markdown-body ul,
+.ai-bubble .markdown-body ol {
+  margin: 0 0 10px;
+  padding-right: 22px;   /* RTL: bullet/number از سمت راست */
+  padding-left: 0;
+}
+.ai-bubble .markdown-body li {
+  margin: 4px 0;
+}
+.ai-bubble .markdown-body li > p {
+  margin: 0;
+}
+
+.ai-bubble .markdown-body a {
+  color: var(--navy);
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+.ai-bubble .markdown-body blockquote {
+  margin: 0 0 10px;
+  padding: 6px 14px;
+  border-right: 3px solid var(--copper);
+  border-left: none;
+  background: rgba(196, 137, 74, 0.06);
+  color: var(--text-secondary, #555);
+  border-radius: 6px;
+}
+.ai-bubble .markdown-body blockquote p {
+  margin: 0;
+}
+
+.ai-bubble .markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--gray-100);
+  margin: 12px 0;
+}
+
+.ai-bubble .markdown-body code {
+  font-family: 'Consolas', 'Menlo', monospace;
+  font-size: 12.5px;
+  background: rgba(26, 39, 68, 0.08);
+  color: var(--navy);
+  padding: 1px 6px;
+  border-radius: 4px;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
+.ai-bubble .markdown-body pre {
+  background: #1a2744;
+  color: #e6eaf2;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  margin: 0 0 10px;
+  direction: ltr;
+  text-align: left;
+}
+.ai-bubble .markdown-body pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: 12.5px;
+}
+
+.ai-bubble .markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  display: block;
+  overflow-x: auto;
+}
+.ai-bubble .markdown-body th,
+.ai-bubble .markdown-body td {
+  border: 1px solid var(--gray-100);
+  padding: 6px 10px;
+  text-align: right;
+}
+.ai-bubble .markdown-body th {
+  background: var(--gray-50);
+  font-weight: 700;
+  color: var(--navy);
+}
+
 .user-bubble {
   background: var(--navy);
   color: white;

@@ -9,8 +9,13 @@ FROM node:20-slim AS builder
 WORKDIR /app
 
 # کپی فیزیکی پیکربندی پکیج‌ها و نصب ملزومات
-COPY package.json /app/
-RUN npm install
+# (lockfile همراه package.json کپی می‌شود تا از کش بیلد بهره ببریم)
+COPY package.json package-lock.json /app/
+
+# استفاده از mirror برای نصب سریع‌تر پکیج‌ها
+RUN npm config set registry https://registry.npmmirror.com \
+    && npm install --no-audit --no-fund \
+    && npm config delete registry
 
 # کپی سورس‌های فرانت‌اند و کامپایل نهایی با Vite
 COPY . /app/
