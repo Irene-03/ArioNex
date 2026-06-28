@@ -86,6 +86,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - shared_storage:/app/storage
     restart: always
 
   # پردازشگر پس‌زمینه تسک‌های غیرهمزمان کرالر (Celery Worker)
@@ -114,6 +116,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - shared_storage:/app/storage
     restart: always
 
   # کلاینت داشبورد مدیریتی فرانت‌اند (Nginx Served React Application)
@@ -130,4 +134,6 @@ volumes:
   postgres_data:
     driver: local
   minio_data:
+    driver: local
+  shared_storage:
     driver: local

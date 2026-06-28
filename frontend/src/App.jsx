@@ -12,6 +12,7 @@ import UploadView from './views/Upload/UploadView';
 import CrawlerView from './views/Crawler/CrawlerView';
 import AdminView from './views/Admin/AdminView';
 import IntegrationsView from './views/Integrations/IntegrationsView';
+import CategoriesView from './views/Categories/CategoriesView';
 
 function DashboardLayout() {
   const { currentUser, activeScreen } = useApp();
@@ -33,6 +34,7 @@ function DashboardLayout() {
         {activeScreen === 'crawler' && <CrawlerView />}
         {activeScreen === 'admin' && <AdminView />}
         {activeScreen === 'integrations' && <IntegrationsView />}
+        {activeScreen === 'categories' && <CategoriesView />}
         
         <div className="wf-tag">ArioNex Commercial AI — v1.0.0</div>
       </div>

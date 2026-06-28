@@ -321,3 +321,117 @@ async def update_system_prompt(payload: PromptUpdateRequest):
     finally:
         if conn:
             conn.close()
+
+# -------------------------------------------------------------------
+# Categories Management Endpoints
+# -------------------------------------------------------------------
+
+class CategoryRequest(BaseModel):
+    name: str
+    description: str = ""
+    is_active: bool = True
+
+@router.get("/config/categories", summary="دریافت لیست دسته‌بندی‌ها")
+async def get_categories():
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name, description, is_active FROM categories ORDER BY id ASC;")
+            rows = cur.fetchall()
+            categories = [
+                {"id": r[0], "name": r[1], "description": r[2], "is_active": r[3]} for r in rows
+            ]
+            return {"status": "success", "categories": categories}
+    except Exception as e:
+        logger.error(f"Failed to fetch categories: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/config/categories", summary="ایجاد دسته‌بندی جدید")
+async def create_category(payload: CategoryRequest):
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO categories (name, description, is_active)
+                VALUES (%s, %s, %s) RETURNING id;
+                """,
+                (payload.name, payload.description, payload.is_active)
+            )
+            new_id = cur.fetchone()[0]
+            conn.commit()
+            return {"status": "success", "message": "Category created.", "category": {"id": new_id, **payload.dict()}}
+    except Exception as e:
+        logger.error(f"Failed to create category: {str(e)}")
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.put("/config/categories/{category_id}", summary="به‌روزرسانی دسته‌بندی")
+async def update_category(category_id: int, payload: CategoryRequest):
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE categories
+                SET name = %s, description = %s, is_active = %s
+                WHERE id = %s
+                RETURNING id;
+                """,
+                (payload.name, payload.description, payload.is_active, category_id)
+            )
+            updated_id = cur.fetchone()
+            if not updated_id:
+                raise HTTPException(status_code=404, detail="Category not found.")
+            conn.commit()
+            return {"status": "success", "message": "Category updated.", "category": {"id": category_id, **payload.dict()}}
+    except HTTPException as he:
+        if conn:
+            conn.rollback()
+        raise he
+    except Exception as e:
+        logger.error(f"Failed to update category: {str(e)}")
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.delete("/config/categories/{category_id}", summary="حذف دسته‌بندی")
+async def delete_category(category_id: int):
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM categories WHERE id = %s RETURNING id;", (category_id,))
+            deleted_id = cur.fetchone()
+            if not deleted_id:
+                raise HTTPException(status_code=404, detail="Category not found.")
+            conn.commit()
+            return {"status": "success", "message": "Category deleted.", "id": category_id}
+    except HTTPException as he:
+        if conn:
+            conn.rollback()
+        raise he
+    except Exception as e:
+        logger.error(f"Failed to delete category: {str(e)}")
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

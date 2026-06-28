@@ -69,6 +69,23 @@ async def execute_upload_logic(file: UploadFile) -> dict:
 
         file_id = get_next_file_id()
 
+        # تبدیل فایل‌های Excel به CSV جهت پردازش یکپارچه در سیستم محاسباتی
+        if ext in (".xlsx", ".xls"):
+            import pandas as pd
+            try:
+                df = pd.read_excel(temp_path)
+                temp_csv_path = temp_path.replace(ext, ".csv")
+                df.to_csv(temp_csv_path, index=False, encoding='utf-8')
+                
+                # به‌روزرسانی اطلاعات فایل به فرمت جدید
+                temp_path = temp_csv_path
+                filename = os.path.splitext(filename)[0] + ".csv"
+                ext = ".csv"
+                logger.info(f"Successfully converted Excel to CSV: {filename}")
+            except Exception as e:
+                logger.error(f"Excel conversion failed: {str(e)}")
+                raise HTTPException(status_code=400, detail=f"Failed to read/convert Excel file: {str(e)}")
+
         # ۲. پیش‌نمایش PII Redaction برای فایل‌های متنی/CSV (جهت ادمین داشبورد)
         pii_preview_text = ""
         pii_audit_counts = {}

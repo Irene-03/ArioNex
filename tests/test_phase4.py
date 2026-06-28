@@ -40,15 +40,17 @@ def test_query_intent_routing():
 
 def test_query_rewriter_fallback():
     print("Testing Query Rewriter Fallback...")
+    from unittest.mock import patch
     
     # تست لایه بازنویسی ورودی به صورت زاپاس (عین متن ورودی باید برگردد)
     user_input = "این چطور کار میکنه؟"
     chat_history = [{"AI": "آریونکس دستیار شماست."}, {"Human": "ممنون."}]
     
-    rewritten = rewrite_query(user_input, chat_history)
-    print(f"Original: {user_input} -> Rewritten: {rewritten}")
-    
-    assert rewritten == user_input, "In mock mode, rewriter should return original query as fallback!"
+    with patch("app.services.retrieval.query_rewriter._get_active_api_key", return_value=None):
+        rewritten = rewrite_query(user_input, chat_history)
+        print(f"Original: {user_input} -> Rewritten: {rewritten}")
+        
+        assert rewritten == user_input, "In mock mode, rewriter should return original query as fallback!"
     print(" Query Rewriter checks PASSED.\n")
 
 def test_analyst_graph_execution():
@@ -67,19 +69,25 @@ def test_analyst_graph_execution():
 
 def test_golden_hallucination_guardrail():
     print("Testing Golden Non-Hallucination Guardrail...")
+    from app.core.config import settings
     
-    # تست قانون طلایی امتناع RAG در صورت خالی بودن نتایج دیتابیس
-    # کوئری درباره موضوعی کاملا نامربوط که تطابقی نخواهد داشت
-    query = "پرواز فضایی به مریخ چقدر زمان میبرد؟"
-    res = synthesize_rag_response(query, chat_history=[])
-    
-    print(f"Query: {query}")
-    print(f"Response: {res['answer']}")
-    print(f"Sources:  {res['sources']}")
-    
-    # چون دیتابیس وکتور خالی است، بلافاصله باید امتناع کند
-    assert res["answer"] == STANDARD_REFUSAL_MESSAGE, "Hallucination guardrail failed to block answer!"
-    assert len(res["sources"]) == 0, "No sources should be cited in refusal!"
+    original_strict = settings.security.strict_non_hallucination
+    settings.security.strict_non_hallucination = True
+    try:
+        # تست قانون طلایی امتناع RAG در صورت خالی بودن نتایج دیتابیس
+        # کوئری درباره موضوعی کاملا نامربوط که تطابقی نخواهد داشت
+        query = "پرواز فضایی به مریخ چقدر زمان میبرد؟"
+        res = synthesize_rag_response(query, chat_history=[])
+        
+        print(f"Query: {query}")
+        print(f"Response: {res['answer']}")
+        print(f"Sources:  {res['sources']}")
+        
+        # چون دیتابیس وکتور خالی است، بلافاصله باید امتناع کند
+        assert res["answer"] == STANDARD_REFUSAL_MESSAGE, "Hallucination guardrail failed to block answer!"
+        assert len(res["sources"]) == 0, "No sources should be cited in refusal!"
+    finally:
+        settings.security.strict_non_hallucination = original_strict
     print(" Golden Non-Hallucination Guardrail checks PASSED.\n")
 
 if __name__ == "__main__":

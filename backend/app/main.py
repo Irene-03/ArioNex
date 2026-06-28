@@ -119,8 +119,8 @@ app.add_middleware(
     max_age=3600,
 )
 
-# اعمال محدودیت نرخ درخواست‌ها جهت جلوگیری از حملات DoS (محدودیت ۳۰ درخواست در دقیقه)
-app.add_middleware(RateLimitMiddleware, requests_limit=30, window_seconds=60)
+# اعمال محدودیت نرخ درخواست‌ها جهت جلوگیری از حملات DoS (محدودیت ۱۰۰۰ درخواست در دقیقه)
+app.add_middleware(RateLimitMiddleware, requests_limit=1000, window_seconds=60)
 
 # ثبت روترهای مستقل بر اساس موضوع
 app.include_router(query_router)

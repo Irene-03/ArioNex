@@ -12,7 +12,7 @@
 
 import os
 import logging
-from typing import List, Dict, Any, TypedDict, Annotated, Literal
+from typing import List, Dict, Any, TypedDict, Annotated, Literal, Generator
 import pandas as pd
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import Tool
@@ -90,7 +90,12 @@ class AnalystAgent:
             conn = get_db_connection()
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT id, filename FROM documents WHERE file_type = 'csv' ORDER BY created_at DESC LIMIT 1"
+                    """
+                    SELECT id, filename FROM documents 
+                    WHERE file_type = 'csv' 
+                      AND id IN (SELECT DISTINCT file_id FROM pg_supervisor)
+                    ORDER BY created_at DESC LIMIT 1
+                    """
                 )
                 row = cur.fetchone()
             conn.close()
@@ -176,26 +181,21 @@ class AnalystAgent:
 
         return [analyze_df_tool, column_sum_tool, groupby_agg_tool, filter_rows_tool, python_tool]
 
-    def execute_analysis(self, query: str, file_id: int = None, custom_file_path: str = None) -> str:
+    def _prepare_graph(self, file_id: int = None, custom_file_path: str = None):
         """
         /// <summary>
-        /// اجرای گراف محاسباتی LangGraph روی دیتای تراکنش‌ها جهت پاسخ‌دهی به فرمول‌ها
+        /// آماده‌سازی و کامپایل گراف لنگ‌گراف برای تحلیل داده‌ها
         /// </summary>
-        /// <param name="query">پرسش محاسباتی کاربر</param>
-        /// <param name="file_id">شناسه فایل CSV آپلود شده کاربر (اختیاری — اگر نباشد آخرین فایل استفاده می‌شود)</param>
-        /// <param name="custom_file_path">مسیر فایل مستقیم روی دیسک (اختیاری — اولویت بالاتر از file_id)</param>
-        /// <returns>رشته متنی پاسخ نهایی</returns>
         """
         if not self.is_enabled:
-            logger.info("Analyst Agent is disabled in config.yaml. Skipping data calculations.")
-            return "DOUBTFUL ANSWER: Structured Data Analytics service is currently disabled."
+            return None, None, "DOUBTFUL ANSWER: Structured Data Analytics service is currently disabled."
 
         # ۱. بارگذاری DataFrame از فایل واقعی کاربر
         df_to_use = self._resolve_dataframe(file_id=file_id, custom_file_path=custom_file_path)
 
         if df_to_use is None or df_to_use.empty:
             logger.warning("Analyst Agent: No structured data found. Cannot perform analysis.")
-            return "DOUBTFUL ANSWER: No structured dataframe is available. Please upload a CSV file first."
+            return None, None, "DOUBTFUL ANSWER: No structured dataframe is available. Please upload a CSV file first."
 
         # ۲. پیکربندی ابزارها و مدل LLM از طریق Factory
         tools_list = self.get_tools(df_to_use)
@@ -237,6 +237,17 @@ class AnalystAgent:
         
         memory = MemorySaver()
         graph = workflow.compile(checkpointer=memory)
+        return graph, system_prompt, None
+
+    def execute_analysis(self, query: str, file_id: int = None, custom_file_path: str = None) -> str:
+        """
+        /// <summary>
+        /// اجرای گراف محاسباتی LangGraph روی دیتای تراکنش‌ها جهت پاسخ‌دهی به فرمول‌ها
+        /// </summary>
+        """
+        graph, system_prompt, error_msg = self._prepare_graph(file_id, custom_file_path)
+        if error_msg:
+            return error_msg
 
         # ۶. اجرای زنجیره و استخراج آخرین پیغام
         try:
@@ -251,6 +262,55 @@ class AnalystAgent:
         except Exception as e:
             logger.error(f"LangGraph execution crashed: {str(e)}")
             return f"DOUBTFUL ANSWER: Data processing pipeline failed. Error: {str(e)}"
+
+    def execute_analysis_stream(self, query: str, file_id: int = None, custom_file_path: str = None) -> Generator[dict, None, None]:
+        """
+        /// <summary>
+        /// استریم کردن مراحل تفکر و خروجی عامل محاسباتی LangGraph به زبان فارسی
+        /// </summary>
+        """
+        graph, system_prompt, error_msg = self._prepare_graph(file_id, custom_file_path)
+        if error_msg:
+            yield {"type": "final", "content": error_msg}
+            return
+
+        try:
+            state_input = {"messages": [HumanMessage(content=query)]}
+            config = {"configurable": {"thread_id": "1", "recursion_limit": 10}}
+            
+            yield {"type": "thought", "content": "🤖 *شروع فرآیند تحلیل داده توسط عامل محاسباتی آریونکس...*\n\n"}
+            
+            for chunk in graph.stream(state_input, config=config, stream_mode="updates"):
+                for node_name, node_state in chunk.items():
+                    if node_name == "agent":
+                        messages = node_state.get("messages", [])
+                        if messages:
+                            last_msg = messages[-1]
+                            if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+                                for tool_call in last_msg.tool_calls:
+                                    t_name = tool_call.get("name", "")
+                                    t_args = tool_call.get("args", {})
+                                    yield {
+                                        "type": "thought",
+                                        "content": f"🔍 *تصمیم عامل:* استفاده از ابزار `{t_name}` جهت تحلیل داده‌ها.\n"
+                                                   f"📥 *پارامترها:* `{t_args}`\n\n"
+                                    }
+                            else:
+                                yield {"type": "final", "content": last_msg.content}
+                    elif node_name == "tools":
+                        messages = node_state.get("messages", [])
+                        if messages:
+                            last_msg = messages[-1]
+                            tool_out = last_msg.content
+                            if len(tool_out) > 200:
+                                tool_out = tool_out[:200] + "..."
+                            yield {
+                                "type": "thought",
+                                "content": f"📊 *خروجی ابزار:* \n```\n{tool_out}\n```\n\n"
+                            }
+        except Exception as e:
+            logger.error(f"LangGraph streaming crashed: {str(e)}")
+            yield {"type": "final", "content": f"DOUBTFUL ANSWER: LangGraph streaming failure: {str(e)}"}
 
 # شیء سراسری عامل تحلیلگر داده
 analyst_agent = AnalystAgent()

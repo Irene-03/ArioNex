@@ -250,6 +250,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const [features, setFeatures] = useState({
+    checkCategories: false,
     piiRedaction: true,
     localGemma: true,
     hallucinationGuard: false,
@@ -279,7 +280,8 @@ export const AppProvider = ({ children }) => {
         services: {
           safety_auditor: updatedFeatures.localGemma,
           log_processor: updatedFeatures.auditLog,
-          web_search: !updatedFeatures.externalApiBlocked
+          web_search: !updatedFeatures.externalApiBlocked,
+          check_categories: updatedFeatures.checkCategories
         },
         integrations: {
           telegram_bot: updatedFeatures.telegramBot,
@@ -649,6 +651,7 @@ export const AppProvider = ({ children }) => {
         const data = await res.json();
         if (data) {
           setFeatures({
+            checkCategories: data.services?.check_categories ?? false,
             piiRedaction: data.security?.pii_redaction ?? true,
             localGemma: data.services?.safety_auditor ?? false,
             hallucinationGuard: data.security?.strict_non_hallucination ?? false,

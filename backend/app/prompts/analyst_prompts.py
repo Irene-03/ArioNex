@@ -40,6 +40,23 @@ def get_analyst_system_prompt(column_names: List[str]) -> str:
 6. Provide a clear, concise answer based on the tool results
 7. Stop when you have a complete answer
 
+**Note on Dates:** 
+The 'Date' column contains Persian/Jalali calendar dates in the format YYYY/MM/DD (e.g., '1402/12/15').
+The months correspond to Jalali calendar months:
+- 01: Farvardin (فروردین)
+- 02: Ordibehesht (اردیبهشت)
+- 03: Khordad (خرداد)
+- 04: Tir (تیر)
+- 05: Mordad (مرداد)
+- 06: Shahrivar (شهریور)
+- 07: Mehr (مهر)
+- 08: Aban (آبان)
+- 09: Azar (آذر)
+- 10: Dey (دی)
+- 11: Bahman (بهمن)
+- 12: Esfand (اسفند)
+When the user asks for a month by name, search/filter the Date column for the corresponding month number (e.g., '/12/' or split the string to extract the month part and check if it equals '12' for Esfand).
+
 **DataFrame Columns:**
 {column_names}
 

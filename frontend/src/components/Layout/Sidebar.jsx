@@ -42,6 +42,12 @@ export default function Sidebar() {
           <span>📥</span> آپلود اسناد
         </div>
         <div 
+          className={`nav-item ${activeScreen === 'categories' ? 'active' : ''}`}
+          onClick={() => setActiveScreen('categories')}
+        >
+          <span>🗂️</span> دسته‌بندی‌ها
+        </div>
+        <div 
           className={`nav-item ${activeScreen === 'crawler' ? 'active' : ''}`}
           onClick={() => setActiveScreen('crawler')}
         >

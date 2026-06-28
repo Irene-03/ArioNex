@@ -31,6 +31,7 @@ from app.services.retrieval.custom_memory import (
     _get_or_create_main
 )
 from app.services.retrieval.analyst import analyst_agent
+from app.services.retrieval.query_router.router import route_query_intent
 
 logger = logging.getLogger("arionex.query_router")
 
@@ -211,9 +212,10 @@ def synthesize_rag_response(
             from app.services.retrieval.query_rewriter import rewrite_query
             standalone_query = rewrite_query(user_input, chat_history)
 
-    # اگر سوال نامرتبط بود، هدایت به تحلیلگر داده‌های مالی
-    if structure_content != "$$$":
-        logger.info("Query is unrelated to document tags. Running Analyst Agent fallback...")
+    # هدایت به تحلیلگر در صورت داشتن قصد محاسباتی یا نامرتبط بودن با اسناد عمومی RAG
+    is_analyst_intent = route_query_intent(standalone_query) == "analyst"
+    if is_analyst_intent or structure_content != "$$$":
+        logger.info(f"Running Analyst Agent (intent={is_analyst_intent}, structure={structure_content != '$$$'}) ...")
         analyst_result = analyst_agent.execute_analysis(standalone_query)
         if "DOUBTFUL ANSWER" not in analyst_result:
             logger.info("Analyst Agent successfully resolved the query.")
@@ -553,18 +555,28 @@ async def synthesize_rag_response_stream(
             from app.services.retrieval.query_rewriter import rewrite_query
             standalone_query = rewrite_query(user_input, chat_history)
 
-    # اگر سوال نامرتبط بود، هدایت به تحلیلگر
-    if structure_content != "$$$":
-        logger.info("Query is unrelated to document tags in stream. Running Analyst Agent fallback...")
-        analyst_result = analyst_agent.execute_analysis(standalone_query)
+    # هدایت به تحلیلگر در صورت داشتن قصد محاسباتی یا نامرتبط بودن با اسناد عمومی RAG
+    is_analyst_intent = route_query_intent(standalone_query) == "analyst"
+    if is_analyst_intent or structure_content != "$$$":
+        logger.info(f"Running Analyst Agent in stream (intent={is_analyst_intent}, structure={structure_content != '$$$'}) ...")
         yield {"event": "sources", "data": [{"name": "accounting_data.csv", "page": "تحلیل آماری حسابداری"}]}
-        if "DOUBTFUL ANSWER" not in analyst_result:
-            yield {"event": "token", "data": analyst_result}
+        
+        final_answer = ""
+        # استریم کردن مراحل تفکر
+        for step in analyst_agent.execute_analysis_stream(standalone_query):
+            if step["type"] == "thought":
+                yield {"event": "token", "data": step["content"]}
+            elif step["type"] == "final":
+                final_answer = step["content"]
+
+        # ارسال پاسخ نهایی
+        if "DOUBTFUL ANSWER" not in final_answer:
+            yield {"event": "token", "data": final_answer}
         elif settings.security.strict_non_hallucination:
             yield {"event": "token", "data": STANDARD_REFUSAL_MESSAGE}
         else:
             logger.info("Analyst Agent (stream) produced doubtful answer but guard disabled. Returning anyway.")
-            yield {"event": "token", "data": analyst_result}
+            yield {"event": "token", "data": final_answer}
         return
 
     # ۵. دسته‌بندی موضوعی
