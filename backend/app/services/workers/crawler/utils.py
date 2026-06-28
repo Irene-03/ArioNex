@@ -132,7 +132,9 @@ async def _fetch_page_js(url: str, proxy: Optional[str] = None, user_agent: Opti
                 locale="fa-IR"
             )
             page = await context.new_page()
-            await page.goto(url, wait_until="networkidle", timeout=30000)
+            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            # یک صبر کوتاه برای تکمیل رندر المان‌های جاوااسکریپت پس از لود DOM
+            await page.wait_for_timeout(3000)
             html = await page.content()
             await browser.close()
             return html

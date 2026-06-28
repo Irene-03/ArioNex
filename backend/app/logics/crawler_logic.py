@@ -244,16 +244,11 @@ async def execute_list_crawl_jobs(
     return [_row_to_job_response(row) for row in rows]
 
 
-async def execute_cancel_crawl_job(job_id: str) -> dict:
+async def execute_cancel_crawl_job(job_id: str, hard_delete: bool = False) -> dict:
     """
     /// <summary>
-    /// لغو یک job کرال در حال اجرا
+    /// لغو یک job کرال در حال اجرا یا حذف کامل تاریخچه
     /// </summary>
-    /// <remarks>
-    /// این متد وضعیت job را در دیتابیس به 'cancelled' تغییر می‌دهد.
-    /// از آنجایی که task پس‌زمینه هر iteration وضعیت را چک نمی‌کند،
-    /// لغو واقعی در نسخه بعدی با asyncio.Event پیاده‌سازی می‌شود.
-    /// </remarks>
     """
     conn = None
     try:
@@ -267,6 +262,16 @@ async def execute_cancel_crawl_job(job_id: str) -> dict:
 
             if not row:
                 raise HTTPException(status_code=404, detail=f"Crawler job '{job_id}' not found")
+
+            if hard_delete:
+                try:
+                    await execute_delete_jobdir(job_id)
+                except Exception as e:
+                    logger.warning(f"Could not delete jobdir for {job_id} during hard_delete: {str(e)}")
+                
+                cur.execute("DELETE FROM crawler_jobs WHERE job_id = %s", (job_id,))
+                conn.commit()
+                return {"message": f"Job '{job_id}' has been permanently deleted", "job_id": job_id}
 
             current_status = row["status"]
             if current_status in ("completed", "failed", "cancelled"):

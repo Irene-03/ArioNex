@@ -246,6 +246,22 @@ export default function CrawlerView() {
                             لغو
                           </button>
                         )}
+                        {(job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') && (
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm('آیا از حذف دائم این تاریخچه اطمینان دارید؟')) return;
+                              const res = await apiFetch(`http://localhost:8000/v1/crawl/${job.job_id}?hard_delete=true`, {method: 'DELETE'});
+                              if (res.ok) {
+                                setCrawlJobs(prev => prev.filter(j => j.job_id !== job.job_id));
+                              }
+                            }}
+                            style={{background: '#f1f5f9', color: 'var(--text-muted)', border: 'none', borderRadius: '4px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', transition: '0.2s'}}
+                            onMouseOver={e => e.target.style.background = '#e2e8f0'}
+                            onMouseOut={e => e.target.style.background = '#f1f5f9'}
+                          >
+                            حذف
+                          </button>
+                        )}
                       </div>
                     </div>
 

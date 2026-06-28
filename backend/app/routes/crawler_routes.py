@@ -96,17 +96,20 @@ async def get_crawl_job_status(job_id: str) -> CrawlJobResponse:
 
 @router.delete(
     "/{job_id}",
-    summary="لغو یک job کرال",
-    description="یک job در حال اجرا یا در صف را لغو می‌کند.",
+    summary="لغو یا حذف کامل یک job کرال",
+    description="یک job در حال اجرا را لغو می‌کند، یا در صورت ارسال hard_delete، تاریخچه آن را کاملاً حذف می‌کند.",
 )
-async def cancel_crawl_job(job_id: str) -> dict:
+async def cancel_crawl_job(
+    job_id: str,
+    hard_delete: bool = Query(default=False, description="آیا تاریخچه کاملا پاک شود؟")
+) -> dict:
     """
     /// <summary>
-    /// اندپوینت لغو job کرال
+    /// اندپوینت لغو یا حذف تاریخچه job کرال
     /// </summary>
     /// <param name="job_id">شناسه یکتای job</param>
     """
-    return await execute_cancel_crawl_job(job_id)
+    return await execute_cancel_crawl_job(job_id, hard_delete=hard_delete)
 
 
 @router.post(

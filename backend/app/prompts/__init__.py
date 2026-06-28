@@ -5,6 +5,7 @@
 # جداسازی پرامپت‌ها از کد منطقی باعث می‌شود تست و بهینه‌سازی آسان‌تر باشد.
 from .rag_prompts import (
     RESPONDER_TEMPLATE,
+    RESPONDER_TEMPLATE_OPEN,
     STANDALONE_TEMPLATE,
     STANDARD_REFUSAL_MESSAGE,
 )

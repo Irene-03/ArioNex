@@ -64,7 +64,7 @@ class PlaywrightMiddleware:
     Middleware برای رندر کردن صفحات JavaScript با Playwright.
     به صورت سنکرون اجرا می‌شود تا با Twisted/Scrapy سازگار باشد.
     """
-    def process_request(self, request, spider):
+    async def process_request(self, request, spider):
         if not getattr(spider, 'js_render', False):
             return None
 
@@ -79,19 +79,9 @@ class PlaywrightMiddleware:
         prx = _proxy_provider.get_proxy()
 
         try:
-            # اجرای همزمان Playwright در thread pool جداگانه
-            try:
-                # اگر event loop در حال اجرا نباشد
-                html = asyncio.run(_fetch_page_js(request.url, proxy=prx, user_agent=ua))
-            except RuntimeError:
-                # اگر loop در حال اجراست (احتمالاً در asyncioreactor)
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(
-                        asyncio.run,
-                        _fetch_page_js(request.url, proxy=prx, user_agent=ua)
-                    )
-                    html = future.result(timeout=35)
+            # با توجه به اینکه reactor از نوع AsyncioSelectorReactor است،
+            # مستقیماً await می‌کنیم و از توابع thread/block استفاده نمی‌کنیم.
+            html = await _fetch_page_js(request.url, proxy=prx, user_agent=ua)
 
             if html:
                 return HtmlResponse(
@@ -299,8 +289,8 @@ def create_scrapy_settings(concurrency: int, respect_robots: bool, jobdir_path: 
         priority='project'
     )
     scrapy_settings.set('DOWNLOAD_HANDLERS', {
-        'http': 'scrapy.core.downloader.handlers.http.HTTPDownloadHandler',
-        'https': 'scrapy.core.downloader.handlers.http.HTTPDownloadHandler',
+        'http': 'scrapy.core.downloader.handlers.http11.HTTP11DownloadHandler',
+        'https': 'scrapy.core.downloader.handlers.http11.HTTP11DownloadHandler',
     }, priority='project')
 
     # تنظیمات همزمانی

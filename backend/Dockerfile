@@ -16,9 +16,10 @@ WORKDIR /app
 
 # کپی و نصب وابستگی‌های پایتونی پروژه
 COPY requirements.txt /app/
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir python-multipart
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip \
+    && pip install -r requirements.txt \
+    && pip install python-multipart
 
 # کپی کدهای بک‌اند به محیط کاربری کانتینر
 COPY . /app/
