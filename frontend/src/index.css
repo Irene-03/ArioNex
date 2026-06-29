@@ -82,10 +82,7 @@ html, body {
 
 body {
   font-family: 'Vazirmatn', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background-color: #e3dec9;
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(196, 137, 74, 0.05) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(26, 39, 68, 0.05) 0px, transparent 50%);
+  background-color: var(--off-white);
   color: var(--text-primary);
   min-height: 100vh;
   display: flex;
@@ -99,8 +96,8 @@ body {
   width: 100%;
   height: 100vh;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
   overflow: hidden;
 }
 
@@ -157,7 +154,7 @@ code {
    RESPONSIVE LAYOUT SYSTEM
    ═══════════════════════════════════════════ */
 
-/* کانتینر اصلی — full screen on small, framed on large */
+/* کانتینر اصلی — تمام‌صفحه در همه اندازه‌ها (Full-screen on all sizes) */
 .device-frame {
   width: 100%;
   height: 100vh;
@@ -165,21 +162,6 @@ code {
   display: flex;
   position: relative;
   overflow: hidden;
-}
-
-/* Large screens: show as premium framed card */
-@media (min-width: 1280px) {
-  #root {
-    padding: 20px;
-  }
-
-  .device-frame {
-    width: min(1280px, 100%);
-    height: min(860px, calc(100vh - 40px));
-    border-radius: 20px;
-    box-shadow: var(--shadow-premium);
-    border: 1px solid rgba(196, 137, 74, 0.15);
-  }
 }
 
 /* Medium screens */
