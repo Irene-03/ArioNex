@@ -100,12 +100,13 @@ class StructuredDataProcessor:
                     else:
                         final_chunk = normalized_chunk
 
-                    # تولید embedding
+                    # تولید embedding با fallback صفر
                     try:
                         embedding = get_embedding(final_chunk)
                     except Exception as emb_err:
-                        logger.warning(f"Embedding failed for row {idx} in '{original_filename}': {str(emb_err)}. Skipping row.")
-                        continue
+                        logger.warning(f"Embedding failed for row {idx} in '{original_filename}': {str(emb_err)}. Using zero-vector fallback.")
+                        from app.core.embeddings import _get_embedding_dimension
+                        embedding = [0.0] * _get_embedding_dimension()
 
                     sequence_id = idx + 1
                     cur.execute(

@@ -203,7 +203,20 @@ class ArioNexSpider(scrapy.Spider):
             return
 
         page_url = response.url
-        html = response.text
+
+        # اسکیپ کردن فایل‌های غیر-HTML (تصاویر، PDF و ...)
+        from app.services.workers.crawler.utils import _is_skippable_url
+        if _is_skippable_url(page_url):
+            self.logger.debug(f"Skipping non-HTML URL: {page_url}")
+            return
+
+        try:
+            html = response.text
+        except Exception:
+            self.logger.warning(f"Failed to decode response text for {page_url}")
+            self.pages_failed += 1
+            self.update_db_stats()
+            return
 
         from app.services.workers.crawler.utils import _extract_page_content
         try:
@@ -262,6 +275,8 @@ class ArioNexSpider(scrapy.Spider):
         depth = response.meta.get('depth', 0)
         if depth < self.max_depth and self.pages_crawled < self.max_pages:
             for link in page_data["outgoing_links"]:
+                if _is_skippable_url(link):
+                    continue
                 if not _is_same_domain(self.start_url, link):
                     if not self.follow_external:
                         continue

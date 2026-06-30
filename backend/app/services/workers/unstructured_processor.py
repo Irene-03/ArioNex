@@ -9,9 +9,12 @@
 """
 
 import os
+import io
 import logging
-from pypdf import PdfReader
+
+import fitz
 from docx import Document as Doc
+from PIL import Image
 
 from app.core.config import settings
 from app.core.database import get_db_connection
@@ -21,6 +24,75 @@ from app.services.workers.text_processor import normalize_text, chunk_text
 from app.services.safety.pii_redactor import redact_text
 
 logger = logging.getLogger("arionex.unstructured_processor")
+
+# ------------------------------------------------------------------
+# Lazy-loaded PaddleOCR (single global instance)
+# ------------------------------------------------------------------
+_ocr_instance = None
+
+
+def _get_ocr():
+    global _ocr_instance
+    if _ocr_instance is None:
+        try:
+            from paddleocr import PaddleOCR
+            _ocr_instance = PaddleOCR(use_angle_cls=True, lang='fa', use_gpu=False)
+            logger.info("PaddleOCR initialised (lang=fa, use_gpu=False)")
+        except ImportError:
+            logger.error("PaddleOCR not installed. Run: pip install paddleocr")
+            raise
+    return _ocr_instance
+
+
+def _reshape_persian(text: str) -> str:
+    """Reshape Arabic/Persian characters and apply BiDi algorithm."""
+    try:
+        import arabic_reshaper
+        from bidi.algorithm import get_display
+        return get_display(arabic_reshaper.reshape(text))
+    except ImportError:
+        logger.warning("arabic_reshaper or python-bidi not installed; returning raw text.")
+        return text
+
+
+def _page_has_meaningful_text(text: str, min_chars: int = 15) -> bool:
+    """Return True if extracted text is long enough to be real (not scanned/garbled)."""
+    text = text.strip()
+    if len(text) < min_chars:
+        return False
+    alpha = sum(1 for ch in text if ch.isalpha() or ch.isspace())
+    return alpha > len(text) * 0.3
+
+
+def _extract_page_fitz(page) -> str:
+    """Stage 1: fast text extraction via PyMuPDF."""
+    text = page.get_text()
+    return _reshape_persian(text) if text.strip() else ""
+
+
+def _extract_page_ocr(page, dpi: int = 300) -> str:
+    """Stage 2: OCR fallback via PaddleOCR for scanned pages."""
+    try:
+        pix = page.get_pixmap(dpi=dpi)
+        img = Image.open(io.BytesIO(pix.tobytes("png")))
+    except Exception:
+        return ""
+
+    ocr = _get_ocr()
+    try:
+        result = ocr.ocr(img, cls=True)
+    except Exception:
+        return ""
+
+    if not result or not result[0]:
+        return ""
+
+    lines = []
+    for line_info in result[0]:
+        text, conf = line_info[1]
+        if conf and conf > 0.3:
+            lines.append(text)
+    return "\n".join(lines)
 
 
 def split_into_semantic_windows(text: str, window_size: int = 3000, overlap: int = 500) -> list:
@@ -61,17 +133,33 @@ class UnstructuredDocumentProcessor:
     def parse_pdf(self, file_path: str) -> str:
         """
         /// <summary>
-        /// استخراج تمام متون درون فایل PDF با استفاده از کتابخانه pypdf
+        /// پایپ‌لاین دو مرحله‌ای استخراج متن از PDF:
+        ///   1. PyMuPDF (fitz) — استخراج سریع متن در صورت وجود لایه متنی
+        ///   2. PaddleOCR    — تشخیص حروف تصویری برای صفحات اسکن‌شده
         /// </summary>
         """
         text_content = []
         try:
-            reader = PdfReader(file_path)
-            for page_num, page in enumerate(reader.pages):
-                page_text = page.extract_text()
-                if page_text:
+            doc = fitz.open(file_path)
+            total = len(doc)
+            logger.info(f"PDF opened via PyMuPDF: {total} page(s)")
+
+            for i in range(total):
+                page = doc[i]
+
+                # مرحله ۱: استخراج سریع با PyMuPDF
+                page_text = _extract_page_fitz(page)
+
+                if _page_has_meaningful_text(page_text):
                     text_content.append(page_text)
+                else:
+                    # مرحله ۲: برگشت به PaddleOCR برای صفحه اسکن‌شده
+                    logger.info(f"Page {i+1}/{total}: low-quality text → PaddleOCR fallback")
+                    ocr_text = _extract_page_ocr(page)
+                    text_content.append(ocr_text if ocr_text.strip() else page_text)
+
             return "\n".join(text_content)
+
         except Exception as e:
             logger.error(f"Failed to parse PDF file at {file_path}. Error: {str(e)}")
             raise e

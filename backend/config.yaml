@@ -94,7 +94,7 @@ crawler:
   # رندر صفحات JavaScript (React/Vue/Angular) با استفاده از Playwright
   # هشدار: فعال کردن این گزینه نیاز به نصب playwright و chromium دارد
   js_render:
-    enabled: false
+    enabled: true
 
   # دنبال کردن لینک‌های خارجی (خارج از دامنه اصلی)
   # با سختگیری زیاد — فقط دامنه‌های مرتبط و ارزشمند دنبال می‌شوند

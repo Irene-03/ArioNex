@@ -126,7 +126,7 @@ def _embed_with_openai(text: str) -> list[float]:
 def _embed_with_hormouz(text: str) -> list[float]:
     """
     /// <summary>
-    /// تولید embedding از طریق Hormouz API
+    /// تولید embedding از طریق Hormouz API با timeout ۳۰ ثانیه
     /// </summary>
     """
     from openai import OpenAI
@@ -137,6 +137,8 @@ def _embed_with_hormouz(text: str) -> list[float]:
     client = OpenAI(
         api_key=api_key,
         base_url="https://api.hormouz.net/v1",
+        timeout=30.0,
+        max_retries=0,
     )
     response = client.embeddings.create(model=model, input=text)
     return response.data[0].embedding

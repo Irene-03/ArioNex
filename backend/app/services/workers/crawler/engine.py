@@ -127,21 +127,20 @@ class CrawlerService:
             try:
                 from playwright.async_api import async_playwright
                 async with async_playwright() as p:
-                    executable = p.chromium.executable_path
-                    if not os.path.exists(executable):
-                        logger.warning(f"[CrawlerJob:{job_id}] Playwright Chromium executable not found at {executable}. Attempting auto-installation...")
-                        install_proc = await asyncio.create_subprocess_exec(
-                            sys.executable, "-m", "playwright", "install", "chromium"
-                        )
-                        await install_proc.wait()
-                        if install_proc.returncode != 0:
-                            raise RuntimeError(f"Playwright installation exited with non-zero code {install_proc.returncode}")
+                    # Verify Edge is available by launching it via the msedge channel
+                    browser = await p.chromium.launch(channel="msedge", headless=True)
+                    await browser.close()
             except Exception as e:
-                logger.error(f"[CrawlerJob:{job_id}] Playwright Chromium check/installation failed: {str(e)}")
+                logger.error(f"[CrawlerJob:{job_id}] Playwright/Edge check failed: {str(e)}")
+                error_msg = str(e)
+                if "msedge" in error_msg and "executable doesn't exist" in error_msg:
+                    error_msg = "Microsoft Edge is not installed on this system. Install Edge or provide a valid browser."
+                elif "playwright" in error_msg.lower():
+                    error_msg = "Playwright is not properly installed. Verify with 'pip install playwright'."
                 _update_job_in_db(
                     job_id,
                     status="failed",
-                    error_message=f"Playwright Chromium browser is not installed and auto-installation failed: {str(e)}. Run 'playwright install chromium' on the server."
+                    error_message=f"JS rendering dependency check failed: {error_msg}"
                 )
                 return
 

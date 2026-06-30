@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import random
+import sys
 import trafilatura
 from typing import Optional
 from urllib.parse import urljoin, urlparse, urlunparse
@@ -121,19 +122,26 @@ async def _fetch_page_plain(url: str, proxy: Optional[str] = None, user_agent: O
 async def _fetch_page_js(url: str, proxy: Optional[str] = None, user_agent: Optional[str] = None) -> Optional[str]:
     try:
         from playwright.async_api import async_playwright
+        # Windows SelectorEventLoop (used by Scrapy) doesn't support subprocess operations.
+        # Run Playwright in a dedicated thread with ProactorEventLoop.
+        import asyncio
+        loop = asyncio.get_running_loop()
+        if sys.platform == 'win32' and isinstance(loop, asyncio.SelectorEventLoop):
+            html = await _run_playwright_in_thread(url, proxy, user_agent)
+            return html
+
         async with async_playwright() as p:
             playwright_proxy = None
             if proxy:
                 playwright_proxy = {"server": proxy}
 
-            browser = await p.chromium.launch(headless=True, proxy=playwright_proxy)
+            browser = await p.chromium.launch(channel="msedge", headless=True, proxy=playwright_proxy)
             context = await browser.new_context(
                 user_agent=user_agent or random.choice(_USER_AGENTS),
                 locale="fa-IR"
             )
             page = await context.new_page()
             await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            # یک صبر کوتاه برای تکمیل رندر المان‌های جاوااسکریپت پس از لود DOM
             await page.wait_for_timeout(3000)
             html = await page.content()
             await browser.close()
@@ -146,6 +154,43 @@ async def _fetch_page_js(url: str, proxy: Optional[str] = None, user_agent: Opti
         if proxy:
             _proxy_provider.report_failure(proxy)
         return None
+
+
+async def _run_playwright_in_thread(url: str, proxy: Optional[str] = None, user_agent: Optional[str] = None) -> Optional[str]:
+    """Run Playwright in a separate thread with its own event loop (required on Windows where Scrapy's SelectorEventLoop doesn't support subprocess)."""
+    import asyncio
+    import concurrent.futures
+
+    def _run():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(_do_playwright_fetch(url, proxy, user_agent))
+        finally:
+            loop.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return await asyncio.get_event_loop().run_in_executor(pool, _run)
+
+
+async def _do_playwright_fetch(url: str, proxy: Optional[str] = None, user_agent: Optional[str] = None) -> Optional[str]:
+    from playwright.async_api import async_playwright
+    async with async_playwright() as p:
+        playwright_proxy = None
+        if proxy:
+            playwright_proxy = {"server": proxy}
+
+        browser = await p.chromium.launch(channel="msedge", headless=True, proxy=playwright_proxy)
+        context = await browser.new_context(
+            user_agent=user_agent or random.choice(_USER_AGENTS),
+            locale="fa-IR"
+        )
+        page = await context.new_page()
+        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        await page.wait_for_timeout(3000)
+        html = await page.content()
+        await browser.close()
+        return html
 
 
 def _extract_page_content(html: str, url: str) -> dict:

@@ -139,7 +139,12 @@ def _commit_staged_data(job_id: str, label: str) -> int:
             # تهیه embedding برای هر chunk
             embeddings_data = []
             for item in chunks_to_insert:
-                emb = _get_embedding_with_retry(item["content"])
+                try:
+                    emb = _get_embedding_with_retry(item["content"])
+                except Exception as emb_err:
+                    logger.warning(f"[CrawlerJob:{job_id}] Embedding failed for chunk seq={item['sequence_id']}: {str(emb_err)}. Using zero-vector fallback.")
+                    from app.core.embeddings import _get_embedding_dimension
+                    emb = [0.0] * _get_embedding_dimension()
                 embeddings_data.append((item["content"], emb, temp_label, 0, item["sequence_id"]))
 
             # استفاده از execute_batch به جای executemany برای سازگاری کامل با type vector در psycopg2
