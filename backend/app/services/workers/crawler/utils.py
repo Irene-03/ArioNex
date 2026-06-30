@@ -135,7 +135,7 @@ async def _fetch_page_js(url: str, proxy: Optional[str] = None, user_agent: Opti
             if proxy:
                 playwright_proxy = {"server": proxy}
 
-            browser = await p.chromium.launch(channel="msedge", headless=True, proxy=playwright_proxy)
+            browser = await p.chromium.launch(headless=True, proxy=playwright_proxy)
             context = await browser.new_context(
                 user_agent=user_agent or random.choice(_USER_AGENTS),
                 locale="fa-IR"
@@ -180,7 +180,7 @@ async def _do_playwright_fetch(url: str, proxy: Optional[str] = None, user_agent
         if proxy:
             playwright_proxy = {"server": proxy}
 
-        browser = await p.chromium.launch(channel="msedge", headless=True, proxy=playwright_proxy)
+        browser = await p.chromium.launch(headless=True, proxy=playwright_proxy)
         context = await browser.new_context(
             user_agent=user_agent or random.choice(_USER_AGENTS),
             locale="fa-IR"

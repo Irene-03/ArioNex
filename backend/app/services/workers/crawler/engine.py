@@ -127,22 +127,11 @@ class CrawlerService:
             try:
                 from playwright.async_api import async_playwright
                 async with async_playwright() as p:
-                    # Verify Edge is available by launching it via the msedge channel
-                    browser = await p.chromium.launch(channel="msedge", headless=True)
+                    browser = await p.chromium.launch(headless=True)
                     await browser.close()
             except Exception as e:
-                logger.error(f"[CrawlerJob:{job_id}] Playwright/Edge check failed: {str(e)}")
-                error_msg = str(e)
-                if "msedge" in error_msg and "executable doesn't exist" in error_msg:
-                    error_msg = "Microsoft Edge is not installed on this system. Install Edge or provide a valid browser."
-                elif "playwright" in error_msg.lower():
-                    error_msg = "Playwright is not properly installed. Verify with 'pip install playwright'."
-                _update_job_in_db(
-                    job_id,
-                    status="failed",
-                    error_message=f"JS rendering dependency check failed: {error_msg}"
-                )
-                return
+                logger.warning(f"[CrawlerJob:{job_id}] Playwright/Chromium not available ({str(e)}). Falling back to plain HTTP (no JS rendering).")
+                js_render = False
 
         # Launch the Scrapy crawler in a separate Python process
         try:

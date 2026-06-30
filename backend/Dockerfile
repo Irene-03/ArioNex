@@ -9,6 +9,7 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONIOENCODING=utf-8
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/ms-playwright
 
 WORKDIR /app
 
@@ -19,10 +20,19 @@ COPY requirements.txt /app/
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip \
     && pip install -r requirements.txt \
-    && pip install python-multipart
+    && pip install python-multipart \
+    && apt-get update -qq \
+    && apt-get install -y -qq --no-install-recommends \
+        libnss3 libnspr4 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 \
+        libasound2 libxshmfence1 libxcomposite1 libxdamage1 libxrandr2 \
+        libxtst6 libcups2 libpango-1.0-0 \
+    && rm -rf /var/lib/apt/lists/*
 
 # کپی کدهای بک‌اند به محیط کاربری کانتینر
 COPY . /app/
+
+# نصب مرورگر Chromium برای Playwright (اختیاری — در صورت تحریم CDN، build fail نمی‌شود)
+RUN python -m playwright install chromium 2>/dev/null || echo "[INFO] Playwright Chromium download failed (likely due to region restrictions). JS rendering will fall back to non-JS mode."
 
 # پورت پیش‌فرض وب‌سرور FastAPI
 EXPOSE 8000
