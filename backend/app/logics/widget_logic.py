@@ -15,6 +15,7 @@
 
 import json
 import logging
+import time
 from typing import AsyncGenerator
 from fastapi import HTTPException
 
@@ -57,6 +58,7 @@ async def execute_widget_logic(request: QueryRequest) -> QueryResponse:
         history = _widget_sessions[session_id][-10:]
 
         # ۲. فراخوانی موتور RAG مرکزی
+        start_time = time.time()
         result = synthesize_rag_response(
             user_input=request.query,
             chat_history=history,
@@ -65,6 +67,9 @@ async def execute_widget_logic(request: QueryRequest) -> QueryResponse:
             file_ids=request.file_ids,
             session_id=session_id
         )
+        end_time = time.time()
+        response_time_ms = int((end_time - start_time) * 1000)
+        approx_tokens = (len(request.query) + len(result["answer"])) // 4
 
         # ۳. به‌روزرسانی تاریخچه نشست
         _widget_sessions[session_id].append({"Human": request.query})
@@ -76,6 +81,8 @@ async def execute_widget_logic(request: QueryRequest) -> QueryResponse:
             user_role="Viewer",
             query_text=request.query,
             response_text=result["answer"],
+            total_tokens=approx_tokens,
+            response_time_ms=response_time_ms,
         )
 
         return QueryResponse(
@@ -111,6 +118,7 @@ async def execute_widget_stream_logic(request: QueryRequest) -> AsyncGenerator[s
     history = _widget_sessions[session_id][-10:]
 
     accumulated_answer = ""
+    start_time = time.time()
     try:
         async for event in synthesize_rag_response_stream(
             user_input=request.query,
@@ -128,11 +136,16 @@ async def execute_widget_stream_logic(request: QueryRequest) -> AsyncGenerator[s
         _widget_sessions[session_id].append({"AI": accumulated_answer})
 
         # ثبت ممیزی
+        end_time = time.time()
+        response_time_ms = int((end_time - start_time) * 1000)
+        approx_tokens = (len(request.query) + len(accumulated_answer)) // 4
         log_audit_event(
             user_name="Widget_User",
             user_role="Viewer",
             query_text=request.query,
             response_text=accumulated_answer,
+            total_tokens=approx_tokens,
+            response_time_ms=response_time_ms,
         )
     except Exception as e:
         logger.error(f"Widget stream error: {str(e)}")

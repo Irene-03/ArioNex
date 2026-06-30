@@ -15,6 +15,7 @@
 import json
 import logging
 import asyncio
+import time
 from typing import AsyncGenerator, Optional
 from fastapi import HTTPException, Request
 
@@ -107,6 +108,7 @@ async def execute_query_logic(request: QueryRequest, current_user: Optional[dict
             _query_sessions[session_id] = []
         chat_history = _query_sessions[session_id][-10:]
 
+        start_time = time.time()
         result = synthesize_rag_response(
             user_input=request.query,
             chat_history=chat_history,
@@ -115,6 +117,11 @@ async def execute_query_logic(request: QueryRequest, current_user: Optional[dict
             file_ids=final_file_ids,
             session_id=session_id
         )
+        end_time = time.time()
+        response_time_ms = int((end_time - start_time) * 1000)
+        
+        # Approximate tokens
+        approx_tokens = (len(request.query) + len(result["answer"])) // 4
 
         # به‌روزرسانی تاریخچه نشست
         _query_sessions[session_id].append({"Human": request.query})
@@ -126,6 +133,8 @@ async def execute_query_logic(request: QueryRequest, current_user: Optional[dict
             user_role=role,
             query_text=request.query,
             response_text=result["answer"],
+            total_tokens=approx_tokens,
+            response_time_ms=response_time_ms,
         )
 
         return QueryResponse(
@@ -201,6 +210,7 @@ async def execute_query_stream_logic(
     history = _query_sessions[session_id][-10:]
 
     accumulated_answer = ""
+    start_time = time.time()
     try:
         # Enforce a 60-second execution/inactivity timeout on the stream
         async with asyncio.timeout(60.0):
@@ -235,11 +245,16 @@ async def execute_query_stream_logic(
             _query_sessions[session_id].append({"AI": accumulated_answer})
 
             # ثبت در سیستم ممیزی پس از پایان stream
+            end_time = time.time()
+            response_time_ms = int((end_time - start_time) * 1000)
+            approx_tokens = (len(request.query) + len(accumulated_answer)) // 4
             log_audit_event(
                 user_name=username,
                 user_role=role,
                 query_text=request.query,
                 response_text=accumulated_answer,
+                total_tokens=approx_tokens,
+                response_time_ms=response_time_ms,
             )
             yield _sse_event("done", {"is_safe": True})
 

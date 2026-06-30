@@ -27,6 +27,11 @@ export default function DashboardView() {
           <div className="stat-value">{stats.total_pii_masked} مورد</div>
           <div className="stat-change stat-up">ماسک شده در تمام فایل‌ها</div>
         </div>
+        <div className="stat-card">
+          <div className="stat-label">توکن‌های مصرفی API</div>
+          <div className="stat-value">{stats.total_tokens_used ? stats.total_tokens_used.toLocaleString() : 0}</div>
+          <div className="stat-change" style={{color: 'var(--copper-dark)'}}>کل نشست‌ها</div>
+        </div>
       </div>
 
       <div className="two-col">

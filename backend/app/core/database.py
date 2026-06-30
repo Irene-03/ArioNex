@@ -93,7 +93,9 @@ def init_db() -> None:
             query_text TEXT NOT NULL,
             response_text TEXT NOT NULL,
             status VARCHAR(30) NOT NULL,
-            pii_masked_count INT DEFAULT 0
+            pii_masked_count INT DEFAULT 0,
+            total_tokens INT DEFAULT 0,
+            response_time_ms INT DEFAULT 0
         );
         """,
         # ۵. جدول ابزارک‌های وب‌سایت (Website Widgets)

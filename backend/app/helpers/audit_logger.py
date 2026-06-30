@@ -19,8 +19,8 @@ logger = logging.getLogger("arionex.audit_logger")
 
 # دستور SQL ثبت لاگ ممیزی — قابل استفاده در هر channel
 _AUDIT_INSERT_SQL = """
-INSERT INTO pg_audit_logs (user_name, user_role, query_text, response_text, status, pii_masked_count)
-VALUES (%s, %s, %s, %s, %s, %s)
+INSERT INTO pg_audit_logs (user_name, user_role, query_text, response_text, status, pii_masked_count, total_tokens, response_time_ms)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 
@@ -31,6 +31,8 @@ def log_audit_event(
     response_text: str,
     status: str = "success",
     pii_masked_count: int = 0,
+    total_tokens: int = 0,
+    response_time_ms: int = 0,
 ) -> None:
     """
     /// <summary>
@@ -57,6 +59,8 @@ def log_audit_event(
                 response_text,
                 status,
                 pii_masked_count,
+                total_tokens,
+                response_time_ms,
             ))
             conn.commit()
         conn.close()
