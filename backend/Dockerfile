@@ -21,11 +21,10 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip \
     && pip install -r requirements.txt \
     && pip install python-multipart \
-    && apt-get update -qq \
-    && apt-get install -y -qq --no-install-recommends \
+    && (apt-get update -qq --fix-missing && apt-get install -y -qq --no-install-recommends --fix-missing \
         libnss3 libnspr4 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 \
         libasound2 libxshmfence1 libxcomposite1 libxdamage1 libxrandr2 \
-        libxtst6 libcups2 libpango-1.0-0 \
+        libxtst6 libcups2 libpango-1.0-0 || echo "WARNING: apt-get failed, skipping playwright deps") \
     && rm -rf /var/lib/apt/lists/*
 
 # کپی کدهای بک‌اند به محیط کاربری کانتینر

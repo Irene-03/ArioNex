@@ -45,14 +45,11 @@ def _get_ocr():
 
 
 def _reshape_persian(text: str) -> str:
-    """Reshape Arabic/Persian characters and apply BiDi algorithm."""
-    try:
-        import arabic_reshaper
-        from bidi.algorithm import get_display
-        return get_display(arabic_reshaper.reshape(text))
-    except ImportError:
-        logger.warning("arabic_reshaper or python-bidi not installed; returning raw text.")
-        return text
+    """Reshape Arabic/Persian characters and apply BiDi algorithm.
+    WARNING: get_display() reverses the string logically which breaks vector embeddings and LLMs!
+    We should rely on logical text ordering.
+    """
+    return text
 
 
 def _page_has_meaningful_text(text: str, min_chars: int = 15) -> bool:
