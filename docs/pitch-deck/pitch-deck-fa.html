@@ -21,9 +21,8 @@
 
         .slide {
             width: 1280px;
-            height: 720px;
+            min-height: 720px;
             position: relative;
-            overflow: hidden;
             margin: 0 auto 18px;
             padding: 52px 64px;
             background: radial-gradient(circle at 10% 90%, rgba(201, 131, 69, .18), transparent 32%), linear-gradient(135deg, #fff, #f7f1e8);
@@ -41,6 +40,21 @@
             border: 1px solid rgba(16, 27, 51, .10);
             border-radius: 32px;
             pointer-events: none
+        }
+
+        .slide .visual {
+            max-width: none
+        }
+
+        .slide .visual > * {
+            max-width: 100%;
+            box-sizing: border-box
+        }
+
+        .slide .content {
+            overflow-wrap: break-word;
+            word-break: break-word;
+            max-width: none
         }
 
         .content {
@@ -78,9 +92,9 @@
         }
 
         .lead {
-            font-size: 21px;
-            line-height: 1.9;
-            margin: 0 0 18px;
+            font-size: 18px;
+            line-height: 1.8;
+            margin: 0 0 14px;
             color: #26324d
         }
 
@@ -93,12 +107,12 @@
         }
 
         li {
-            font-size: 19px;
-            line-height: 1.55;
+            font-size: 17px;
+            line-height: 1.5;
             background: rgba(255, 255, 255, .62);
             border: 1px solid rgba(16, 27, 51, .08);
-            border-radius: 16px;
-            padding: 10px 16px
+            border-radius: 14px;
+            padding: 8px 14px
         }
 
         li:before {
@@ -117,37 +131,31 @@
             justify-content: center
         }
 
-        .hero-mark {
-            width: 420px;
-            height: 420px;
-            border-radius: 42px;
-            background: linear-gradient(145deg, #101b33, #182a52);
-            box-shadow: 0 30px 80px rgba(16, 27, 51, .28);
+        .slide-1 .lead {
+            font-size: 21px;
+            line-height: 1.9;
+            margin: 0 0 18px
+        }
+
+        .slide-1 li {
+            font-size: 19px;
+            line-height: 1.55;
+            padding: 10px 16px
+        }
+
+        .slide-13 .content {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            color: #fff;
-            gap: 26px
+            gap: 28px
         }
 
-        .triangle {
-            width: 190px;
-            height: 170px;
-            clip-path: polygon(50% 0, 100% 100%, 0 100%);
-            background: linear-gradient(135deg, #c98345, #f1c27d);
-            display: flex;
-            align-items: end;
-            justify-content: center;
-            padding-bottom: 32px;
-            font-size: 42px;
-            font-weight: 950;
-            color: #101b33
-        }
-
-        .hero-mark span {
-            font-size: 22px;
-            color: #f8ead7
+        .logo-visual {
+            width: 380px;
+            height: auto;
+            border-radius: 24px;
+            box-shadow: 0 30px 80px rgba(16, 27, 51, .28);
+            display: block
         }
 
         .image-frame {
@@ -241,8 +249,8 @@
 
         .market-rings {
             position: relative;
-            width: 430px;
-            height: 430px;
+            width: 380px;
+            height: 380px;
             border-radius: 50%;
             background: conic-gradient(from 90deg, #c98345, #efb980, #101b33, #c98345);
             padding: 18px;
@@ -283,15 +291,19 @@
 
         .timeline {
             display: flex;
+            flex-wrap: wrap;
             gap: 14px;
-            align-items: center
+            align-items: center;
+            justify-content: center;
+            width: 100%
         }
 
         .timeline span {
             background: #fff;
             border-radius: 24px;
             padding: 30px 22px;
-            min-width: 150px;
+            min-width: 130px;
+            flex: 1 1 auto;
             text-align: center;
             font-size: 22px;
             font-weight: 800;
@@ -337,6 +349,11 @@
             box-shadow: 0 25px 70px rgba(16, 27, 51, .28)
         }
 
+        @page {
+            size: 1280px 720px;
+            margin: 0
+        }
+
         @media print {
             body {
                 background: white
@@ -344,7 +361,10 @@
 
             .slide {
                 margin: 0;
-                break-after: page
+                break-after: page;
+                min-height: 720px;
+                height: 720px;
+                overflow: hidden
             }
         }
     </style>
@@ -353,7 +373,7 @@
 <section class="slide slide-1">
     <div class="content">
         <p class="kicker">Investor Pitch Deck</p>
-        <h1>آریونکس | ArioNex</h1>
+        <h1>آریونکس | <span style="font-family:'Times New Roman',serif">ArioNex</span></h1>
         <h2>دستیار هوش مصنوعی امن برای دانش سازمانی فارسی</h2>
         <p class="lead">یک محصول B2B آماده پایلوت که دانش پراکنده سازمان را به پاسخ‌های سریع، امن و قابل اتکا تبدیل
             می‌کند.</p>
@@ -364,9 +384,7 @@
         </ul>
     </div>
     <aside class="visual">
-        <div class="hero-mark">
-            <div class="triangle">ANX</div>
-            <span>Secure Persian Enterprise AI</span></div>
+        <img src="logo.jpg" alt="ArioNex" class="logo-visual">
     </aside>
 </section>
 <section class="slide slide-2">
@@ -404,7 +422,7 @@
         </ul>
     </div>
     <aside class="visual">
-        <div class="stack"><span>ورودی اسناد</span><span>پاک‌سازی و امنیت</span><span>جست‌وجوی معنایی</span><span>پاسخ قابل اتکا</span>
+        <div class="stack"><span>ورودی اسناد</span><span>پاک‌سازی و امنیت</span><span>جست‌وجوی معنایی</span><span>پاسخ قابل اتکا</span><span>یکپارچه‌سازی با ابزارهای ایرانی</span>
         </div>
     </aside>
 </section>
@@ -461,7 +479,7 @@
         <ul>
             <li>Safety Airlock برای پاک‌سازی و Redaction</li>
             <li>ذخیره‌سازی دانش امن و قابل کنترل</li>
-            <li>عامل‌های تخصصی برای تحلیل، جست‌وجو و اعتبارسنجی</li>
+            <li>عامل‌های تخصصی برای جست‌وجو، اعتبارسنجی، حسابداری، پشتیبانی</li>
             <li>آمادگی برای Integration با ابزارهای ایرانی مثل بله</li>
         </ul>
     </div>
@@ -518,7 +536,7 @@
         <p class="kicker">08 / Competition</p>
         <h1>رقابت: ابزار زیاد است، اما تمرکز ما متفاوت است</h1>
         <h2>آریونکس بین چت‌بات عمومی، ابزار SaaS خارجی و توسعه سفارشی داخلی جایگاه مشخصی دارد.</h2>
-        <p class="lead">رقبایی مثل گفتا، متیس، یارابات، دستیارینو و راهکارهای جهانی وجود دارند. تمایز آریونکس تمرکز بر
+        <p class="lead">رقبایی مثل رایورز و دستیارینو و راهکارهای جهانی وجود دارند. تمایز آریونکس تمرکز بر
             مدیریت دانش سازمانی، فارسی‌سازی، امنیت داده و یکپارچه‌سازی با ابزارهای داخلی است.</p>
         <ul>
             <li>امنیت و امکان استقرار اختصاصی</li>
@@ -573,7 +591,6 @@
 </section>
 <section class="slide slide-11">
     <div class="content">
-        <p class="kicker">10 / Financial Ask</p>
         <h1>درخواست سرمایه: ۱.۵ میلیارد تومان برای ۱۲ ماه Runway</h1>
         <h2>هدف سرمایه، تبدیل MVP به محصول قابل فروش و ایجاد اولین درآمدهای B2B است.</h2>
         <p class="lead">هزینه‌کرد پیشنهادی به‌صورت متوازن بین توسعه محصول، فروش B2B، نیروی انسانی، سرور و امور حقوقی
@@ -589,27 +606,38 @@
         <div class="donut"><span>۱.۵ میلیارد تومان<br><small>۱۲ ماه Runway</small></span></div>
     </aside>
 </section>
+
+<!-- اسلاید ۱۲ کاملاً ویرایش شده و تمیز طبق درخواست نهایی شما -->
 <section class="slide slide-12">
     <div class="content">
         <p class="kicker">11 / Team</p>
         <h1>تیم: تجربه فنی، محصول و LLM فارسی</h1>
         <h2>تیم کوچک است، اما دقیقاً در نقطه تلاقی نرم‌افزار سازمانی، محصول AI و زبان فارسی تجربه دارد.</h2>
-        <p class="lead">زهرا رفیعی مسئول فنی و مهندس نرم‌افزار در سرچیا است. عارفه ضرابیان مسئول محصول و تصمیم‌گیری و
-            مهندس هوش مصنوعی در پدیده عصر فناوری است. تیم سابقه توسعه LLMهای تخصصی فارسی و رتبه چهارم مسابقه همراه اول
-            با Gemma 2 را دارد.</p>
+        <p class="lead">در تیم آریونکس، زهرا رفیعی نقش مسئول فنی و عارفه ضرابیان مسئولیت محصول و تصمیم‌گیری را بر عهده
+            دارند.</p>
         <ul>
-            <li>زهرا رفیعی: مسئول فنی / مهندس نرم‌افزار</li>
-            <li>عارفه ضرابیان: مسئول محصول / مهندس هوش مصنوعی</li>
+            <li>زهرا رفیعی: مسئول فنی</li>
+            <li>عارفه ضرابیان: مسئول محصول و تصمیم‌گیری</li>
             <li>تجربه توسعه LLMهای تخصصی برای زبان فارسی</li>
             <li>رتبه چهارم مسابقه همراه اول در مدل دفاعی سبک و سریع Gemma 2</li>
         </ul>
     </div>
     <aside class="visual">
         <div class="team-cards">
-            <div><b>زهرا رفیعی</b><span>مسئول فنی</span></div>
-            <div><b>عارفه ضرابیان</b><span>مسئول محصول</span></div>
+            <div><b>زهرا رفیعی</b><span>مهندس نرم‌افزار در سرچیا</span>
+            </div>
+            <div><b>عارفه ضرابیان</b><span>مهندس هوش مصنوعی در پدیده عصر فناوری</span>
+            </div>
         </div>
     </aside>
+</section>
+
+<section class="slide slide-13">
+    <div class="content" style="grid-column: 1 / -1; text-align: center">
+        <p class="kicker" style="margin-left:auto;margin-right:auto">Thank You</p>
+        <h1 style="font-size:58px">متشکریم</h1>
+        <h2 style="font-weight:400;color:#26324d">آریونکس | <span style="font-family:'Times New Roman',serif">ArioNex</span></h2>
+    </div>
 </section>
 </body>
 </html>
