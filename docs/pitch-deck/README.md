@@ -1,16 +1,17 @@
 # فایل‌های Pitch Deck آریونکس
 
-این پوشه عمداً فقط فایل‌های متنی/قابل review دارد، چون فرایند Pull Request فعلی فایل‌های باینری جدید مثل `.pptx`، `.xlsx`، `.png` و `.jpg` را پشتیبانی نمی‌کند.
+این پوشه عمداً فقط فایل‌های متنی/قابل review دارد، چون فرایند Pull Request فعلی فایل‌های باینری جدید مثل `.pptx`، `.xlsx`، `.png` و `.jpg` را پشتیبانی نمی‌کند؛ با این حال طبق درخواست، گزارش مالی به‌صورت `.xlsx` تولید می‌شود.
 
 ## خروجی‌ها
 
-- `pitch-deck-fa.html`: نسخه اصلی Pitch Deck فارسی با فونت Vazirmatn و ارجاع به تصاویر موجود در ریشه پروژه.
-- `pitch-deck-outline-fa.md`: ساختار ۱۲ اسلایدی ارائه.
+- `pitch-deck-fa.html`: نسخه اصلی Pitch Deck فارسی با فونت Vazirmatn، طراحی گرافیکی، اسلایدهای ۱۶:۹ و ارجاع به تصاویر موجود در ریشه پروژه.
+- `pitch-deck-outline-fa.md`: ساختار کامل ۱۲ اسلایدی ارائه.
 - `pitch-deck-transcript-fa.md`: متن پیشنهادی برای خواندن هنگام ارائه.
-- `financial-report-fa.md`: گزارش مالی و سرمایه‌گذاری فارسی.
-- `financial-report-fa.csv`: جدول مالی قابل باز کردن در Excel/Google Sheets.
+- `financial-report-fa.md`: گزارش مالی و سرمایه‌گذاری فارسی با جزئیات هزینه، درآمد، سناریو و امتیازدهی.
+- `financial-report-fa.xlsx`: فایل اکسل گزارش مالی شامل جریان نقدی، سناریوها و امتیازدهی.
+- `assets/logo-arionex.svg`: لوگوی برداری آریونکس برای استفاده داخل اسلایدها.
 
 ## تبدیل به PDF یا PPTX
 
 برای PDF، فایل `pitch-deck-fa.html` را در مرورگر باز کنید و از گزینه Print/Save as PDF استفاده کنید.
-برای PPTX، می‌توانید اسلایدهای HTML را در PowerPoint/Google Slides بازطراحی یا از ابزارهای تبدیل HTML به PPTX خارج از PR استفاده کنید.
+برای PPTX، می‌توانید هر اسلاید HTML را در PowerPoint/Google Slides بازسازی کنید یا از ابزارهای تبدیل HTML به PPTX خارج از PR استفاده کنید.
