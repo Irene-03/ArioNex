@@ -1,29 +1,26 @@
 """
 /// <summary>
-/// Computational agent for structured and financial data - Analyst (The Analyst RAG Data Agent)
+/// عامل محاسباتی داده‌های ساختاریافته و مالی - تحلیلگر (The Analyst RAG Data Agent)
 /// </summary>
 /// <remarks>
-/// Inspired by the LangGraph demo, this module loads accounting and transaction data as a DataFrame
-/// and, using a StateGraph chain and typed tools (filtering, column sum, groupby, and a read-only
-/// DuckDB SQL engine), answers statistical and accounting questions semantically. If answering fails,
-/// it responds using the "DOUBTFUL ANSWER" pattern and states the reason.
+/// این ماژول با الهام از دموی لنگ‌گراف، داده‌های حسابداری و تراکنش‌ها را در قالب DataFrame لود کرده
+/// و با استفاده از زنجیره StateGraph و ابزارهای مجهز (نظیر فیلتر، مجموع ستون، groupby و REPL پایتون)
+/// به صورت معنایی به سوالات آماری و حسابداری پاسخ می‌دهد. در صورت شکست در پاسخ‌دهی، با الگوی
+/// "DOUBTFUL ANSWER" و ذکر دلیل پاسخ می‌دهد.
 /// </remarks>
 """
 
 import os
-import re
-import json
-import uuid
-import operator
 import logging
-from typing import List, Dict, Any, Optional, TypedDict, Annotated, Literal, Generator
+from typing import List, Dict, Any, TypedDict, Annotated, Literal, Generator
 import pandas as pd
-from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import Tool
 from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage, AIMessage, HumanMessage
+from langchain_experimental.tools import PythonAstREPLTool
 from langgraph.graph import StateGraph, END, add_messages
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.types import interrupt, Command
-from pydantic import BaseModel, Field
+from langgraph.prebuilt import ToolNode
 
 from app.core.config import settings
 from app.core.llm_factory import get_llm
@@ -31,199 +28,15 @@ from app.prompts.analyst_prompts import get_analyst_system_prompt
 
 logger = logging.getLogger("arionex.analyst")
 
-# Maximum number of identical tool-call repetitions before we force-stop the loop
-MAX_REPEATED_TOOL_CALLS = 3
-
-# Maximum rows returned to the model from query tools
-MAX_QUERY_ROWS = 50
-
-# How many times we nudge the model to actually use a tool before giving up
-MAX_RUNTIME_NUDGES = 2
-
-# Graph recursion limit (must be top-level in the config, NOT inside configurable)
-ANALYST_RECURSION_LIMIT = 15
-
-# Larger token budget for the analyst (reasoning models truncate tool calls at 1024)
-ANALYST_MAX_TOKENS = 2048
-
-# Maximum number of compiled graphs kept in the module-level cache
-GRAPH_CACHE_MAX = 16
-
-# How many times the human can reject the agent's answer before we accept it anyway
-MAX_APPROVAL_ROUNDS = 3
-
-# Persian runtime guidance injected when the model answers without calling any tool.
-RUNTIME_TOOL_NUDGE = (
-    "شما هنوز از هیچ ابزار تحلیلی (مانند query_data یا column_sum) برای بررسی داده‌ها "
-    "استفاده نکرده‌اید و صرفاً بر اساس دانش عمومی پاسخ داده‌اید. لطفاً قبل از پاسخ نهایی حتماً "
-    "با یک ابزار، داده‌ها را از DataFrame مورد نظر بازیابی کنید و پاسخ را فقط بر اساس نتیجه‌ی ابزار بدهید."
-)
-
-# Typed tool inputs
-class AnalyzeDfInput(BaseModel):
-    """Show a preview of the DataFrame."""
-    limit: int = Field(default=3, ge=1, le=20, description="How many rows to show (default 3).")
-
-class ColumnSumInput(BaseModel):
-    """Compute the sum of a numeric column."""
-    column: str = Field(description="Column name to sum.")
-
-class GroupbyAggregateInput(BaseModel):
-    """Group by a column and aggregate a numeric column."""
-    group_col: str = Field(description="Column to group by (e.g. month or product).")
-    agg_col: str = Field(description="Numeric column to aggregate.")
-    agg_func: Literal["sum", "mean", "count", "min", "max"] = Field(
-        description="Aggregation function: sum / mean / count / min / max."
-    )
-
-class FilterRowsInput(BaseModel):
-    """Filter rows by a condition on a column."""
-    col: str = Field(description="Column the condition applies to.")
-    op: Literal["==", ">", "<", ">=", "<=", "!=", "in"] = Field(
-        description="Comparison operator: == / > / < / >= / <= / != / in"
-    )
-    value: str = Field(
-        description="Condition value; for the 'in' operator pass values joined with '#' (e.g. \"#1402#1403#\")."
-    )
-
-class QueryDataInput(BaseModel):
-    """Run a read-only SQL query against the data."""
-    sql: str = Field(description="A valid SELECT statement against the table 'df'.")
-
-# Module-level graph cache and shared checkpointer
-_graph_cache: Dict[str, Any] = {}
-_chkdpt_memory = MemorySaver()
-# In-flight human-in-the-loop sessions: thread_id -> {"graph": graph, "config": config}
-_hitl_sessions: Dict[str, Dict[str, Any]] = {}
-
-_SQL_DISALLOWED_KEYWORDS = re.compile(
-    r"\b(insert|update|delete|drop|alter|create|attach|detach|copy|call|set|pragma|load|install|replace|truncate|vacuum)\b",
-    re.IGNORECASE,
-)
-_SQL_COMMENT_STRIP = re.compile(r"--.*$|/\*.*?\*/", re.MULTILINE | re.DOTALL)
-
-
-def _is_readonly_sql(sql: str) -> bool:
-    """Allow only read-only SELECT / WITH / EXPLAIN queries."""
-    stripped = _SQL_COMMENT_STRIP.sub("", sql).strip()
-    lowered = stripped.lower()
-    if not lowered.startswith(("select", "with", "explain")):
-        return False
-    if _SQL_DISALLOWED_KEYWORDS.search(lowered):
-        return False
-    return True
-
-
-def _coerce_value(series: pd.Series, value: str):
-    """Try to coerce a string value to the series dtype for comparisons; None means string-compare."""
-    if pd.api.types.is_numeric_dtype(series):
-        try:
-            return float(value)
-        except (ValueError, TypeError):
-            return None
-    return None
-
-
-def _df_cache_key(file_id: int, custom_file_path: str, df: pd.DataFrame) -> str:
-    """Unique cache key for the compiled graph based on the data source."""
-    if custom_file_path:
-        try:
-            stat = os.stat(custom_file_path)
-            return f"path:{custom_file_path}:{stat.st_mtime_ns}:{stat.st_size}"
-        except OSError:
-            return f"path:{custom_file_path}"
-    return f"file_id:{file_id}:rows:{len(df)}"
-
-
-def _format_result(res_df: pd.DataFrame, max_rows: int = MAX_QUERY_ROWS) -> str:
-    """Render a result DataFrame to a bounded string."""
-    if res_df is None or len(res_df) == 0:
-        return "Query returned no rows."
-    truncated = res_df.head(max_rows)
-    cell_str = truncated.astype(str).copy()
-    for col in cell_str.columns:
-        cell_str[col] = cell_str[col].str.slice(0, 60)
-    body = cell_str.to_string(index=False)
-    if len(res_df) > max_rows:
-        body += f"\n... ({len(res_df) - max_rows} more rows omitted)"
-    return body
-
-
-def _build_df_context(df: pd.DataFrame) -> str:
-    """Build a schema description injected at runtime (prompt template files are untouched)."""
-    lines = [
-        "== DataFrame information (auxiliary context for using the tools) ==",
-        f"Total rows: {len(df)}",
-        "Columns (name | dtype | missing | sample values):",
-    ]
-    for col in df.columns:
-        dtype = str(df[col].dtype)
-        n_missing = int(df[col].isna().sum())
-        non_null = df[col].dropna()
-        samples = []
-        if len(non_null) > 0:
-            try:
-                samples = list(non_null.astype(str).unique()[:6])
-            except Exception:
-                samples = []
-        sample_str = ", ".join(samples) if samples else "-"
-        lines.append(f"- {col} | {dtype} | missing:{n_missing} | [{sample_str}]")
-    if len(df) > 0:
-        num_cols = df.select_dtypes(include="number").columns.tolist()
-        if num_cols:
-            lines.append("Numeric stats (min / max / mean):")
-            for col in num_cols:
-                try:
-                    lines.append(f"- {col}: min={df[col].min()} max={df[col].max()} mean={df[col].mean():.2f}")
-                except Exception:
-                    pass
-    lines.append("=" * 40)
-    return "\n".join(lines)
-
-
-def _enrich_jalali_dates(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    If any column holds Jalali dates in YYYY/MM/DD format (e.g. 1402/12/15),
-    add helper columns _{col}_jalali_year and _{col}_jalali_month so that
-    month-based filtering / grouping works reliably.
-    """
-    df_out = df.copy()
-    for col in df_out.columns:
-        if col.startswith("_"):
-            continue
-        sample = df_out[col].dropna().astype(str).head(20)
-        if len(sample) == 0:
-            continue
-        if sample.str.match(r"^\d{4}/\d{2}/\d{2}$").all():
-            parts = df_out[col].dropna().astype(str).str.split("/")
-            df_out[f"_{col}_jalali_year"] = parts.str[0]
-            df_out[f"_{col}_jalali_month"] = parts.str[1]
-    return df_out
-
-
-def _collect_tool_history(messages: List[BaseMessage]) -> List[Dict[str, Any]]:
-    """Summarize which tools the agent invoked during the run (for the approval payload)."""
-    calls = []
-    for m in messages:
-        if isinstance(m, AIMessage) and getattr(m, "tool_calls", None):
-            for tc in m.tool_calls:
-                calls.append({"tool": tc.get("name", ""), "args": tc.get("args") or {}})
-    return calls
-
-
-# 1. Define agent state structure
+# ۱. تعریف ساختار وضعیت عامل بر اساس دموی state.py
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
-    nudges: Annotated[int, operator.add]
-    approved: bool
-    human_feedback: str
-    approval_rounds: Annotated[int, operator.add]
 
-# 2. Main class implementing the data analyst agent
+# ۲. کلاس اصلی پیاده‌سازی عامل تحلیلگر داده
 class AnalystAgent:
     """
     /// <summary>
-    /// Data analyst agent class using Pandas and LangGraph
+    /// کلاس عامل تحلیلگر داده‌های مالی با پانداس و LangGraph
     /// </summary>
     """
     def __init__(self):
@@ -232,26 +45,25 @@ class AnalystAgent:
     def _resolve_dataframe(self, file_id: int = None, custom_file_path: str = None) -> pd.DataFrame:
         """
         /// <summary>
-        /// Load a DataFrame from the user's actual file or the latest structured file in the database
+        /// بارگذاری DataFrame از فایل واقعی کاربر یا آخرین فایل ساختاریافته در دیتابیس
         /// </summary>
-        /// <param name="file_id">Structured file ID (optional)</param>
-        /// <param name="custom_file_path">Direct file path (optional — higher priority)</param>
-        /// <returns>The loaded DataFrame, or None if unsuccessful</returns>
+        /// <param name="file_id">شناسه فایل ساختاریافته (اختیاری)</param>
+        /// <param name="custom_file_path">مسیر فایل مستقیم (اختیاری — اولویت بالاتر)</param>
+        /// <returns>DataFrame لود شده یا None در صورت عدم موفقیت</returns>
         """
         from app.services.workers.structured_processor import structured_processor
         from app.core.database import get_db_connection
 
-        # Priority 1: Direct physical path
+        # اولویت ۱: مسیر فیزیکی مستقیم
         if custom_file_path and os.path.exists(custom_file_path):
             try:
                 df = pd.read_csv(custom_file_path)
-                df = _enrich_jalali_dates(df)
                 logger.info(f"Analyst Agent loaded DataFrame from custom_file_path: {custom_file_path}")
                 return df
             except Exception as e:
                 logger.error(f"Failed to load custom CSV: {str(e)}")
 
-        # Priority 2: Specific file_id — fetch from MinIO/Local
+        # اولویت ۲: file_id مشخص — دریافت از MinIO/Local
         if file_id:
             try:
                 conn = get_db_connection()
@@ -266,7 +78,6 @@ class AnalystAgent:
                     filename = row[0]
                     local_path = structured_processor.get_local_path_for_analysis(file_id, filename)
                     df = pd.read_csv(local_path)
-                    df = _enrich_jalali_dates(df)
                     logger.info(f"Analyst Agent loaded DataFrame for file_id={file_id}: {filename} ({len(df)} rows)")
                     return df
                 else:
@@ -274,7 +85,7 @@ class AnalystAgent:
             except Exception as e:
                 logger.error(f"Failed to resolve file_id={file_id} to DataFrame: {str(e)}")
 
-        # Priority 3: Latest structured file uploaded to the database
+        # اولویت ۳: آخرین فایل ساختاریافته آپلود شده در دیتابیس
         try:
             conn = get_db_connection()
             with conn.cursor() as cur:
@@ -292,13 +103,12 @@ class AnalystAgent:
                 latest_id, latest_filename = row
                 local_path = structured_processor.get_local_path_for_analysis(latest_id, latest_filename)
                 df = pd.read_csv(local_path)
-                df = _enrich_jalali_dates(df)
                 logger.info(f"Analyst Agent loaded latest CSV: file_id={latest_id}, {latest_filename} ({len(df)} rows)")
                 return df
         except Exception as e:
             logger.warning(f"No CSV files found in database for analyst: {str(e)}")
 
-        # No file found
+        # هیچ فایلی پیدا نشد
         return None
 
     def get_column_names(self) -> list:
@@ -309,285 +119,144 @@ class AnalystAgent:
 
     def get_tools(self, df_instance: pd.DataFrame) -> list:
         """
-        Build typed LangGraph tools connected to the pandas source plus a read-only DuckDB SQL engine.
+        /// <summary>
+        /// ساخت ابزارهای تعاملی LangGraph متصل به سورس پانداس
+        /// </summary>
         """
-        try:
-            import duckdb
-        except ImportError:
-            raise ImportError(
-                "duckdb is required by the Analyst Agent. Run: pip install duckdb"
+        # ابزار محاسباتی پایتون REPL
+        python_tool = Tool(
+            name="python_repl_ast",
+            func=PythonAstREPLTool(locals={"df": df_instance}).invoke,
+            description=(
+                "Execute Python code to analyze the CSV data. "
+                "The data is preloaded in a pandas DataFrame called 'df'. "
+                "Do not use pd.read_csv() or pd.read_excel(); the data is already available as 'df'."
+                "Do not alter or write to data."
             )
+        )
 
-        available_columns = df_instance.columns.tolist()
+        # ابزارهای تخصصی فیلتر و مجموع و... بر اساس دموی tools.py
+        def analyze_df_func(_input: str) -> str:
+            return f"Head (3 rows):\n{df_instance.head(3).to_string()}"
 
-        @tool("analyze_df", args_schema=AnalyzeDfInput)
-        def analyze_df_func(limit: int = 3) -> str:
-            """Show a preview of the first rows of the DataFrame."""
-            return _format_result(df_instance.head(limit), limit)
-
-        @tool("column_sum", args_schema=ColumnSumInput)
         def column_sum_func(column: str) -> str:
-            """Sum the numeric values of a column."""
             if column not in df_instance.columns:
-                return f"ERROR: Column '{column}' not found. Available columns: {available_columns}"
+                return f"Column '{column}' not found."
             try:
-                total = pd.to_numeric(df_instance[column], errors="coerce").sum()
+                total = df_instance[column].sum()
                 return f"Sum of column '{column}': {total}"
             except Exception as e:
-                return f"ERROR computing sum of '{column}': {str(e)}"
+                return f"Error: {str(e)}"
 
-        @tool("groupby_aggregate", args_schema=GroupbyAggregateInput)
-        def groupby_aggregate_func(group_col: str, agg_col: str, agg_func: str) -> str:
-            """Group by a column and aggregate a numeric column."""
-            if group_col not in df_instance.columns:
-                return f"ERROR: Group column '{group_col}' not found. Available columns: {available_columns}"
-            if agg_col not in df_instance.columns:
-                return f"ERROR: Aggregate column '{agg_col}' not found. Available columns: {available_columns}"
+        def groupby_aggregate_func(params: list) -> str:
             try:
-                grouped = df_instance.groupby(group_col)[agg_col].agg(agg_func)
-                return (f"Grouped results (group_col={group_col}, agg_col={agg_col}, func={agg_func}):\n"
-                        f"{grouped.to_string()}")
+                group_col = params[0]
+                agg_col = params[1]
+                agg_func = params[2]
+                grouped = df_instance.groupby(group_col)[agg_col].agg(agg_func).to_string()
+                return f"Grouped results:\n{grouped}"
             except Exception as e:
-                return f"ERROR in groupby_aggregate: {str(e)}"
+                return f"Error: {str(e)}"
 
-        @tool("filter_rows", args_schema=FilterRowsInput)
-        def filter_rows_func(col: str, op: str, value: str) -> str:
-            """Filter rows based on a condition on a column."""
-            if col not in df_instance.columns:
-                return f"ERROR: Column '{col}' not found. Available columns: {available_columns}"
+        def filter_rows_func(params: list) -> str:
             try:
-                col_series = df_instance[col]
-                if op == "in":
-                    vals = [v for v in value.split("#") if v != ""]
-                    mask = col_series.astype(str).isin(vals)
+                col, op, val = params[0], params[1], params[2]
+                if op == "==":
+                    res = df_instance[df_instance[col] == val]
+                elif op == ">":
+                    res = df_instance[df_instance[col] > val]
+                elif op == "<":
+                    res = df_instance[df_instance[col] < val]
                 else:
-                    target = _coerce_value(col_series, value)
-                    if op == "==":
-                        mask = col_series.astype(str) == str(target) if target is None else col_series == target
-                    elif op == "!=":
-                        mask = col_series.astype(str) != str(target)
-                    elif op == ">":
-                        mask = pd.to_numeric(col_series, errors="coerce") > target
-                    elif op == "<":
-                        mask = pd.to_numeric(col_series, errors="coerce") < target
-                    elif op == ">=":
-                        mask = pd.to_numeric(col_series, errors="coerce") >= target
-                    elif op == "<=":
-                        mask = pd.to_numeric(col_series, errors="coerce") <= target
-                    else:
-                        return f"ERROR: unsupported operator '{op}'. Use one of: ==, !=, >, <, >=, <=, in"
-                res = df_instance[mask]
-                return _format_result(res)
+                    res = df_instance[df_instance[col] != val]
+                return res.head(10).to_string()
             except Exception as e:
-                return f"ERROR in filter_rows: {str(e)}"
+                return f"Error: {str(e)}"
 
-        @tool("query_data", args_schema=QueryDataInput)
-        def query_data_func(sql: str) -> str:
-            """Run a read-only SQL query against the data (table name: 'df'). Returns up to 50 rows."""
-            if not _is_readonly_sql(sql):
-                return ("ERROR: Only read-only SELECT queries are allowed "
-                        "(no INSERT/UPDATE/DELETE/DROP/ALTER/CREATE/COPY/CALL/SET/PRAGMA).")
-            try:
-                con = duckdb.connect()
-                try:
-                    con.register("df", df_instance)
-                    res = con.execute(sql).fetch_df()
-                finally:
-                    con.close()
-                return _format_result(res)
-            except Exception as e:
-                return f"ERROR running SQL query: {str(e)}. Try simpler syntax. Columns available: {available_columns}"
+        # ایجاد کلاس‌های ابزار لنگچین
+        analyze_df_tool = Tool(name="analyze_df", func=analyze_df_func, description="Preview first 3 rows of DataFrame.")
+        column_sum_tool = Tool(name="column_sum", func=column_sum_func, description="Sum numeric values in a column. Input: column name.")
+        groupby_agg_tool = Tool(name="groupby_aggregate", func=groupby_aggregate_func, description="Group and aggregate. Input: [group_col, agg_col, func].")
+        filter_rows_tool = Tool(name="filter_rows", func=filter_rows_func, description="Filter rows by condition. Input: [col, op, val].")
 
-        return [
-            analyze_df_func,
-            column_sum_func,
-            groupby_aggregate_func,
-            filter_rows_func,
-            query_data_func,
-        ]
+        return [analyze_df_tool, column_sum_tool, groupby_agg_tool, filter_rows_tool, python_tool]
 
     def _prepare_graph(self, file_id: int = None, custom_file_path: str = None):
         """
-        Prepare and compile the LangGraph graph for data analysis.
-        Returns (graph, system_prompt, df_context, error_msg).
+        /// <summary>
+        /// آماده‌سازی و کامپایل گراف لنگ‌گراف برای تحلیل داده‌ها
+        /// </summary>
         """
         if not self.is_enabled:
-            return None, None, None, "DOUBTFUL ANSWER: Structured Data Analytics service is currently disabled."
+            return None, None, "DOUBTFUL ANSWER: Structured Data Analytics service is currently disabled."
 
-        # 1. Load DataFrame from the user's actual file
+        # ۱. بارگذاری DataFrame از فایل واقعی کاربر
         df_to_use = self._resolve_dataframe(file_id=file_id, custom_file_path=custom_file_path)
 
         if df_to_use is None or df_to_use.empty:
             logger.warning("Analyst Agent: No structured data found. Cannot perform analysis.")
-            return None, None, None, "DOUBTFUL ANSWER: No structured dataframe is available. Please upload a CSV file first."
+            return None, None, "DOUBTFUL ANSWER: No structured dataframe is available. Please upload a CSV file first."
 
-        # Reuse the compiled graph when the source file has not changed
-        cache_key = _df_cache_key(file_id, custom_file_path, df_to_use)
-        if cache_key in _graph_cache:
-            graph, system_prompt, df_context = _graph_cache[cache_key]
-            logger.info(f"Analyst Agent reused cached graph for key={cache_key}")
-            return graph, system_prompt, df_context, None
-
-        # 2. Configure typed tools and LLM model via Factory
+        # ۲. پیکربندی ابزارها و مدل LLM از طریق Factory
         tools_list = self.get_tools(df_to_use)
-        tools_by_name = {t.name: t for t in tools_list}
-        llm = get_llm(temperature=0, max_tokens=ANALYST_MAX_TOKENS)
+        llm = get_llm(temperature=0)
         model_with_tools = llm.bind_tools(tools_list, tool_choice="auto")
 
-        # 3. Build the analyst system prompt (template untouched) plus runtime schema context
+        # ۳. ساخت پرامپت سیستمی تحلیلگر با ستون‌های واقعی DataFrame
         system_prompt = get_analyst_system_prompt(df_to_use.columns.tolist())
-        df_context = _build_df_context(df_to_use)
 
-        # 4. Define node functions
+        # ۴. تعریف توابع گره (Node Functions) بر اساس دموی nodes.py
         def call_model(state: AgentState):
             messages_to_model = [SystemMessage(content=system_prompt)] + list(state["messages"])
             response = model_with_tools.invoke(messages_to_model)
             return {"messages": [response]}
 
-        def run_tools(state: AgentState):
-            last_message = state["messages"][-1]
-            tool_msgs = []
-            for tool_call in (last_message.tool_calls or []):
-                name = tool_call.get("name", "")
-                args = tool_call.get("args") or {}
-                call_id = tool_call.get("id", "")
-
-                # Loop detection: if the exact same (name, args) has been retried too often, stop.
-                sig = f"{name}|{json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
-                occurrences = 0
-                for m in state["messages"]:
-                    if not (isinstance(m, AIMessage) and m.tool_calls):
-                        continue
-                    for tc in m.tool_calls:
-                        tc_sig = f"{tc.get('name', '')}|{json.dumps(tc.get('args') or {}, sort_keys=True, ensure_ascii=False, default=str)}"
-                        if tc_sig == sig:
-                            occurrences += 1
-
-                if occurrences > MAX_REPEATED_TOOL_CALLS:
-                    content = (
-                        "ERROR: این فراخوانی ابزار با همان پارامترها چند بار تکرار شده و موفق نبوده است. "
-                        "پارامترها را بازبینی کن یا از ابزار query_data / filter_rows با پارامترهای متفاوت استفاده کن. "
-                        f"ستون‌های موجود: {list(df_to_use.columns)}"
-                    )
-                else:
-                    fn = tools_by_name.get(name)
-                    if fn is None:
-                        content = f"ERROR: Unknown tool '{name}'. Available tools: {list(tools_by_name.keys())}"
-                    else:
-                        try:
-                            content = fn.invoke(args)
-                        except Exception as e:
-                            content = (
-                                f"ERROR running tool '{name}': {str(e)}. Please re-check the parameters. "
-                                f"Available columns: {list(df_to_use.columns)}"
-                            )
-                tool_msgs.append(ToolMessage(content=str(content), tool_call_id=call_id))
-            return {"messages": tool_msgs}
-
         def should_continue(state: AgentState):
             last_message = state["messages"][-1]
-            if getattr(last_message, "tool_calls", None):
-                return "tools"
-            # The model produced a final-looking answer without using any tool
-            # and flagged DOUBTFUL (or empty): nudge it once to actually query the data.
-            content = str(getattr(last_message, "content", "") or "")
-            used_tools = any(isinstance(m, AIMessage) and m.tool_calls for m in state["messages"])
-            nudges = state.get("nudges", 0) or 0
-            if not used_tools and ("DOUBTFUL" in content or not content.strip()) and nudges < MAX_RUNTIME_NUDGES:
-                return "nudge"
-            # Human-in-the-loop: before ending, pause so the answer can be approved.
-            return "approve"
-
-        def nudge_node(state: AgentState):
-            return {"messages": [HumanMessage(content=RUNTIME_TOOL_NUDGE)], "nudges": 1}
-
-        def approve_node(state: AgentState):
-            last_message = state["messages"][-1]
-            answer = str(getattr(last_message, "content", "") or "")
-            decision = interrupt({
-                "type": "analyst_answer_approval",
-                "answer": answer,
-                "tools_used": _collect_tool_history(state["messages"]),
-            })
-            if isinstance(decision, bool):
-                decision = {"approved": decision, "feedback": ""}
-            if not isinstance(decision, dict):
-                decision = {"approved": bool(decision), "feedback": ""}
-            if decision.get("approved", False):
-                return {"approved": True, "human_feedback": ""}
-            feedback = str(decision.get("feedback", "") or "").strip()
-            if not feedback:
-                feedback = "پاسخ ارائه‌شده مورد تأیید نیست. لطفاً تحلیل را دوباره انجام بده و پاسخ صحیح را بر اساس داده‌ها بده."
-            return {
-                "approved": False,
-                "human_feedback": feedback,
-                "approval_rounds": 1,
-                "messages": [HumanMessage(content=feedback)],
-            }
-
-        def after_approve(state: AgentState):
-            if state.get("approved", False) or (state.get("approval_rounds", 0) or 0) >= MAX_APPROVAL_ROUNDS:
+            if not last_message.tool_calls:
                 return "end"
-            return "agent"
+            return "continue"
 
-        # 5. Compile the graph
+        tool_node = ToolNode(tools_list)
+
+        # ۵. کامپایل گراف با StateGraph
         workflow = StateGraph(AgentState)
         workflow.add_node("agent", call_model)
-        workflow.add_node("tools", run_tools)
-        workflow.add_node("nudge", nudge_node)
-        workflow.add_node("approve", approve_node)
-
+        workflow.add_node("tools", tool_node)
+        
         workflow.set_entry_point("agent")
         workflow.add_conditional_edges(
             "agent",
             should_continue,
-            {"tools": "tools", "nudge": "nudge", "approve": "approve"},
+            {
+                "continue": "tools",
+                "end": END
+            }
         )
         workflow.add_edge("tools", "agent")
-        workflow.add_edge("nudge", "agent")
-        workflow.add_conditional_edges(
-            "approve",
-            after_approve,
-            {"agent": "agent", "end": END},
-        )
-
-        graph = workflow.compile(checkpointer=_chkdpt_memory)
-        if len(_graph_cache) >= GRAPH_CACHE_MAX:
-            _graph_cache.pop(next(iter(_graph_cache)))
-        _graph_cache[cache_key] = (graph, system_prompt, df_context)
-        return graph, system_prompt, df_context, None
+        
+        memory = MemorySaver()
+        graph = workflow.compile(checkpointer=memory)
+        return graph, system_prompt, None
 
     def execute_analysis(self, query: str, file_id: int = None, custom_file_path: str = None) -> str:
         """
-        Run the LangGraph computational graph on the data and return the final answer.
+        /// <summary>
+        /// اجرای گراف محاسباتی LangGraph روی دیتای تراکنش‌ها جهت پاسخ‌دهی به فرمول‌ها
+        /// </summary>
         """
-        graph, system_prompt, df_context, error_msg = self._prepare_graph(file_id, custom_file_path)
+        graph, system_prompt, error_msg = self._prepare_graph(file_id, custom_file_path)
         if error_msg:
             return error_msg
 
+        # ۶. اجرای زنجیره و استخراج آخرین پیغام
         try:
-            state_input = {
-                "messages": [HumanMessage(content=df_context), HumanMessage(content=query)],
-                "nudges": 0,
-                "approved": False,
-                "human_feedback": "",
-                "approval_rounds": 0,
-            }
-            # NOTE: recursion_limit MUST be top-level in config; thread_id is fresh per run so
-            # state never bleeds between calls even though the graph+checkpointer are shared.
-            config = {
-                "recursion_limit": ANALYST_RECURSION_LIMIT,
-                "configurable": {"thread_id": str(uuid.uuid4())},
-            }
-
+            state_input = {"messages": [HumanMessage(content=query)]}
+            config = {"configurable": {"thread_id": "1", "recursion_limit": 10}}
+            
             result = graph.invoke(state_input, config=config)
-            # Human-in-the-loop: if the graph paused for answer approval, auto-approve it.
-            # This keeps the non-interactive synthesizer call working; callers wanting a real
-            # pause/resume round-trip use start_hitl()/resume_hitl() instead.
-            while "__interrupt__" in result:
-                result = graph.invoke(Command(resume={"approved": True}), config=config)
             last_message = result["messages"][-1]
-
+            
             logger.info("LangGraph Analyst successfully computed the response.")
             return last_message.content
         except Exception as e:
@@ -596,156 +265,52 @@ class AnalystAgent:
 
     def execute_analysis_stream(self, query: str, file_id: int = None, custom_file_path: str = None) -> Generator[dict, None, None]:
         """
-        Stream the reasoning steps and final output of the LangGraph computational agent.
-        Exactly one 'final' chunk is emitted, only after the graph actually ends.
+        /// <summary>
+        /// استریم کردن مراحل تفکر و خروجی عامل محاسباتی LangGraph به زبان فارسی
+        /// </summary>
         """
-        graph, system_prompt, df_context, error_msg = self._prepare_graph(file_id, custom_file_path)
+        graph, system_prompt, error_msg = self._prepare_graph(file_id, custom_file_path)
         if error_msg:
             yield {"type": "final", "content": error_msg}
             return
 
         try:
-            state_input = {
-                "messages": [HumanMessage(content=df_context), HumanMessage(content=query)],
-                "nudges": 0,
-                "approved": False,
-                "human_feedback": "",
-                "approval_rounds": 0,
-            }
-            config = {
-                "recursion_limit": ANALYST_RECURSION_LIMIT,
-                "configurable": {"thread_id": str(uuid.uuid4())},
-            }
-
+            state_input = {"messages": [HumanMessage(content=query)]}
+            config = {"configurable": {"thread_id": "1", "recursion_limit": 10}}
+            
             yield {"type": "thought", "content": "🤖 *شروع فرآیند تحلیل داده توسط عامل محاسباتی آریونکس...*\n\n"}
-
-            pending_final = None
-            stream_iter = graph.stream(state_input, config=config, stream_mode="updates")
-            while True:
-                interrupted_payload = None
-                for chunk in stream_iter:
-                    if "__interrupt__" in chunk:
-                        intr = chunk["__interrupt__"][0]
-                        interrupted_payload = intr.value if hasattr(intr, "value") else intr
-                        break
-                    for node_name, node_state in chunk.items():
-                        if node_name == "agent":
-                            messages = node_state.get("messages", [])
-                            if messages:
-                                last_msg = messages[-1]
-                                if getattr(last_msg, "tool_calls", None):
-                                    for tool_call in last_msg.tool_calls:
-                                        t_name = tool_call.get("name", "")
-                                        t_args = tool_call.get("args", {})
-                                        yield {
-                                            "type": "thought",
-                                            "content": f"🔍 *تصمیم عامل:* استفاده از ابزار `{t_name}` جهت تحلیل داده‌ها.\n"
-                                                       f"📥 *پارامترها:* `{t_args}`\n\n",
-                                        }
-                                else:
-                                    # Buffer the potential final answer; it is only flushed if the
-                                    # graph ends without a subsequent nudge step.
-                                    pending_final = last_msg.content
-                        elif node_name == "tools":
-                            messages = node_state.get("messages", [])
-                            if messages:
-                                last_msg = messages[-1]
-                                tool_out = str(last_msg.content)
-                                if len(tool_out) > 200:
-                                    tool_out = tool_out[:200] + "..."
-                                yield {
-                                    "type": "thought",
-                                    "content": f"📊 *خروجی ابزار:* \n```\n{tool_out}\n```\n\n",
-                                }
-                        elif node_name == "nudge":
-                            # The model was nudged to actually query the data; discard the buffered
-                            # premature DOUBTFUL answer and let the agent run again.
-                            pending_final = None
-
-                if interrupted_payload is None:
-                    break
-
-                # Human-in-the-loop: surface the answer-approval gate to the caller.
-                yield {"type": "approval", "content": interrupted_payload}
-                # Auto-approve so the non-interactive SSE stream completes normally.
-                stream_iter = graph.stream(
-                    Command(resume={"approved": True}), config=config, stream_mode="updates"
-                )
-
-            if pending_final is not None:
-                yield {"type": "final", "content": pending_final}
+            
+            for chunk in graph.stream(state_input, config=config, stream_mode="updates"):
+                for node_name, node_state in chunk.items():
+                    if node_name == "agent":
+                        messages = node_state.get("messages", [])
+                        if messages:
+                            last_msg = messages[-1]
+                            if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+                                for tool_call in last_msg.tool_calls:
+                                    t_name = tool_call.get("name", "")
+                                    t_args = tool_call.get("args", {})
+                                    yield {
+                                        "type": "thought",
+                                        "content": f"🔍 *تصمیم عامل:* استفاده از ابزار `{t_name}` جهت تحلیل داده‌ها.\n"
+                                                   f"📥 *پارامترها:* `{t_args}`\n\n"
+                                    }
+                            else:
+                                yield {"type": "final", "content": last_msg.content}
+                    elif node_name == "tools":
+                        messages = node_state.get("messages", [])
+                        if messages:
+                            last_msg = messages[-1]
+                            tool_out = last_msg.content
+                            if len(tool_out) > 200:
+                                tool_out = tool_out[:200] + "..."
+                            yield {
+                                "type": "thought",
+                                "content": f"📊 *خروجی ابزار:* \n```\n{tool_out}\n```\n\n"
+                            }
         except Exception as e:
             logger.error(f"LangGraph streaming crashed: {str(e)}")
             yield {"type": "final", "content": f"DOUBTFUL ANSWER: LangGraph streaming failure: {str(e)}"}
 
-    def start_hitl(self, query: str, file_id: int = None, custom_file_path: str = None) -> dict:
-        """
-        Begin a human-in-the-loop analysis session.
-
-        Runs the graph up to the first answer-approval gate (interrupt). Returns:
-          {"status": "awaiting_approval", "thread_id": ..., "payload": {...}}
-        when the human must review the answer, or
-          {"status": "completed", "thread_id": ..., "answer": "..."}
-        if the run finished without needing approval (or errored early).
-        """
-        graph, system_prompt, df_context, error_msg = self._prepare_graph(file_id, custom_file_path)
-        if error_msg:
-            return {"status": "error", "message": error_msg}
-
-        thread_id = str(uuid.uuid4())
-        config = {
-            "recursion_limit": ANALYST_RECURSION_LIMIT,
-            "configurable": {"thread_id": thread_id},
-        }
-        state_input = {
-            "messages": [HumanMessage(content=df_context), HumanMessage(content=query)],
-            "nudges": 0,
-            "approved": False,
-            "human_feedback": "",
-            "approval_rounds": 0,
-        }
-        try:
-            result = graph.invoke(state_input, config=config)
-        except Exception as e:
-            logger.error(f"LangGraph HITL start crashed: {str(e)}")
-            return {"status": "error", "message": f"DOUBTFUL ANSWER: {str(e)}"}
-
-        if "__interrupt__" in result:
-            intr = result["__interrupt__"][0]
-            payload = intr.value if hasattr(intr, "value") else intr
-            _hitl_sessions[thread_id] = {"graph": graph, "config": config}
-            if len(_hitl_sessions) > GRAPH_CACHE_MAX:
-                _hitl_sessions.pop(next(iter(_hitl_sessions)))
-            return {"status": "awaiting_approval", "thread_id": thread_id, "payload": payload}
-
-        last_message = result["messages"][-1]
-        return {"status": "completed", "thread_id": thread_id, "answer": last_message.content}
-
-    def resume_hitl(self, thread_id: str, decision: dict) -> dict:
-        """
-        Resume a paused human-in-the-loop session with the human's decision.
-
-        decision: {"approved": True} to accept the answer, or
-                  {"approved": False, "feedback": "..."} to reject with feedback
-                  (the agent re-runs with the feedback and pauses again for re-approval).
-        """
-        session = _hitl_sessions.get(thread_id)
-        if session is None:
-            return {"status": "error", "message": "No pending approval session for this thread_id."}
-        try:
-            result = session["graph"].invoke(Command(resume=decision), config=session["config"])
-        except Exception as e:
-            logger.error(f"LangGraph HITL resume crashed: {str(e)}")
-            return {"status": "error", "message": f"DOUBTFUL ANSWER: {str(e)}"}
-
-        if "__interrupt__" in result:
-            intr = result["__interrupt__"][0]
-            payload = intr.value if hasattr(intr, "value") else intr
-            return {"status": "awaiting_approval", "thread_id": thread_id, "payload": payload}
-
-        _hitl_sessions.pop(thread_id, None)
-        last_message = result["messages"][-1]
-        return {"status": "completed", "thread_id": thread_id, "answer": last_message.content}
-
-# Global data analyst agent instance
+# شیء سراسری عامل تحلیلگر داده
 analyst_agent = AnalystAgent()
