@@ -1,12 +1,12 @@
 # ================================================================
-#   ارکستریشن چندکانتینری هوشمند آریونکس (ArioNex Docker Compose)
-#   مدیریت و اتصال دیتابیس برداری، استوریج، فرانت‌اند و بک‌اند
+#   Smart multi-container orchestration for ArioNex (ArioNex Docker Compose)
+#   Management and connection of vector database, storage, frontend and backend
 # ================================================================
 
 version: '3.8'
 
 services:
-  # پایگاه داده برداری رسمی سیستم (PostgreSQL + pgvector)
+  # Official system vector database (PostgreSQL + pgvector)
   db:
     image: pgvector/pgvector:pg16
     container_name: arionex-vector-db
@@ -25,7 +25,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # سرویس آبجکت استوریج کانتینری (MinIO Cloud Simulator)
+  # Containerized object storage service (MinIO Cloud Simulator)
   minio:
     image: minio/minio
     container_name: arionex-minio
@@ -45,7 +45,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # صف پیام‌ها و حافظه موقت سلری (Redis Broker)
+  # Message queue and Celery temporary storage (Redis Broker)
   redis:
     image: redis:7-alpine
     container_name: arionex-redis
@@ -58,7 +58,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # وب‌سرور و موتور هوش مصنوعی بک‌اند (FastAPI Backend)
+  # Backend web server and AI engine (FastAPI Backend)
   backend:
     build: ./backend
     container_name: arionex-backend
@@ -95,7 +95,7 @@ services:
       - shared_storage:/app/storage
     restart: always
 
-  # پردازشگر پس‌زمینه تسک‌های غیرهمزمان کرالر (Celery Worker)
+  # Background processor for asynchronous crawler tasks (Celery Worker)
   celery_worker:
     build: ./backend
     container_name: arionex-celery-worker
@@ -130,7 +130,7 @@ services:
       - shared_storage:/app/storage
     restart: always
 
-  # کلاینت داشبورد مدیریتی فرانت‌اند (Nginx Served React Application)
+  # Frontend admin dashboard client (Nginx Served React Application)
   frontend:
     build: ./frontend
     container_name: arionex-frontend

@@ -1,17 +1,17 @@
 """
 /// <summary>
-/// فایل اصلی راه‌اندازی و اجرای وب‌سرور آریونکس (ArioNex Backend Entrypoint)
+/// Main startup and execution file of the ArioNex web server (ArioNex Backend Entrypoint)
 /// </summary>
 /// <remarks>
-/// این فایل وب‌سرور FastAPI را پیکربندی کرده، سیستم لاگ‌نویسی و اتصالات پایگاه داده را بالا می‌آورد
-/// و تنظیمات CORS را برای اتصال روان فرانت‌اند و ابزارک‌های وب مدیریت می‌کند.
+/// This file configures the FastAPI web server, brings up the logging system and database connections,
+/// and manages the CORS settings for smooth frontend and web widget connectivity.
 ///
-/// ساختار روترها (Route Registration):
-///   /v1/query       — پرسش RAG مستقیم (REST API)
-///   /v1/upload      — آپلود و ایندکس اسناد
-///   /v1/config      — مدیریت Feature Toggle‌ها (ادمین)
-///   /v1/widget.js   — JavaScript ابزارک وب‌سایت
-///   /v1/widget/chat — پردازش پیام ابزارک
+/// Route registration structure:
+///   /v1/query       — Direct RAG query (REST API)
+///   /v1/upload      — Document upload and indexing
+///   /v1/config      — Feature toggle management (admin)
+///   /v1/widget.js   — Website widget JavaScript
+///   /v1/widget/chat — Widget message processing
 /// </remarks>
 """
 
@@ -28,7 +28,7 @@ from app.helpers.rate_limiter import RateLimitMiddleware
 from app.routes import query_router, upload_router, config_router, widget_router, integration_router, crawler_router, auth_router, knowledge_router
 from app.services.integrations.telegram_bot import start_telegram_bot_service, stop_telegram_bot_service
 
-# پیکربندی سیستم لاگ‌نویسی متمرکز
+# Configure the centralized logging system
 setup_logging()
 logger = logging.getLogger("arionex.main")
 
@@ -37,37 +37,37 @@ logger = logging.getLogger("arionex.main")
 async def lifespan(app: FastAPI):
     """
     /// <summary>
-    /// مدیریت وقایع چرخه حیات (Lifespan) وب‌سرور بک‌اند
+    /// Manage the lifespan events of the backend web server
     /// </summary>
     /// <remarks>
-    /// این متد در ابتدای راه‌اندازی سرور، پایگاه داده و اکستنشن‌های مربوطه را آماده‌سازی می‌کند.
-    /// همچنین ربات تلگرام سازمانی را به صورت پس‌زمینه اجرا می‌نماید.
+    /// At server startup, this method prepares the database and its related extensions.
+    /// It also runs the organizational Telegram bot in the background.
     /// </remarks>
     """
     logger.info("ArioNex Enterprise Backend is starting up...")
     logger.info(f"Active LLM Provider: {settings.llm_provider} | Model: {settings.model_name}")
     logger.info(f"Embedding Provider: {settings.embedding_provider} | Model: {settings.embedding_model}")
 
-    # راه‌اندازی اولیه دیتابیس پستگرس و افزونه pgvector
+    # Initial setup of the PostgreSQL database and the pgvector extension
     try:
         init_db()
         logger.info("PostgreSQL + pgvector initialization completed successfully.")
     except Exception as e:
         logger.error(f"Critical error during database initialization on startup: {str(e)}")
 
-    # راه‌اندازی سرویس ربات تلگرام سازمانی
+    # Start the organizational Telegram bot service
     try:
         await start_telegram_bot_service()
     except Exception as e:
         logger.error(f"Failed to start telegram bot service inside lifespan: {str(e)}")
 
-    # ثبت لیست ماژول‌های فعال برای پیگیری در کنسول لاگ
+    # Log the list of active modules for tracking in the log console
     active_services = [k for k, v in settings.services.__dict__.items() if v]
     logger.info(f"Active Pipeline Expert Workers (Feature Toggles): {active_services}")
 
     yield
 
-    # متوقف کردن ایمن ربات تلگرام سازمانی
+    # Safely stop the organizational Telegram bot
     try:
         await stop_telegram_bot_service()
     except Exception as e:
@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI):
     logger.info("ArioNex Enterprise Backend is shutting down...")
 
 
-# ساخت وب‌سرور با عنوان رسمی محصول تجاری
+# Build the web server under the official commercial product title
 app = FastAPI(
     title="ArioNex Enterprise AI Assistant API",
     description="پلتفرم هوشمند تحلیل داده، اسناد و سیستم پرسش و پاسخ سازمانی آریونکس — Multi-Provider LLM",
@@ -94,7 +94,7 @@ async def value_error_exception_handler(request: Request, exc: ValueError):
         content={"detail": str(exc)},
     )
 
-# دریافت لیست دامنه‌های مجاز از تنظیمات سیستم
+# Get the list of allowed domains from the system settings
 ALLOWED_ORIGINS = [origin.strip() for origin in settings.cors_allowed_origins.split(",") if origin.strip()]
 if not ALLOWED_ORIGINS:
     if settings.env == "development":
@@ -108,7 +108,7 @@ if not ALLOWED_ORIGINS:
     else:
         raise ValueError("CORS_ALLOWED_ORIGINS must be set in production")
 
-# پیکربندی CORS برای اتصال به فرانت‌اند ری‌اکت و ابزارک‌های پاپ‌آپ وب‌سایت‌ها
+# Configure CORS for connecting to the React frontend and website popup widgets
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -119,10 +119,10 @@ app.add_middleware(
     max_age=3600,
 )
 
-# اعمال محدودیت نرخ درخواست‌ها جهت جلوگیری از حملات DoS (محدودیت ۱۰۰۰ درخواست در دقیقه)
+# Apply request rate limiting to prevent DoS attacks (limit of 1000 requests per minute)
 app.add_middleware(RateLimitMiddleware, requests_limit=1000, window_seconds=60)
 
-# ثبت روترهای مستقل بر اساس موضوع
+# Register the standalone routers by topic
 app.include_router(query_router)
 app.include_router(upload_router)
 app.include_router(config_router)
@@ -213,7 +213,7 @@ async def check_minio() -> dict:
 async def liveness_check():
     """
     /// <summary>
-    /// اندپوینت بررسی زنده بودن سیستم (Liveness Probe)
+    /// Endpoint for checking whether the system is alive (Liveness Probe)
     /// </summary>
     """
     return {"status": "alive"}
@@ -222,7 +222,7 @@ async def liveness_check():
 async def readiness_check():
     """
     /// <summary>
-    /// اندپوینت بررسی آماده‌باش بودن سیستم (Readiness Probe)
+    /// Endpoint for checking whether the system is ready (Readiness Probe)
     /// </summary>
     """
     from fastapi import HTTPException
@@ -235,7 +235,7 @@ async def readiness_check():
 async def health_check():
     """
     /// <summary>
-    /// اندپوینت تفصیلی بررسی سلامت سیستم و وابستگی‌ها (Detailed Health Check)
+    /// Detailed endpoint for checking system health and dependencies (Detailed Health Check)
     /// </summary>
     """
     from datetime import datetime
@@ -288,7 +288,7 @@ async def health_check():
 async def root():
     """
     /// <summary>
-    /// اندپوینت ریشه برای خوش‌آمدگویی به سرور
+    /// Root endpoint to greet the server
     /// </summary>
     """
     return {
@@ -300,5 +300,5 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    # اجرای وب‌سرور لوکال روی پورت ۸۰۰۰
+    # Run the local web server on port 8000
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

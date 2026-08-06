@@ -1,22 +1,22 @@
 """
 /// <summary>
-/// کارخانه یکپارچه مدل‌های زبانی آریونکس (ArioNex Unified LLM Factory)
+/// ArioNex unified LLM factory (ArioNex Unified LLM Factory)
 /// </summary>
 /// <remarks>
-/// این ماژول یک رابط یکپارچه برای اتصال به مدل‌های زبانی مختلف فراهم می‌کند.
-/// از این طریق تمام کد داخلی سیستم می‌تواند بدون تغییر از هر provider استفاده کند.
+/// This module provides a unified interface for connecting to different language models.
+/// In this way, all internal system code can use any provider without modification.
 ///
-/// Provider‌های پشتیبانی‌شده:
-///   - openai      : GPT-4o, GPT-4o-mini و سایر مدل‌های OpenAI
-///   - anthropic   : Claude 3.5 Sonnet, Claude 3 Haiku و سایر مدل‌های Anthropic
-///   - google      : Gemini 1.5 Pro, Gemini 1.5 Flash و سایر مدل‌های Google
-///   - deepseek    : DeepSeek-Chat, DeepSeek-Coder (از طریق OpenAI-compatible API)
-///   - openrouter  : دسترسی به تمام مدل‌های فوق از طریق یک API key واحد (پیشنهادی برای تولید)
-///   - hormouz     : دروازه ۳۵۰+ مدل از طریق یک API key واحد — سازگار با OpenAI (https://api.hormouz.net/v1)
-///   - ollama      : مدل‌های محلی روی سخت‌افزار شخصی (بدون نیاز به اینترنت یا API key)
+/// Supported providers:
+///   - openai      : GPT-4o, GPT-4o-mini and other OpenAI models
+///   - anthropic   : Claude 3.5 Sonnet, Claude 3 Haiku and other Anthropic models
+///   - google      : Gemini 1.5 Pro, Gemini 1.5 Flash and other Google models
+///   - deepseek    : DeepSeek-Chat, DeepSeek-Coder (via the OpenAI-compatible API)
+///   - openrouter  : Access to all of the above models through a single API key (recommended for production)
+///   - hormouz     : Gateway to 350+ models through a single API key — OpenAI-compatible (https://api.hormouz.net/v1)
+///   - ollama      : Local models on personal hardware (no internet or API key required)
 ///
-/// مزیت openrouter: یک API key، دسترسی به همه مدل‌ها، fallback خودکار، مدیریت هزینه متمرکز
-/// مزیت ollama: حریم‌خصوصی کامل، آفلاین، بدون هزینه
+/// openrouter advantage: one API key, access to all models, automatic fallback, centralized cost management
+/// ollama advantage: full privacy, offline, free of charge
 /// </remarks>
 """
 
@@ -33,36 +33,38 @@ def get_llm(
     provider: Optional[str] = None,
     model: Optional[str] = None,
     temperature: float = 0.1,
+    max_tokens: Optional[int] = None,
 ):
     """
     /// <summary>
-    /// کارخانه مرکزی تولید نمونه LLM بر اساس provider انتخاب شده در تنظیمات
+    /// Central factory for producing an LLM instance based on the provider selected in the settings
     /// </summary>
-    /// <param name="provider">نام provider — openai, anthropic, google, deepseek, openrouter</param>
-    /// <param name="model">نام مدل — در صورت None از مدل پیش‌فرض settings استفاده می‌شود</param>
-    /// <param name="temperature">دمای خروجی مدل (0=قطعی، 1=خلاقانه)</param>
-    /// <returns>نمونه‌ای از BaseChatModel سازگار با LangChain</returns>
+    /// <param name="provider">Provider name — openai, anthropic, google, deepseek, openrouter</param>
+    /// <param name="model">Model name — if None, the default settings model is used</param>
+    /// <param name="temperature">Model output temperature (0=deterministic, 1=creative)</param>
+    /// <param name="max_tokens">Output token cap — if None, the provider default is used</param>
+    /// <returns>An instance of BaseChatModel compatible with LangChain</returns>
     /// <remarks>
-    /// این تابع به عنوان تنها نقطه ورود برای ساخت مدل زبانی در سراسر سیستم استفاده می‌شود.
-    /// در صورت خالی بودن کلید، یک خطای ValueError صادر می‌کند.
-    /// نمونه‌های ساخته‌شده برای هر (provider, model, temperature) کش می‌شوند تا سربار
-    /// ساخت مجدد آبجکت مدل در هر فراخوانی زنجیره حذف شود.
+    /// This function is used as the single entry point for building a language model across the entire system.
+    /// If the key is empty, a ValueError is raised.
+    /// Built instances are cached per (provider, model, temperature) to remove the overhead
+    /// of recreating the model object on every chain call.
     /// </remarks>
     """
-    # استفاده از مقادیر پیش‌فرض از settings در صورت عدم ارائه
+    # Use default values from settings when none are provided
     active_provider = provider or settings.llm_provider
     active_model = model or settings.model_name
-    return _get_llm_cached(active_provider, active_model, temperature)
+    return _get_llm_cached(active_provider, active_model, temperature, max_tokens)
 
 
 @lru_cache(maxsize=32)
-def _get_llm_cached(active_provider: str, active_model: str, temperature: float):
+def _get_llm_cached(active_provider: str, active_model: str, temperature: float, max_tokens: Optional[int] = None):
     """
     /// <summary>
-    /// نسخه کش‌شده ساخت نمونه LLM (یک نمونه به ازای هر پیکربندی فعال)
+    /// Cached version of LLM instance creation (one instance per active configuration)
     /// </summary>
     """
-    # بررسی فعال بودن پروایدر در تنظیمات سیستم
+    # Check whether the provider is enabled in the system settings
     is_enabled = True
     if hasattr(settings, "providers"):
         is_enabled = getattr(settings.providers, active_provider, True)
@@ -75,26 +77,26 @@ def _get_llm_cached(active_provider: str, active_model: str, temperature: float)
 
     try:
         if active_provider == "openrouter":
-            return _create_openrouter_llm(active_model, temperature)
+            return _create_openrouter_llm(active_model, temperature, max_tokens)
         elif active_provider == "openai":
-            return _create_openai_llm(active_model, temperature)
+            return _create_openai_llm(active_model, temperature, max_tokens)
         elif active_provider == "anthropic":
-            return _create_anthropic_llm(active_model, temperature)
+            return _create_anthropic_llm(active_model, temperature, max_tokens)
         elif active_provider == "google":
-            return _create_google_llm(active_model, temperature)
+            return _create_google_llm(active_model, temperature, max_tokens)
         elif active_provider == "deepseek":
-            return _create_deepseek_llm(active_model, temperature)
+            return _create_deepseek_llm(active_model, temperature, max_tokens)
         elif active_provider == "gapgpt":
-            return _create_gapgpt_llm(active_model, temperature)
+            return _create_gapgpt_llm(active_model, temperature, max_tokens)
         elif active_provider == "avalai":
-            return _create_avalai_llm(active_model, temperature)
+            return _create_avalai_llm(active_model, temperature, max_tokens)
         elif active_provider == "hormouz":
-            return _create_hormouz_llm(active_model, temperature)
+            return _create_hormouz_llm(active_model, temperature, max_tokens)
         elif active_provider == "ollama":
-            return _create_ollama_llm(active_model, temperature)
+            return _create_ollama_llm(active_model, temperature, max_tokens)
         else:
             logger.warning(f"Unknown LLM provider '{active_provider}'. Falling back to OpenRouter.")
-            return _create_openrouter_llm(active_model, temperature)
+            return _create_openrouter_llm(active_model, temperature, max_tokens)
 
     except Exception as e:
         logger.error(f"LLM Factory failed to initialize provider '{active_provider}': {str(e)}")
@@ -102,16 +104,16 @@ def _get_llm_cached(active_provider: str, active_model: str, temperature: float)
 
 
 # -------------------------------------------------------------------
-# توابع داخلی ساخت نمونه LLM برای هر provider
+# Internal LLM instance creation functions for each provider
 # -------------------------------------------------------------------
 
-def _create_openrouter_llm(model: str, temperature: float):
+def _create_openrouter_llm(model: str, temperature: float, max_tokens: Optional[int] = None):
     """
     /// <summary>
-    /// ساخت LLM از طریق OpenRouter — یک API key برای همه مدل‌ها
+    /// Build an LLM through OpenRouter — one API key for all models
     /// </summary>
     /// <remarks>
-    /// OpenRouter از OpenAI-compatible API استفاده می‌کند.
+    /// OpenRouter uses the OpenAI-compatible API.
     /// </remarks>
     """
     from langchain_openai import ChatOpenAI
@@ -134,10 +136,10 @@ def _create_openrouter_llm(model: str, temperature: float):
     )
 
 
-def _create_openai_llm(model: str, temperature: float):
+def _create_openai_llm(model: str, temperature: float, max_tokens: Optional[int] = None):
     """
     /// <summary>
-    /// ساخت LLM از طریق OpenAI API مستقیم
+    /// Build an LLM through the direct OpenAI API
     /// </summary>
     """
     from langchain_openai import ChatOpenAI
@@ -151,19 +153,19 @@ def _create_openai_llm(model: str, temperature: float):
         model_name=model,
         temperature=temperature,
         openai_api_key=api_key,
-        max_tokens=1024,
+        max_tokens=max_tokens or 1024,
     )
 
 
 
-def _create_anthropic_llm(model: str, temperature: float):
+def _create_anthropic_llm(model: str, temperature: float, max_tokens: Optional[int] = None):
     """
     /// <summary>
-    /// ساخت LLM از طریق Anthropic Claude API
+    /// Build an LLM through the Anthropic Claude API
     /// </summary>
     /// <remarks>
-    /// نیاز به نصب: pip install langchain-anthropic
-    /// مدل پیشنهادی: claude-3-5-sonnet-20241022
+    /// Installation required: pip install langchain-anthropic
+    /// Recommended model: claude-3-5-sonnet-20241022
     /// </remarks>
     """
     try:
@@ -180,18 +182,18 @@ def _create_anthropic_llm(model: str, temperature: float):
         model_name=model,
         temperature=temperature,
         anthropic_api_key=api_key,
-        max_tokens=1024,
+        max_tokens=max_tokens or 1024,
     )
 
 
-def _create_google_llm(model: str, temperature: float):
+def _create_google_llm(model: str, temperature: float, max_tokens: Optional[int] = None):
     """
     /// <summary>
-    /// ساخت LLM از طریق Google Gemini API
+    /// Build an LLM through the Google Gemini API
     /// </summary>
     /// <remarks>
-    /// نیاز به نصب: pip install langchain-google-genai
-    /// مدل پیشنهادی: gemini-1.5-pro-latest یا gemini-1.5-flash
+    /// Installation required: pip install langchain-google-genai
+    /// Recommended model: gemini-1.5-pro-latest or gemini-1.5-flash
     /// </remarks>
     """
     try:
@@ -208,18 +210,18 @@ def _create_google_llm(model: str, temperature: float):
         model=model,
         temperature=temperature,
         google_api_key=api_key,
-        max_output_tokens=1024,
+        max_output_tokens=max_tokens or 1024,
     )
 
 
-def _create_deepseek_llm(model: str, temperature: float):
+def _create_deepseek_llm(model: str, temperature: float, max_tokens: Optional[int] = None):
     """
     /// <summary>
-    /// ساخت LLM از طریق DeepSeek API (سازگار با OpenAI API)
+    /// Build an LLM through the DeepSeek API (compatible with the OpenAI API)
     /// </summary>
     /// <remarks>
-    /// DeepSeek از OpenAI-compatible API استفاده می‌کند.
-    /// مدل پیشنهادی: deepseek-chat یا deepseek-coder
+    /// DeepSeek uses the OpenAI-compatible API.
+    /// Recommended model: deepseek-chat or deepseek-coder
     /// </remarks>
     """
     from langchain_openai import ChatOpenAI
@@ -232,14 +234,14 @@ def _create_deepseek_llm(model: str, temperature: float):
         temperature=temperature,
         openai_api_key=api_key,
         openai_api_base="https://api.deepseek.com/v1",
-        max_tokens=1024,
+        max_tokens=max_tokens or 1024,
     )
 
 
-def _create_gapgpt_llm(model: str, temperature: float):
+def _create_gapgpt_llm(model: str, temperature: float, max_tokens: Optional[int] = None):
     """
     /// <summary>
-    /// ساخت LLM از طریق GapGPT API (سازگار با OpenAI API)
+    /// Build an LLM through the GapGPT API (compatible with the OpenAI API)
     /// </summary>
     """
     from langchain_openai import ChatOpenAI
@@ -247,7 +249,7 @@ def _create_gapgpt_llm(model: str, temperature: float):
     api_key = settings.gapgpt_api_key
     _warn_if_mock(api_key, "GapGPT")
 
-    # اگر مدل پیش‌فرض بود، از gpt-4o-mini به عنوان مقدار پیش‌فرض GapGPT استفاده شود
+    # If the model is the default one, use gpt-4o-mini as the GapGPT default value
     active_model = model if model != "openai/gpt-4o-mini" else "gpt-4o-mini"
 
     return ChatOpenAI(
@@ -255,14 +257,14 @@ def _create_gapgpt_llm(model: str, temperature: float):
         temperature=temperature,
         openai_api_key=api_key,
         openai_api_base="https://api.gapgpt.app/v1",
-        max_tokens=1024,
+        max_tokens=max_tokens or 1024,
     )
 
 
-def _create_avalai_llm(model: str, temperature: float):
+def _create_avalai_llm(model: str, temperature: float, max_tokens: Optional[int] = None):
     """
     /// <summary>
-    /// ساخت LLM از طریق AvalAI API (سازگار با OpenAI API)
+    /// Build an LLM through the AvalAI API (compatible with the OpenAI API)
     /// </summary>
     """
     from langchain_openai import ChatOpenAI
@@ -270,7 +272,7 @@ def _create_avalai_llm(model: str, temperature: float):
     api_key = settings.avalai_api_key
     _warn_if_mock(api_key, "AvalAI")
 
-    # اگر مدل پیش‌فرض بود، از gpt-4o-mini به عنوان مقدار پیش‌فرض AvalAI استفاده شود
+    # If the model is the default one, use gpt-4o-mini as the AvalAI default value
     active_model = model if model != "openai/gpt-4o-mini" else "gpt-4o-mini"
 
     return ChatOpenAI(
@@ -278,20 +280,20 @@ def _create_avalai_llm(model: str, temperature: float):
         temperature=temperature,
         openai_api_key=api_key,
         openai_api_base="https://api.avalai.ir/v1",
-        max_tokens=1024,
+        max_tokens=max_tokens or 1024,
     )
 
 
-def _create_hormouz_llm(model: str, temperature: float):
+def _create_hormouz_llm(model: str, temperature: float, max_tokens: Optional[int] = None):
     """
     /// <summary>
-    /// ساخت LLM از طریق Hormouz API (سازگار با OpenAI API) — دروازه ۳۵۰+ مدل
+    /// Build an LLM through the Hormouz API (compatible with the OpenAI API) — gateway to 350+ models
     /// </summary>
     /// <remarks>
-    /// Hormouz از OpenAI-compatible API استفاده می‌کند.
+    /// Hormouz uses the OpenAI-compatible API.
     /// Base URL: https://api.hormouz.net/v1
-    /// مدل‌ها با فرمت "provider/model-name" مشخص می‌شوند مانند openai/gpt-4o.
-    /// پشتیبانی از streaming (SSE) و billing اعتبار-محور.
+    /// Models are specified in the "provider/model-name" format such as openai/gpt-4o.
+    /// Supports streaming (SSE) and credit-based billing.
     /// </remarks>
     """
     from langchain_openai import ChatOpenAI
@@ -305,18 +307,18 @@ def _create_hormouz_llm(model: str, temperature: float):
         openai_api_key=api_key,
         openai_api_base="https://api.hormouz.net/v1",
         streaming=True,
-        max_tokens=1024,
+        max_tokens=max_tokens or 1024,
     )
 
 
-def _create_ollama_llm(model: str, temperature: float):
+def _create_ollama_llm(model: str, temperature: float, max_tokens: Optional[int] = None):
     """
-    ساخت LLM محلی از طریق Ollama
+    Build a local LLM through Ollama
     """
     ollama_model = getattr(settings, 'ollama_model', None) or model or 'gemma3:4b'
     ollama_base = getattr(settings, 'ollama_base_url', 'http://localhost:11434')
     
-    # لاگ برای دیباگ
+    # Log for debugging
     logger.info(f"🖥️ Ollama LLM: model='{ollama_model}', base_url='{ollama_base}'")
     
     try:
@@ -325,7 +327,7 @@ def _create_ollama_llm(model: str, temperature: float):
             model=ollama_model,
             temperature=temperature,
             base_url=ollama_base,
-            num_predict=1024,
+            num_predict=max_tokens or 1024,
         )
     except ImportError:
         try:
@@ -334,7 +336,7 @@ def _create_ollama_llm(model: str, temperature: float):
                 model=ollama_model,
                 temperature=temperature,
                 base_url=ollama_base,
-                num_predict=1024,
+                num_predict=max_tokens or 1024,
             )
         except ImportError:
             raise ImportError(
@@ -346,7 +348,7 @@ def _create_ollama_llm(model: str, temperature: float):
 def _warn_if_mock(api_key: str, provider_name: str) -> None:
     """
     /// <summary>
-    /// بررسی وجود کلید API معتبر و سلب امکان استفاده از کلیدهای پیش‌فرض یا خالی
+    /// Validate the presence of a valid API key and prevent the use of default or empty keys
     /// </summary>
     """
     import sys
@@ -370,15 +372,15 @@ def get_embedding_model(
 ):
     """
     /// <summary>
-    /// کارخانه مرکزی تولید مدل Embedding بر اساس provider انتخاب شده
+    /// Central factory for producing an Embedding model based on the selected provider
     /// </summary>
-    /// <param name="provider">نام provider — openai, google, openrouter</param>
-    /// <param name="model">نام مدل embedding — در صورت None از مقدار پیش‌فرض استفاده می‌شود</param>
-    /// <returns>یک callable برای تولید embedding بردارها</returns>
+    /// <param name="provider">Provider name — openai, google, openrouter</param>
+    /// <param name="model">Embedding model name — if None, the default value is used</param>
+    /// <returns>A callable for generating embedding vectors</returns>
     /// <remarks>
-    /// این تابع به تابع get_embedding در embeddings.py وصل می‌شود
-    /// و امکان انتخاب provider embedding را در runtime فراهم می‌کند.
-    /// Provider‌های پشتیبانی‌شده: openai (پیش‌فرض), google
+    /// This function connects to the get_embedding function in embeddings.py
+    /// and allows the embedding provider to be selected at runtime.
+    /// Supported providers: openai (default), google
     /// </remarks>
     """
     active_provider = provider or settings.embedding_provider
@@ -389,14 +391,14 @@ def get_embedding_model(
     if active_provider == "google":
         return _create_google_embedding(active_model)
     else:
-        # پیش‌فرض: OpenAI embeddings (سازگار با openrouter و openai مستقیم)
+        # Default: OpenAI embeddings (compatible with openrouter and direct openai)
         return _create_openai_embedding(active_model)
 
 
 def _create_openai_embedding(model: str):
     """
     /// <summary>
-    /// ساخت مدل Embedding از OpenAI (یا هر endpoint سازگار با OpenAI)
+    /// Build an Embedding model from OpenAI (or any OpenAI-compatible endpoint)
     /// </summary>
     """
     from openai import OpenAI
@@ -433,11 +435,11 @@ def _create_openai_embedding(model: str):
 def _create_google_embedding(model: str):
     """
     /// <summary>
-    /// ساخت مدل Embedding از Google Generative AI
+    /// Build an Embedding model from Google Generative AI
     /// </summary>
     /// <remarks>
-    /// نیاز به نصب: pip install google-generativeai
-    /// مدل پیشنهادی: models/text-embedding-004
+    /// Installation required: pip install google-generativeai
+    /// Recommended model: models/text-embedding-004
     /// </remarks>
     """
     try:

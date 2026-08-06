@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// فایل راستی‌آزمایی تغییرات و اصلاحات موتور کرالر وب (Web Crawler Fixes Verification Script)
+/// Verification file for the web crawler engine changes and fixes (Web Crawler Fixes Verification Script)
 /// </summary>
 """
 
@@ -9,7 +9,7 @@ import os
 import asyncio
 from unittest.mock import MagicMock, patch
 
-# اضافه کردن مسیر پروژه جهت شناسایی پکیج app
+# Add the project path so the app package can be detected
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
 from app.services.workers.crawler.engine import CrawlerService

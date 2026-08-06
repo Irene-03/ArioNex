@@ -1,14 +1,14 @@
 """
 /// <summary>
-/// منطق کسب‌وکار اندپوینت پرسش RAG (ArioNex Query Business Logic)
+/// ArioNex Query Business Logic (ArioNex Query Business Logic)
 /// </summary>
 /// <remarks>
-/// این ماژول منطق پردازش درخواست‌های RAG را از لایه روتر FastAPI جدا می‌کند.
-/// مسئولیت‌ها:
-///   ۱. بررسی فعال بودن کانال REST API در تنظیمات
-///   ۲. فراخوانی موتور RAG مرکزی (synthesize_rag_response)
-///   ۳. ثبت نتایج در سیستم ممیزی مرکزی
-///   ۴. بازگرداندن پاسخ نهایی ساختاریافته
+/// This module separates the RAG request processing logic from the FastAPI router layer.
+/// Responsibilities:
+///   1. Check whether the REST API channel is enabled in settings
+///   2. Call the central RAG engine (synthesize_rag_response)
+///   3. Log results in the central audit system
+///   4. Return the final structured answer
 /// </remarks>
 """
 
@@ -29,7 +29,7 @@ from collections import OrderedDict
 class LRUCache(OrderedDict):
     """
     /// <summary>
-    /// کش کمکی کمترین استفاده اخیر (Least Recently Used Cache) برای محدودسازی نشست‌های فعال در حافظه جهت جلوگیری از حمله DoS سرریز حافظه
+    /// Helper Least Recently Used Cache to cap active sessions in memory, preventing memory-overflow DoS attacks
     /// </summary>
     """
     def __init__(self, maxsize=1000, *args, **kwargs):
@@ -56,14 +56,14 @@ _query_sessions = LRUCache(maxsize=1000)
 async def execute_query_logic(request: QueryRequest, current_user: Optional[dict] = None) -> QueryResponse:
     """
     /// <summary>
-    /// اجرای کامل منطق پردازش پرسش RAG از دریافت تا ممیزی با اعمال کنترل دسترسی (ACL)
+    /// Runs the full RAG query processing logic from ingestion to audit, with access control (ACL) applied
     /// </summary>
     """
     if not settings.integrations.rest_api:
         logger.warning("REST API Integration is currently disabled in settings.")
         raise HTTPException(status_code=403, detail="REST API Integration channel is disabled.")
 
-    # استخراج شناسه‌های فایل مجاز بر اساس نقش کاربر (RBAC / ACL)
+    # Extract the allowed file IDs based on the user's role (RBAC / ACL)
     allowed_file_ids = None
     username = "API_User"
     role = "Developer"
@@ -72,7 +72,7 @@ async def execute_query_logic(request: QueryRequest, current_user: Optional[dict
         username = current_user.get("username", "API_User")
         role = current_user.get("role", "Developer")
         
-        # اگر کاربر تحلیل‌گر است، فقط اسناد با دسترسی Analyst
+        # If the user is an analyst, only documents with Analyst access
         if role == "Analyst":
             from app.core.database import get_db_connection
             conn = None
@@ -90,11 +90,11 @@ async def execute_query_logic(request: QueryRequest, current_user: Optional[dict
                 if conn:
                     conn.close()
 
-    # اعمال فیلتر نهایی شناسه‌های فایل
+    # Apply the final file ID filter
     final_file_ids = request.file_ids
     if allowed_file_ids is not None:
         if final_file_ids:
-            # اشتراک شناسه‌ها
+            # Intersection of IDs
             final_file_ids = list(set(final_file_ids).intersection(set(allowed_file_ids)))
             if not final_file_ids:
                 final_file_ids = [-1]
@@ -102,7 +102,7 @@ async def execute_query_logic(request: QueryRequest, current_user: Optional[dict
             final_file_ids = allowed_file_ids
 
     try:
-        # فراخوانی موتور RAG با تاریخچه نشست
+        # Call the RAG engine with the session history
         session_id = request.session_id
         if session_id not in _query_sessions:
             _query_sessions[session_id] = []
@@ -120,20 +120,24 @@ async def execute_query_logic(request: QueryRequest, current_user: Optional[dict
         end_time = time.time()
         response_time_ms = int((end_time - start_time) * 1000)
         
-        # Approximate tokens
-        approx_tokens = (len(request.query) + len(result["answer"])) // 4
+        # Approximate tokens (input = query, output = answer)
+        approx_input_tokens = len(request.query) // 4
+        approx_output_tokens = len(result["answer"]) // 4
+        approx_tokens = approx_input_tokens + approx_output_tokens
 
-        # به‌روزرسانی تاریخچه نشست
+        # Update the session history
         _query_sessions[session_id].append({"Human": request.query})
         _query_sessions[session_id].append({"AI": result["answer"]})
 
-        # ثبت در سیستم ممیزی مرکزی
+        # Log in the central audit system
         log_audit_event(
             user_name=username,
             user_role=role,
             query_text=request.query,
             response_text=result["answer"],
             total_tokens=approx_tokens,
+            input_tokens=approx_input_tokens,
+            output_tokens=approx_output_tokens,
             response_time_ms=response_time_ms,
         )
 
@@ -160,7 +164,7 @@ async def execute_query_stream_logic(
 ) -> AsyncGenerator[str, None]:
     """
     /// <summary>
-    /// نسخه streaming منطق پرسش با اعمال قوانین سطح دسترسی اسناد (ACL)
+    /// Streaming version of the query logic with document access level rules (ACL) applied
     /// </summary>
     """
     if not settings.integrations.rest_api:
@@ -169,7 +173,7 @@ async def execute_query_stream_logic(
         yield _sse_event("done", {"is_safe": True})
         return
 
-    # استخراج شناسه‌های فایل مجاز بر اساس نقش کاربر (RBAC / ACL)
+    # Extract the allowed file IDs based on the user's role (RBAC / ACL)
     allowed_file_ids = None
     username = "API_User"
     role = "Developer"
@@ -240,20 +244,24 @@ async def execute_query_stream_logic(
 
         # Check if the client did not disconnect before saving session history & auditing
         if not (http_request and await http_request.is_disconnected()):
-            # ثبت تاریخچه نشست
+            # Save the session history
             _query_sessions[session_id].append({"Human": request.query})
             _query_sessions[session_id].append({"AI": accumulated_answer})
 
-            # ثبت در سیستم ممیزی پس از پایان stream
+            # Log in the audit system after the stream ends
             end_time = time.time()
             response_time_ms = int((end_time - start_time) * 1000)
-            approx_tokens = (len(request.query) + len(accumulated_answer)) // 4
+            approx_input_tokens = len(request.query) // 4
+            approx_output_tokens = len(accumulated_answer) // 4
+            approx_tokens = approx_input_tokens + approx_output_tokens
             log_audit_event(
                 user_name=username,
                 user_role=role,
                 query_text=request.query,
                 response_text=accumulated_answer,
                 total_tokens=approx_tokens,
+                input_tokens=approx_input_tokens,
+                output_tokens=approx_output_tokens,
                 response_time_ms=response_time_ms,
             )
             yield _sse_event("done", {"is_safe": True})
@@ -271,13 +279,13 @@ async def execute_query_stream_logic(
 def _sse_event(event: str, data) -> str:
     """
     /// <summary>
-    /// قالب‌بندی یک رویداد در فرمت استاندارد Server-Sent Events
+    /// Format an event in the standard Server-Sent Events format
     /// </summary>
-    /// <param name="event">نام رویداد (sources, token, done, error)</param>
-    /// <param name="data">داده — رشته یا dict که به JSON تبدیل می‌شود</param>
+    /// <param name="event">Event name (sources, token, done, error)</param>
+    /// <param name="data">Data — a string or dict that is converted to JSON</param>
     """
     if not isinstance(data, str):
         data = json.dumps(data, ensure_ascii=False)
-    # حذف خطوط جدید از داده‌ها — SSE برای هر line جدا data: می‌خواهد
+    # Remove newlines from the data — SSE needs a separate data: line per line
     safe_data = data.replace("\r\n", "\n").replace("\n", "\\n")
     return f"event: {event}\ndata: {safe_data}\n\n"

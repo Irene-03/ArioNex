@@ -7,11 +7,11 @@ logger = logging.getLogger("arionex.toggleable_services")
 def _clean_and_parse_json(text: str) -> dict:
     """
     /// <summary>
-    /// پاکسازی و پارس امن خروجی مدل زبانی به صورت JSON معتبر با قابلیت بازیابی جیسان‌های شکسته
+    /// Clean and safely parse the language model output as valid JSON, with recovery for broken JSON
     /// </summary>
     """
     cleaned = text.strip()
-    # حذف بلاک‌های کد مارک‌داون
+    # Remove markdown code blocks
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```[a-zA-Z]*\n", "", cleaned)
         cleaned = re.sub(r"\n```$", "", cleaned)

@@ -1,36 +1,36 @@
 # ================================================================
-#   داکرفایل دو مرحله‌ای کلاینت ری‌اکت آریونکس (ArioNex Frontend Dockerfile)
-#   رویکرد بیلد بهینه و توزیع تحت وب‌سرور قدرتمند و فوق‌سبک Nginx
+#   Two-stage Dockerfile for the ArioNex React client (ArioNex Frontend Dockerfile)
+#   Optimized build and distribution behind the powerful, ultra-lightweight Nginx web server
 # ================================================================
 
-# --- مرحله ۱: بیلد و کمپایل فایل‌های جاوااسکریپت و استایل‌ها ---
+# --- Stage 1: Build and compile the JavaScript and stylesheet files ---
 FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# کپی فیزیکی پیکربندی پکیج‌ها و نصب ملزومات
-# (lockfile همراه package.json کپی می‌شود تا از کش بیلد بهره ببریم)
+# Copy the package configuration files and install dependencies
+# (The lockfile is copied along with package.json to benefit from the build cache)
 COPY package.json package-lock.json /app/
 
-# استفاده از mirror برای نصب سریع‌تر پکیج‌ها
+# Use a mirror registry for faster package installation
 RUN npm config set registry https://registry.npmmirror.com \
     && npm install --no-audit --no-fund \
     && npm config delete registry
 
-# کپی سورس‌های فرانت‌اند و کامپایل نهایی با Vite
+# Copy the frontend sources and run the final build with Vite
 COPY . /app/
 RUN npm run build
 
-# --- مرحله ۲: خدمت‌رسانی و توزیع فایل‌های ایستای کامپایل شده ---
+# --- Stage 2: Serve and distribute the compiled static files ---
 FROM nginx:alpine
 
-# کپی خروجی بیلد مرحله اول به پوشه وب‌سرور Nginx
+# Copy the stage 1 build output into the Nginx web server directory
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# کپی پیکربندی Nginx جهت پشتیبانی از آدرس‌های SPA ری‌اکت
+# Copy the Nginx configuration to support React SPA routes
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# پورت پیش‌فرض وب‌سرور
+# Default web server port
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]

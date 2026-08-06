@@ -62,8 +62,8 @@ def _index_chunks_in_db(chunks: list, label: str, source_url: str, job_id: str) 
 
 def _is_job_cancelled(job_id: str) -> bool:
     """
-    بررسی لغو شدن job از دیتابیس.
-    از cursor معمولی (tuple) استفاده می‌کند برای یکنواختی.
+    Check whether the job has been cancelled from the database.
+    Uses a regular (tuple) cursor for consistency.
     """
     conn = None
     try:
@@ -136,7 +136,7 @@ def _commit_staged_data(job_id: str, label: str) -> int:
             if not chunks_to_insert:
                 continue
 
-            # تهیه embedding برای هر chunk
+            # Prepare embeddings for each chunk
             embeddings_data = []
             for item in chunks_to_insert:
                 try:
@@ -147,7 +147,7 @@ def _commit_staged_data(job_id: str, label: str) -> int:
                     emb = [0.0] * _get_embedding_dimension()
                 embeddings_data.append((item["content"], emb, temp_label, 0, item["sequence_id"]))
 
-            # استفاده از execute_batch به جای executemany برای سازگاری کامل با type vector در psycopg2
+            # Use execute_batch instead of executemany for full compatibility with the vector type in psycopg2
             conn = None
             try:
                 conn = get_db_connection()

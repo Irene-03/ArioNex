@@ -1,18 +1,18 @@
 """
 /// <summary>
-/// ماژول تولید امبدینگ‌های برداری آریونکس — چندین provider (ArioNex Multi-Provider Embedding Engine)
+/// ArioNex vector embedding generation module — multiple providers (ArioNex Multi-Provider Embedding Engine)
 /// </summary>
 /// <remarks>
-/// این ماژول وظیفه تبدیل متون chunk به بردار چند-بعدی را بر عهده دارد.
-/// Provider و مدل embedding از settings قابل انتخاب هستند:
+/// This module is responsible for converting chunk texts into multi-dimensional vectors.
+/// The embedding provider and model are selectable from the settings:
 ///
-///   - openai:    text-embedding-3-large (۳۰۷۲ بعد) یا text-embedding-3-small (۱۵۳۶ بعد)
+///   - openai:    text-embedding-3-large (3072 dimensions) or text-embedding-3-small (1536 dimensions)
 ///   - google:    models/text-embedding-004
-///   - hormouz:   هر مدل سازگار با OpenAI از طریق https://api.hormouz.net/v1
-///   - openrouter: هر مدل سازگار با OpenAI از طریق https://openrouter.ai/api/v1
+///   - hormouz:   any OpenAI-compatible model via https://api.hormouz.net/v1
+///   - openrouter: any OpenAI-compatible model via https://openrouter.ai/api/v1
 ///
-/// در صورت عدم وجود کلید API یا بروز خطا، بردار صفر با طول مناسب برمی‌گردد
-/// تا فرآیند پردازش بدون کرش ادامه یابد (Graceful Degradation).
+/// If the API key is missing or an error occurs, a zero vector of the appropriate length is returned
+/// so the processing pipeline continues without crashing (Graceful Degradation).
 /// </remarks>
 """
 
@@ -24,12 +24,12 @@ from app.core.config import settings
 
 logger = logging.getLogger("arionex.embeddings")
 
-# کش سراسری کلاینت‌های OpenAI-compatible جهت جلوگیری از ساخت کلاینت در هر فراخوانی
+# Global cache of OpenAI-compatible clients to avoid building a client on every call
 @lru_cache(maxsize=32)
 def _get_cached_openai_client(provider: str, base_url: Optional[str], api_key: str, timeout: Optional[float], max_retries: Optional[int]):
     """
     /// <summary>
-    /// ساخت یا بازیابی کلاینت OpenAI-compatible کش‌شده (یک کلاینت به ازای هر پیکربندی)
+    /// Build or retrieve the cached OpenAI-compatible client (one client per configuration)
     /// </summary>
     """
     from openai import OpenAI
@@ -37,7 +37,7 @@ def _get_cached_openai_client(provider: str, base_url: Optional[str], api_key: s
         return OpenAI(api_key=api_key, base_url=base_url, timeout=timeout, max_retries=max_retries)
     return OpenAI(api_key=api_key, timeout=timeout, max_retries=max_retries)
 
-# نگاشت ابعاد مدل‌های شناخته‌شده
+# Mapping of dimensions for known models
 _EMBEDDING_DIMENSIONS = {
     "text-embedding-3-large": 3072,
     "text-embedding-3-small": 1536,
@@ -48,15 +48,15 @@ _EMBEDDING_DIMENSIONS = {
 def _get_embedding_dimension() -> int:
     """
     /// <summary>
-    /// دریافت تعداد ابعاد بردار بر اساس مدل embedding انتخاب‌شده
+    /// Get the number of vector dimensions based on the selected embedding model
     /// </summary>
-    /// <returns>تعداد ابعاد بردار (پیش‌فرض: ۳۰۷۲)</returns>
+    /// <returns>The number of vector dimensions (default: 3072)</returns>
     """
     model = settings.embedding_model
     if settings.embedding_provider == "hormouz":
         model = settings.hormouz_embedding_model
 
-    # حذف پیشوند پروایدر در صورت وجود (مانند openai/ یا deepseek/)
+    # Strip the provider prefix if present (e.g., openai/ or deepseek/)
     model_name = model.split("/")[-1] if "/" in model else model
     return _EMBEDDING_DIMENSIONS.get(model_name, 3072)
 
@@ -81,7 +81,7 @@ def _validate_api_key(provider: str):
 def get_embedding(text: str) -> list[float]:
     """
     /// <summary>
-    /// تولید بردار ویژگی (Embedding) برای متن ورودی با استفاده از provider انتخاب‌شده
+    /// Generate the feature vector (embedding) for the input text using the selected provider
     /// </summary>
     """
     dim = _get_embedding_dimension()
@@ -116,13 +116,13 @@ def get_embedding(text: str) -> list[float]:
 def _embed_with_openai(text: str) -> list[float]:
     """
     /// <summary>
-    /// تولید embedding از طریق OpenAI API یا هر endpoint سازگار با OpenAI (OpenRouter ...)
+    /// Generate an embedding through the OpenAI API or any OpenAI-compatible endpoint (OpenRouter ...)
     /// </summary>
     """
     provider = settings.embedding_provider
     model = settings.embedding_model
 
-    # انتخاب کلید و base_url بر اساس provider فعال
+    # Select the key and base_url based on the active provider
     if provider == "openrouter":
         api_key = settings.openrouter_api_key
         base_url = "https://openrouter.ai/api/v1"
@@ -130,7 +130,7 @@ def _embed_with_openai(text: str) -> list[float]:
         api_key = settings.openai_api_key
         base_url = None
 
-    # استفاده از کلاینت OpenAI کش‌شده برای حذف سربار ساخت کلاینت در هر فراخوانی
+    # Use the cached OpenAI client to avoid the overhead of building a client on every call
     client = _get_cached_openai_client(provider, base_url, api_key, None, None)
     response = client.embeddings.create(model=model, input=text)
     return response.data[0].embedding
@@ -139,7 +139,7 @@ def _embed_with_openai(text: str) -> list[float]:
 def _embed_with_hormouz(text: str) -> list[float]:
     """
     /// <summary>
-    /// تولید embedding از طریق Hormouz API با timeout ۳۰ ثانیه
+    /// Generate an embedding through the Hormouz API with a 30-second timeout
     /// </summary>
     """
     api_key = settings.hormouz_api_key
@@ -153,7 +153,7 @@ def _embed_with_hormouz(text: str) -> list[float]:
 def _embed_with_google(text: str) -> list[float]:
     """
     /// <summary>
-    /// تولید embedding از طریق Google Generative AI
+    /// Generate an embedding through Google Generative AI
     /// </summary>
     """
     try:
@@ -175,8 +175,8 @@ def _embed_with_google(text: str) -> list[float]:
 def get_embedding_cached(text: str) -> list[float]:
     """
     /// <summary>
-    /// نسخه کش‌شده تولید امبدینگ — برای پرسش‌های تکراری و فراخوانی از چند نقطه،
-    /// فراخوانی شبکه‌ای API فقط یک‌بار انجام می‌شود.
+    /// Cached embedding generation — for repeated queries and calls from multiple locations,
+    /// the API network call is only made once.
     /// </summary>
     """
     return get_embedding(text)

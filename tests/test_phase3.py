@@ -1,13 +1,13 @@
 """
 /// <summary>
-/// فایل تست خودکار و راستی‌آزمایی فاز ۳ آریونکس (ArioNex Phase 3 Verification Script)
+/// ArioNex Phase 3 automated test and verification file (ArioNex Phase 3 Verification Script)
 /// </summary>
 """
 
 import sys
 import os
 
-# اضافه کردن مسیر پروژه جهت شناسایی پکیج app
+# Add the project path so the app package can be detected
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
 from app.services.workers.unstructured_processor import unstructured_processor
@@ -24,13 +24,13 @@ def test_unstructured_worker():
     print("Testing Unstructured Document Ingestion Worker...")
     assert unstructured_processor.is_enabled == True, "Unstructured processor should be enabled by default!"
     
-    # ساخت فایل متنی نمونه محلی برای تست پارسر
+    # Create a sample local text file to test the parser
     test_file = "test_unstructured.txt"
     with open(test_file, "w", encoding="utf-8") as f:
         f.write("این یک متن نمونه حسابداری برای آریونکس است. کد ملی ۱۲۳۴۵۶۷۸۹۰ محرمانه است.")
         
     try:
-        # تست استخراج متن
+        # Test text extraction
         text = unstructured_processor.parse_txt(test_file)
         print(f"Extracted Text: {text}")
         assert "آریونکس" in text
@@ -44,7 +44,7 @@ def test_qna_worker():
     print("Testing QnA Template Processor Ingestion Worker...")
     assert qna_processor.is_enabled == True, "QnA processor should be enabled by default!"
     
-    # بررسی متدها و مقادیر اولیه
+    # Check methods and initial values
     print(f"QnA Ingestion status: {qna_processor.is_enabled}")
     print(" QnA worker checks PASSED.\n")
 
@@ -52,33 +52,33 @@ def test_structured_worker():
     print("Testing Structured Data Ingestion Worker...")
     assert structured_processor.is_enabled == True, "Structured processor should be enabled by default!"
     
-    # بررسی متدها و مقادیر اولیه
+    # Check methods and initial values
     print(f"Structured Ingestion status: {structured_processor.is_enabled}")
     print(" Structured worker checks PASSED.\n")
 
 def test_toggleable_services():
     print("Testing Toggleable Shell Services Pluggability...")
     
-    # ذخیره حالت‌های اصلی برای بازگردانی
+    # Save original states for restoration
     orig_entity = entity_extractor_worker.is_enabled
     orig_rule = rule_extractor_worker.is_enabled
     orig_neo = neo4j_manager.is_enabled
     orig_safety = local_gemma_auditor.is_enabled
     
-    # غیرفعال کردن موقت سرویس‌ها جهت تست رفتار بای‌پاس در حالت غیرفعال
+    # Temporarily disable services to test bypass behavior in disabled mode
     entity_extractor_worker.is_enabled = False
     rule_extractor_worker.is_enabled = False
     neo4j_manager.is_enabled = False
     local_gemma_auditor.is_enabled = False
     
     try:
-        # بررسی وضعیت غیرفعال پیش‌فرض و صحت کارکرد در لایه ایزوله
+        # Check default disabled status and correct operation in the isolated layer
         assert entity_extractor_worker.is_enabled == False, "Entity extractor should be disabled by default!"
         assert rule_extractor_worker.is_enabled == False, "Rule extractor should be disabled by default!"
         assert neo4j_manager.is_enabled == False, "Neo4j should be disabled by default!"
         assert local_gemma_auditor.is_enabled == False, "Local Gemma safety auditor should be disabled by default!"
         
-        # تست رفتارهای شبیه‌سازی شده در حالت غیرفعال (باید لیست خالی یا False برگردانند و کرش نکنند)
+        # Test simulated behaviors in disabled mode (should return an empty list or False without crashing)
         entities = entity_extractor_worker.extract_entities("متن نمونه")
         rules = rule_extractor_worker.extract_rules("متن نمونه")
         neo_inserted = neo4j_manager.insert_relationship("موجودیت ۱", "مرتبط", "موجودیت ۲")
@@ -97,7 +97,7 @@ def test_toggleable_services():
         assert query_audited == True
         assert response_audited == True
     finally:
-        # بازگرداندن وضعیت اصلی سرویس‌ها
+        # Restore the original service states
         entity_extractor_worker.is_enabled = orig_entity
         rule_extractor_worker.is_enabled = orig_rule
         neo4j_manager.is_enabled = orig_neo

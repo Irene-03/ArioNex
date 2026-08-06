@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// سیستم مدیریت لاگ‌نویسی متمرکز آریونکس (ArioNex Logging Configuration)
+/// ArioNex centralized logging configuration (ArioNex Logging Configuration)
 /// </summary>
 /// <remarks>
-/// تمامی لاگ‌های سیستمی تولید شده در این برنامه با ساختار منظم و در سطح‌های مختلف
-/// به زبان انگلیسی تولید شده و به کنسول فرستاده می‌شوند.
+/// All system logs produced by this application are generated in English with an organized structure
+/// at various levels and sent to the console.
 /// </remarks>
 """
 
@@ -14,10 +14,10 @@ import sys
 def setup_logging() -> None:
     """
     /// <summary>
-    /// راه‌اندازی و کانفیگ ماژول لاگ‌نویسی پایتون
+    /// Set up and configure the Python logging module
     /// </summary>
     /// <remarks>
-    /// فرمت خروجی لاگ‌ها شامل زمان، نام فایل، سطح لاگ و پیام لاگ به زبان انگلیسی است.
+    /// The log output format includes timestamp, file name, log level, and the log message in English.
     /// </remarks>
     """
     # Reconfigure stdout and stderr to handle UTF-8 Persian/Arabic text correctly on Windows/etc.
@@ -40,7 +40,7 @@ def setup_logging() -> None:
         ]
     )
     
-    # تنظیم سطح لاگ برای کتابخانه‌های ثالث جهت کاهش شلوغی کنسول
+    # Set the log level for third-party libraries to reduce console noise
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("psycopg2").setLevel(logging.WARNING)
     

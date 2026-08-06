@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// فایل تست خودکار و راستی‌آزمایی امنیت کلیدهای API و فایل پیکربندی (API Key Security & Env Protection Tests)
+/// Automated test and verification file for API key security and the configuration file (API Key Security & Env Protection Tests)
 /// </summary>
 """
 
@@ -10,7 +10,7 @@ import asyncio
 import hashlib
 from unittest.mock import MagicMock, patch
 
-# اضافه کردن مسیر پروژه جهت شناسایی پکیج app
+# Add the project path so the app package can be detected
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
 from fastapi import HTTPException

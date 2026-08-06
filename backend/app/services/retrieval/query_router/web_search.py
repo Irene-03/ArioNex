@@ -7,10 +7,10 @@ logger = logging.getLogger("arionex.query_router")
 def _get_active_api_key(provider: str) -> str:
     """
     /// <summary>
-    /// نگاشت provider فعال به کلید API متناظر در settings
+    /// Map the active provider to its corresponding API key in settings
     /// </summary>
-    /// <param name="provider">نام provider فعال (openrouter, openai, hormouz, ...)</param>
-    /// <returns>مقدار کلید API ذخیره شده برای این provider</returns>
+    /// <param name="provider">Name of the active provider (openrouter, openai, hormouz, ...)</param>
+    /// <returns>The stored API key value for this provider</returns>
     """
     mapping = {
         "openrouter": settings.openrouter_api_key,
@@ -28,10 +28,10 @@ def _get_active_api_key(provider: str) -> str:
 def perform_tavily_web_search(query: str) -> list[dict]:
     """
     /// <summary>
-    /// فراخوانی جستجوی وب زنده با Tavily API در صورت فعال بودن در سیستم
+    /// Perform a live web search with the Tavily API if it is enabled in the system
     /// </summary>
-    /// <param name="query">پرسش کاربر</param>
-    /// <returns>لیستی از نتایج وب بازیابی شده</returns>
+    /// <param name="query">User question</param>
+    /// <returns>List of retrieved web results</returns>
     """
     if not settings.services.web_search or not settings.tavily_api_key or "your-tavily" in settings.tavily_api_key:
         logger.info("Tavily Web Search is disabled or API Key is missing. Skipping web search.")
@@ -54,9 +54,9 @@ def perform_tavily_web_search(query: str) -> list[dict]:
                 web_results.append({
                     "content": item.get("content", ""),
                     "label": f"Web Source: {item.get('title', 'External Page')}",
-                    "file_id": 999, # شناسه ثابت برای منابع وب جهت ردیابی متادیتای فرانت‌اند
+                    "file_id": 999, # Fixed ID for web sources to track frontend metadata
                     "sequence_id": 0,
-                    "similarity": 0.65, # امتیاز شباهت ثابت برای منابع وب
+                    "similarity": 0.65, # Fixed similarity score for web sources
                     "source_type": "web"
                 })
             logger.info(f"Tavily search retrieved {len(web_results)} pages.")

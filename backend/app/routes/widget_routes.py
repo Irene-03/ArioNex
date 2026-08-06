@@ -1,13 +1,13 @@
 """
 /// <summary>
-/// روتر ابزارک چت پاپ‌آپ وب‌سایت آریونکس (ArioNex Web Widget Chat Router)
+/// ArioNex Web Widget Chat Router (ArioNex Web Widget Chat Router)
 /// </summary>
 /// <remarks>
-/// این ماژول دو اندپوینت ابزارک وب‌سایت را تعریف می‌کند:
-///   ۱. GET /v1/widget.js   — فایل JavaScript پاپ‌آپ چت
-///   ۲. POST /v1/widget/chat — اندپوینت پردازش پیام چت ابزارک
+/// This module defines the two website widget endpoints:
+///   1. GET /v1/widget.js   — the chat popup JavaScript file
+///   2. POST /v1/widget/chat — endpoint for processing widget chat messages
 ///
-/// منطق session و RAG در widget_logic.py قرار دارد.
+/// The session and RAG logic lives in widget_logic.py.
 /// </remarks>
 """
 
@@ -33,10 +33,10 @@ router = APIRouter(prefix="/v1", tags=["Widget — Website Chat Popup"])
 async def get_web_widget_script(website: Optional[str] = None):
     """
     /// <summary>
-    /// اندپوینت دریافت فایل جاوااسکریپت ابزارک چت پاپ‌آپ وب‌سایت
+    /// Endpoint for fetching the website chat popup JavaScript file
     /// </summary>
-    /// <param name="website">آدرس وب‌سایت درخواست‌دهنده جهت شخصی‌سازی تم و پیام</param>
-    /// <returns>کدهای جاوااسکریپت خودمحور با استایل‌دهی لوکس و بومی</returns>
+    /// <param name="website">Requesting website address for customizing the theme and message</param>
+    /// <returns>Self-contained JavaScript with a luxurious, native look and feel</returns>
     """
     if not settings.integrations.popup_widget:
         logger.warning("Pop-up Website Widget integration is disabled in settings.")
@@ -45,7 +45,7 @@ async def get_web_widget_script(website: Optional[str] = None):
             media_type="application/javascript",
         )
 
-    # مقادیر پیش‌فرض تم و پیام خوش‌آمدگویی
+    # Default values for theme and welcome message
     welcome_message = "سلام! من دستیار هوشمند آریونکس (ArioNex) هستم. چطور می‌توانم به شما کمک کنم؟ 💼✨"
     theme_color = "#1a2744"
     accent_color = "#c4894a"
@@ -71,7 +71,7 @@ async def get_web_widget_script(website: Optional[str] = None):
             if conn:
                 conn.close()
 
-    # خواندن اسکریپت جاوااسکریپت از فایل تمپلیت
+    # Read the JavaScript script from the template file
     try:
         template_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
@@ -87,7 +87,7 @@ async def get_web_widget_script(website: Optional[str] = None):
             media_type="application/javascript"
         )
 
-    # اعمال پویای تنظیمات ابزارک
+    # Dynamically apply the widget settings
     custom_js = js_code.replace("#1a2744", theme_color)
     custom_js = custom_js.replace("#c4894a", accent_color)
     custom_js = custom_js.replace(
@@ -107,7 +107,7 @@ async def get_web_widget_script(website: Optional[str] = None):
 async def process_widget_query(request: QueryRequest):
     """
     /// <summary>
-    /// اندپوینت اختصاصی تبادل پیام ابزارک پاپ‌آپ وب‌سایت
+    /// Dedicated endpoint for exchanging messages with the website popup widget
     /// </summary>
     """
     return await execute_widget_logic(request)
@@ -121,7 +121,7 @@ async def process_widget_query(request: QueryRequest):
 async def stream_widget_query(request: QueryRequest):
     """
     /// <summary>
-    /// اندپوینت streaming تبادل پیام ابزارک — مناسب برای UX چت زنده
+    /// Widget message exchange streaming endpoint — suitable for live chat UX
     /// </summary>
     """
     return StreamingResponse(

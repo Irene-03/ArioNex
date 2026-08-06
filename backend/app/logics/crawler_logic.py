@@ -1,15 +1,15 @@
 """
 /// <summary>
-/// منطق کسب‌وکار ماژول کرالر وب آریونکس (ArioNex Web Crawler Business Logic)
+/// ArioNex Web Crawler Business Logic (ArioNex Web Crawler Business Logic)
 /// </summary>
 /// <remarks>
-/// این ماژول لایه business logic کرالر را از لایه روتر جدا می‌کند.
-/// مسئولیت‌ها:
-///   ۱. ایجاد job کرال در دیتابیس و دریافت job_id یکتا
-///   ۲. شروع اجرای async CrawlerService به عنوان BackgroundTask
-///   ۳. خواندن وضعیت job برای polling
-///   ۴. لیست تمام job‌ها با مرتب‌سازی
-///   ۵. لغو job در حال اجرا
+/// This module separates the crawler business logic layer from the router layer.
+/// Responsibilities:
+///   1. Create a crawl job in the database and get a unique job_id
+///   2. Start the async CrawlerService as a BackgroundTask
+///   3. Read job status for polling
+///   4. List all jobs with sorting
+///   5. Cancel a running job
 /// </remarks>
 """
 
@@ -30,7 +30,7 @@ from app.tasks.crawler_task import run_crawler_task
 
 logger = logging.getLogger("arionex.crawler_logic")
 
-# تعریف مسیر ریشه backend به صورت ثابت برای استفاده در تمام توابع
+# Define the backend root path as a constant for use across all functions
 _BACKEND_ROOT = Path(__file__).parent.parent.parent
 _JOBS_DIR = _BACKEND_ROOT / "jobs"
 
@@ -48,7 +48,7 @@ def _create_job_in_db(
 ) -> None:
     """
     /// <summary>
-    /// درج رکورد job کرال جدید در جدول crawler_jobs
+    /// Insert a new crawl job record into the crawler_jobs table
     /// </summary>
     """
     conn = None
@@ -79,7 +79,7 @@ def _create_job_in_db(
 def _row_to_job_response(row: dict) -> CrawlJobResponse:
     """
     /// <summary>
-    /// تبدیل رکورد دیتابیس به مدل پاسخ Pydantic
+    /// Convert a database record to the Pydantic response model
     /// </summary>
     """
     jobdir_path = _JOBS_DIR / row["job_id"]
@@ -111,10 +111,10 @@ async def execute_start_crawl(
 ) -> CrawlStartResponse:
     """
     /// <summary>
-    /// اجرای منطق شروع job کرال: ایجاد رکورد در DB و راه‌اندازی task پس‌زمینه
+    /// Run the crawl start logic: create a DB record and launch the background task
     /// </summary>
-    /// <param name="request">درخواست شروع کرال از کاربر</param>
-    /// <returns>job_id و وضعیت اولیه</returns>
+    /// <param name="request">Crawl start request from the user</param>
+    /// <returns>job_id and initial status</returns>
     """
     if not settings.services.web_crawler:
         raise HTTPException(
@@ -122,19 +122,19 @@ async def execute_start_crawl(
             detail="Web crawler service is currently disabled. Enable it in config.yaml under services.web_crawler."
         )
 
-    # اعتبارسنجی URL
+    # Validate the URL
     url = str(request.url).strip()
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="URL must start with http:// or https://")
 
-    # جمع‌آوری تنظیمات با fallback به config.yaml defaults
+    # Collect settings with fallback to config.yaml defaults
     max_pages = request.max_pages or settings.crawler.default_max_pages
     max_depth = request.max_depth or settings.crawler.default_max_depth
     concurrency = request.concurrency or settings.crawler.default_concurrency
     js_render = request.js_render or settings.crawler.js_render
     follow_external = request.follow_external_domains or settings.crawler.follow_external_domains
 
-    # ایجاد job_id یکتا
+    # Generate a unique job_id
     job_id = str(uuid.uuid4())
 
     logger.info(
@@ -142,7 +142,7 @@ async def execute_start_crawl(
         f"(pages={max_pages}, depth={max_depth}, js={js_render}, external={follow_external})"
     )
 
-    # ثبت job در دیتابیس
+    # Register the job in the database
     _create_job_in_db(
         job_id=job_id,
         url=url,
@@ -155,7 +155,7 @@ async def execute_start_crawl(
         widget_id=request.widget_id,
     )
 
-    # شروع Celery Task در پس‌زمینه
+    # Start the Celery Task in the background
     run_crawler_task.delay(
         job_id=job_id,
         url=url,
@@ -181,9 +181,9 @@ async def execute_start_crawl(
 async def execute_get_crawl_status(job_id: str) -> CrawlJobResponse:
     """
     /// <summary>
-    /// دریافت وضعیت real-time یک job کرال
+    /// Get the real-time status of a crawl job
     /// </summary>
-    /// <param name="job_id">شناسه یکتای job</param>
+    /// <param name="job_id">Unique job ID</param>
     """
     conn = None
     try:
@@ -214,11 +214,11 @@ async def execute_list_crawl_jobs(
 ) -> list[CrawlJobResponse]:
     """
     /// <summary>
-    /// لیست تمام job‌های کرال با مرتب‌سازی از جدیدترین به قدیمی‌ترین
+    /// List all crawl jobs sorted from newest to oldest
     /// </summary>
-    /// <param name="limit">تعداد رکوردها در هر صفحه</param>
-    /// <param name="offset">تعداد رکوردهای skip شده (برای pagination)</param>
-    /// <param name="status_filter">فیلتر بر اساس وضعیت (queued/running/completed/failed)</param>
+    /// <param name="limit">Number of records per page</param>
+    /// <param name="offset">Number of skipped records (for pagination)</param>
+    /// <param name="status_filter">Filter by status (queued/running/completed/failed)</param>
     """
     conn = None
     try:
@@ -248,7 +248,7 @@ async def execute_list_crawl_jobs(
 async def execute_cancel_crawl_job(job_id: str, hard_delete: bool = False) -> dict:
     """
     /// <summary>
-    /// لغو یک job کرال در حال اجرا یا حذف کامل تاریخچه
+    /// Cancel a running crawl job or permanently delete its history
     /// </summary>
     """
     conn = None
@@ -304,7 +304,7 @@ async def execute_cancel_crawl_job(job_id: str, hard_delete: bool = False) -> di
 async def execute_resume_crawl(job_id: str) -> CrawlStartResponse:
     """
     /// <summary>
-    /// رزومه کردن یک job کرال متوقف یا ناموفق با استفاده از jobdir ذخیره شده
+    /// Resume a stopped or failed crawl job using the saved jobdir
     /// </summary>
     """
     import os
@@ -384,7 +384,7 @@ async def execute_resume_crawl(job_id: str) -> CrawlStartResponse:
 async def execute_delete_jobdir(job_id: str) -> dict:
     """
     /// <summary>
-    /// حذف پوشه حالت کرال (jobdir) و فایل‌های موقت MinIO
+    /// Delete the crawl state folder (jobdir) and temporary MinIO files
     /// </summary>
     """
     import os

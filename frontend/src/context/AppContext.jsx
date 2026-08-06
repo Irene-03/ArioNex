@@ -1,8 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+﻿import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createApiClient } from '../api/apiClient';
+import { API_BASE } from '../api/config';
+import { useToast, useConfirm } from '../components/ui/ToastProvider';
 
 const AppContext = createContext(null);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useApp = () => {
   const context = useContext(AppContext);
   if (!context) {
@@ -12,6 +15,8 @@ export const useApp = () => {
 };
 
 export const AppProvider = ({ children }) => {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
   const [activeScreen, setActiveScreen] = useState('dashboard');
 
   // ─── Authentication State ──────────────────────────────────────────────────
@@ -79,7 +84,7 @@ export const AppProvider = ({ children }) => {
     setIsLoginLoading(true);
     
     try {
-      const res = await fetch('http://localhost:8000/v1/auth/login', {
+      const res = await fetch(`${API_BASE}/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -132,7 +137,7 @@ export const AppProvider = ({ children }) => {
     setIsSignupLoading(true);
 
     try {
-      const res = await fetch('http://localhost:8000/v1/auth/signup', {
+      const res = await fetch(`${API_BASE}/v1/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -147,7 +152,7 @@ export const AppProvider = ({ children }) => {
         setSignupSuccess(true);
         setLoginUsername(signupUsername);
         setLoginPassword(signupPassword);
-        alert('ثبت‌نام با موفقیت انجام شد. می‌توانید اکنون وارد شوید.');
+        toast.success('ثبت‌نام موفق', 'حساب کاربری شما ساخته شد. اکنون می‌توانید وارد شوید.');
         setIsSignupMode(false);
         setSignupUsername('');
         setSignupPassword('');
@@ -164,7 +169,7 @@ export const AppProvider = ({ children }) => {
 
   const fetchUsersList = async () => {
     try {
-      const res = await apiFetch('http://localhost:8000/v1/auth/users');
+      const res = await apiFetch(`${API_BASE}/v1/auth/users`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) setUsersList(data);
@@ -182,7 +187,7 @@ export const AppProvider = ({ children }) => {
     }
     setInviteError('');
     try {
-      const res = await apiFetch('http://localhost:8000/v1/auth/register', {
+      const res = await apiFetch(`${API_BASE}/v1/auth/register`, {
         method: 'POST',
         body: JSON.stringify({
           username: inviteUsername,
@@ -192,7 +197,7 @@ export const AppProvider = ({ children }) => {
       });
       const data = await res.json();
       if (res.ok) {
-        alert(`کاربر "${data.username}" با موفقیت ثبت شد.`);
+        toast.success('کاربر ثبت شد', `کاربر «${data.username}» با موفقیت در سازمان ثبت شد.`);
         setShowInviteModal(false);
         setInviteUsername('');
         setInvitePassword('');
@@ -214,7 +219,7 @@ export const AppProvider = ({ children }) => {
 
   const fetchSystemInstruction = async () => {
     try {
-      const res = await fetch('http://localhost:8000/v1/config/prompts');
+      const res = await fetch(`${API_BASE}/v1/config/prompts`);
       if (res.ok) {
         const data = await res.json();
         if (data && data.prompt) {
@@ -228,19 +233,19 @@ export const AppProvider = ({ children }) => {
 
   const saveSystemInstruction = async () => {
     try {
-      const res = await apiFetch('http://localhost:8000/v1/config/prompts', {
+      const res = await apiFetch(`${API_BASE}/v1/config/prompts`, {
         method: 'POST',
         body: JSON.stringify({ prompt: systemInstruction })
       });
       if (res.ok) {
-        alert('دستورالعمل سیستم با موفقیت به‌روزرسانی شد.');
+        toast.success('به‌روزرسانی موفق', 'دستورالعمل سیستم ذخیره شد.');
       } else {
         const data = await res.json();
-        alert(data.detail || 'خطا در به‌روزرسانی دستورالعمل سیستم');
+        toast.error('خطا در ذخیره‌سازی', data.detail || 'خطا در به‌روزرسانی دستورالعمل سیستم');
       }
     } catch (err) {
       console.error('Error saving system instruction:', err);
-      alert('خطا در ارتباط با سرور');
+      toast.error('خطا در ارتباط با سرور');
     }
   };
 
@@ -274,7 +279,7 @@ export const AppProvider = ({ children }) => {
     const updatedFeatures = { ...features, [key]: !features[key] };
     setFeatures(updatedFeatures);
 
-    apiFetch('http://localhost:8000/v1/config', {
+    apiFetch(`${API_BASE}/v1/config`, {
       method: 'POST',
       body: JSON.stringify({
         services: {
@@ -316,7 +321,7 @@ export const AppProvider = ({ children }) => {
     const updatedFeatures = { ...features, [featureKey]: !features[featureKey] };
     setFeatures(updatedFeatures);
 
-    apiFetch('http://localhost:8000/v1/config', {
+    apiFetch(`${API_BASE}/v1/config`, {
       method: 'POST',
       body: JSON.stringify({
         providers: {
@@ -340,7 +345,7 @@ export const AppProvider = ({ children }) => {
 
   const handleSaveTelegramToken = async (tokenValue) => {
     try {
-      const res = await apiFetch('http://localhost:8000/v1/config', {
+      const res = await apiFetch(`${API_BASE}/v1/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -349,16 +354,16 @@ export const AppProvider = ({ children }) => {
       });
       if (res.ok) {
         setTelegramBotToken(tokenValue);
-        alert('توکن ربات تلگرام با موفقیت به‌روزرسانی و ربات راه‌اندازی شد.');
+        toast.success('ربات تلگرام راه‌اندازی شد', 'توکن ربات با موفقیت ذخیره و فعال شد.');
         return true;
       } else {
         const data = await res.json();
-        alert(data.detail || 'خطا در به‌روزرسانی توکن ربات تلگرام');
+        toast.error('خطا در ذخیره توکن', data.detail || 'خطا در به‌روزرسانی توکن ربات تلگرام');
         return false;
       }
     } catch (err) {
       console.error(err);
-      alert('خطا در به‌روزرسانی توکن ربات تلگرام');
+      toast.error('خطا در ذخیره توکن', 'خطا در ارتباط با سرور برای به‌روزرسانی توکن تلگرام');
       return false;
     }
   };
@@ -376,7 +381,7 @@ export const AppProvider = ({ children }) => {
 
   const handleSaveProviderApiKey = async (provider, keyValue) => {
     try {
-      const res = await apiFetch('http://localhost:8000/v1/config', {
+      const res = await apiFetch(`${API_BASE}/v1/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -388,16 +393,16 @@ export const AppProvider = ({ children }) => {
         if (data.current_config?.api_keys) {
           setProviderApiKeys(data.current_config.api_keys);
         }
-        alert('کلید API پروایدر با موفقیت ذخیره شد.');
+        toast.success('کلید ذخیره شد', `کلید API پروایدر ${provider} با موفقیت ذخیره شد.`);
         return true;
       } else {
         const data = await res.json();
-        alert(data.detail || 'خطا در ذخیره کلید API');
+        toast.error('خطا در ذخیره کلید', data.detail || 'خطا در ذخیره کلید API');
         return false;
       }
     } catch (err) {
       console.error(err);
-      alert('خطا در ذخیره کلید API');
+      toast.error('خطا در ذخیره کلید', 'خطا در ارتباط با سرور برای ذخیره کلید API');
       return false;
     }
   };
@@ -414,7 +419,7 @@ export const AppProvider = ({ children }) => {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-    } catch (_) {}
+    } catch { /* ignore */ }
     return [
       {
         id: 'session_default',
@@ -437,7 +442,7 @@ export const AppProvider = ({ children }) => {
     try {
       const storedActive = localStorage.getItem('arionex_active_session_id');
       if (storedActive) return storedActive;
-    } catch (_) {}
+    } catch { /* ignore */ }
     return 'session_default';
   });
 
@@ -472,13 +477,13 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     try {
       localStorage.setItem('arionex_chat_sessions', JSON.stringify(sessions));
-    } catch (_) {}
+    } catch { /* ignore */ }
   }, [sessions]);
 
   useEffect(() => {
     try {
       localStorage.setItem('arionex_active_session_id', activeSessionId);
-    } catch (_) {}
+    } catch { /* ignore */ }
   }, [activeSessionId]);
 
   // Safety sync: Ensure activeSessionId is always a valid existing session ID
@@ -486,6 +491,7 @@ export const AppProvider = ({ children }) => {
     if (sessions.length > 0) {
       const exists = sessions.some(s => s.id === activeSessionId);
       if (!exists) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setActiveSessionId(sessions[0].id);
       }
     }
@@ -511,12 +517,19 @@ export const AppProvider = ({ children }) => {
     setActiveSessionId(newId);
   };
 
-  const deleteSession = (id, e) => {
+  const deleteSession = async (id, e) => {
     if (e && e.stopPropagation) e.stopPropagation();
     if (sessions.length <= 1) {
-      alert('نمی‌توان تنها مکالمه موجود را حذف کرد.');
+      toast.error('حذف ممکن نیست', 'نمی‌توان تنها مکالمه موجود را حذف کرد.');
       return;
     }
+    const confirmed = await confirmDialog({
+      title: 'حذف مکالمه',
+      desc: 'این مکالمه به صورت کامل حذف می‌شود و امکان بازگردانی آن وجود ندارد.',
+      confirmLabel: 'حذف',
+      cancelLabel: 'انصراف',
+    });
+    if (!confirmed) return;
     const nextSessions = sessions.filter(s => s.id !== id);
     setSessions(nextSessions);
     if (activeSessionId === id) {
@@ -539,12 +552,14 @@ export const AppProvider = ({ children }) => {
     pdf_count: 0,
     csv_excel_count: 0,
     other_count: 0,
-    disk_usage_gb: 0.0
+    disk_usage_gb: 0.0,
+    input_tokens_used: 0,
+    output_tokens_used: 0
   });
 
   const fetchStats = async () => {
     try {
-      const res = await apiFetch('http://localhost:8000/v1/knowledge/stats');
+      const res = await apiFetch(`${API_BASE}/v1/knowledge/stats`);
       if (res.ok) {
         const data = await res.json();
         setStats(data);
@@ -556,7 +571,7 @@ export const AppProvider = ({ children }) => {
 
   const fetchDocuments = async () => {
     try {
-      const res = await apiFetch('http://localhost:8000/v1/knowledge/documents');
+      const res = await apiFetch(`${API_BASE}/v1/knowledge/documents`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -593,7 +608,7 @@ export const AppProvider = ({ children }) => {
 
   const fetchCrawlJobs = async () => {
     try {
-      let url = 'http://localhost:8000/v1/crawl/jobs?limit=20';
+      let url = `${API_BASE}/v1/crawl/jobs?limit=20`;
       const currentFilter = crawlStatusFilterRef.current;
       if (currentFilter) {
         url += `&status=${currentFilter}`;
@@ -626,7 +641,7 @@ export const AppProvider = ({ children }) => {
 
   const fetchIntegrations = async () => {
     try {
-      const resWidgets = await apiFetch('http://localhost:8000/v1/integrations/widgets');
+      const resWidgets = await apiFetch(`${API_BASE}/v1/integrations/widgets`);
       const dataWidgets = await resWidgets.json();
       setWidgets(dataWidgets);
       if (dataWidgets.length > 0 && !widgetPreviewSelected) {
@@ -635,7 +650,7 @@ export const AppProvider = ({ children }) => {
         setWidgetPreviewSelected(null);
       }
 
-      const resKeys = await apiFetch('http://localhost:8000/v1/integrations/apikeys');
+      const resKeys = await apiFetch(`${API_BASE}/v1/integrations/apikeys`);
       const dataKeys = await resKeys.json();
       setApiKeys(dataKeys);
     } catch (err) {
@@ -647,7 +662,7 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const res = await fetch('http://localhost:8000/v1/config');
+        const res = await fetch(`${API_BASE}/v1/config`);
         const data = await res.json();
         if (data) {
           setFeatures({
@@ -688,6 +703,7 @@ export const AppProvider = ({ children }) => {
     if (!currentUser) return;
     fetchIntegrations();
     if (activeScreen === 'dashboard' || activeScreen === 'knowledge' || activeScreen === 'upload') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchStats();
     }
     if (activeScreen === 'knowledge' || activeScreen === 'upload') {
@@ -700,6 +716,7 @@ export const AppProvider = ({ children }) => {
       fetchUsersList();
       fetchSystemInstruction();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeScreen, currentUser]);
 
   // ─── Crawler polling: stable interval using useRef ──────────────────────
@@ -732,6 +749,7 @@ export const AppProvider = ({ children }) => {
 
   useEffect(() => {
     if (currentUser && currentUser.role !== 'Admin' && (activeScreen === 'admin' || activeScreen === 'integrations')) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveScreen('dashboard');
     }
   }, [activeScreen, currentUser]);
@@ -764,7 +782,7 @@ export const AppProvider = ({ children }) => {
         ));
       }, 300);
 
-      const res = await apiFetch('http://localhost:8000/v1/upload', {
+      const res = await apiFetch(`${API_BASE}/v1/upload`, {
         method: 'POST',
         body: formData
       });
@@ -799,17 +817,17 @@ export const AppProvider = ({ children }) => {
           setPiiChecked(true);
         }
 
-        alert(`سند "${file.name}" با موفقیت آپلود و در پایگاه دانش ایندکس شد.`);
+        toast.success('آپلود موفق', `سند «${file.name}» با موفقیت آپلود و در پایگاه دانش ایندکس شد.`);
         fetchDocuments();
         fetchStats();
       } else {
         setDocuments(prev => prev.filter(d => d.id !== tempId));
-        alert(data.detail || 'خطا در آپلود و پردازش سند');
+        toast.error('خطا در آپلود', data.detail || 'خطا در آپلود و پردازش سند');
       }
     } catch (err) {
       console.error('File upload failed:', err);
       setDocuments(prev => prev.filter(d => d.id !== tempId));
-      alert('خطا در ارتباط با سرور آپلود آریونکس.');
+      toast.error('خطا در ارتباط با سرور', 'ارتباط با سرور آپلود آریونکس برقرار نشد.');
     }
   };
 
@@ -837,7 +855,7 @@ export const AppProvider = ({ children }) => {
       fileInput.onchange = async (event) => {
         const selectedFile = event.target.files[0];
         // Remove from DOM immediately after selection
-        try { document.body.removeChild(fileInput); } catch (_) {}
+        try { document.body.removeChild(fileInput); } catch { /* ignore */ }
         if (selectedFile) {
           await performUpload(selectedFile);
         }
@@ -845,7 +863,7 @@ export const AppProvider = ({ children }) => {
       // Also clean up if dialog is cancelled (focus returns to window)
       const onFocus = () => {
         setTimeout(() => {
-          try { document.body.removeChild(fileInput); } catch (_) {}
+          try { document.body.removeChild(fileInput); } catch { /* ignore */ }
           window.removeEventListener('focus', onFocus);
         }, 300);
       };
@@ -869,7 +887,7 @@ export const AppProvider = ({ children }) => {
     };
 
     try {
-      const res = await apiFetch('http://localhost:8000/v1/integrations/widgets', {
+      const res = await apiFetch(`${API_BASE}/v1/integrations/widgets`, {
         method: 'POST',
         body: JSON.stringify(widgetData)
       });
@@ -878,7 +896,7 @@ export const AppProvider = ({ children }) => {
         setWidgets(prev => [data, ...prev]);
         setWidgetPreviewSelected(data);
       } else {
-        alert(data.detail || 'خطا در ثبت ابزارک');
+        toast.error('خطا در ثبت ابزارک', data.detail || 'خطا در ثبت ابزارک');
       }
       setNewWidgetName('');
       setNewWidgetUrl('');
@@ -888,9 +906,15 @@ export const AppProvider = ({ children }) => {
   };
 
   const handleDeleteWidget = async (id) => {
-    if (!confirm('آیا از حذف این ابزارک اطمینان دارید؟')) return;
+    const confirmed = await confirmDialog({
+      title: 'حذف ابزارک',
+      desc: 'آیا از حذف این ابزارک و قطع اتصال آن از وب‌سایت مربوطه اطمینان دارید؟',
+      confirmLabel: 'حذف',
+      cancelLabel: 'انصراف',
+    });
+    if (!confirmed) return;
     try {
-      const res = await apiFetch(`http://localhost:8000/v1/integrations/widgets/${id}`, {
+      const res = await apiFetch(`${API_BASE}/v1/integrations/widgets/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -898,9 +922,11 @@ export const AppProvider = ({ children }) => {
         if (widgetPreviewSelected?.id === id) {
           setWidgetPreviewSelected(null);
         }
+        toast.success('ابزارک حذف شد', 'ابزارک با موفقیت حذف شد.');
       }
     } catch (err) {
       console.error('Error deleting widget:', err);
+      toast.error('خطا در حذف ابزارک');
     }
   };
 
@@ -909,7 +935,7 @@ export const AppProvider = ({ children }) => {
     if (!newKeyName.trim()) return;
 
     try {
-      const res = await apiFetch('http://localhost:8000/v1/integrations/apikeys', {
+      const res = await apiFetch(`${API_BASE}/v1/integrations/apikeys`, {
         method: 'POST',
         body: JSON.stringify({ name: newKeyName })
       });
@@ -925,16 +951,24 @@ export const AppProvider = ({ children }) => {
   };
 
   const handleDeleteAPIKey = async (id) => {
-    if (!confirm('آیا از ابطال این کلید API اطمینان دارید؟')) return;
+    const confirmed = await confirmDialog({
+      title: 'ابطال کلید API',
+      desc: 'با ابطال این کلید، تمام سیستم‌های متصل با آن از دسترسی خارج خواهند شد. ادامه می‌دهید؟',
+      confirmLabel: 'ابطال کلید',
+      cancelLabel: 'انصراف',
+    });
+    if (!confirmed) return;
     try {
-      const res = await apiFetch(`http://localhost:8000/v1/integrations/apikeys/${id}`, {
+      const res = await apiFetch(`${API_BASE}/v1/integrations/apikeys/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {
         setApiKeys(prev => prev.filter(k => k.id !== id));
+        toast.success('کلید ابطال شد', 'کلید دسترسی API با موفقیت ابطال شد.');
       }
     } catch (err) {
       console.error('Error deleting API key:', err);
+      toast.error('خطا در ابطال کلید');
     }
   };
 
@@ -965,7 +999,7 @@ export const AppProvider = ({ children }) => {
 
     try {
       const savedToken = token || localStorage.getItem('arionex_token');
-      const res = await fetch('http://localhost:8000/v1/query/stream', {
+      const res = await fetch(`${API_BASE}/v1/query/stream`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -1007,14 +1041,14 @@ export const AppProvider = ({ children }) => {
           const decodedData = dataLine.replace(/\\n/g, '\n');
 
           if (eventName === 'token') {
-            // decodedData قبلاً شامل فاصلههاست، فقط اضافه میکنیم
+            // decodedData already includes the spaces, so we just append
             accumulated = accumulated + decodedData;
             setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, text: accumulated, isLoading: false } : m));
           } else if (eventName === 'sources') {
             try {
               const parsedSources = JSON.parse(decodedData);
               setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, sources: parsedSources } : m));
-            } catch (_) {}
+            } catch { /* ignore */ }
           } else if (eventName === 'done') {
             try {
               const meta = JSON.parse(decodedData);
@@ -1022,7 +1056,7 @@ export const AppProvider = ({ children }) => {
               setChatMessages(prev => prev.map(m => m.id === aiMsgId
                 ? { ...m, isSafe: meta.is_safe ?? true, isRefusal, isLoading: false }
                 : m));
-            } catch (_) {}
+            } catch { /* ignore */ }
           } else if (eventName === 'error') {
             console.error('Stream RAG error:', decodedData);
             setChatMessages(prev => prev.map(m => m.id === aiMsgId ? {

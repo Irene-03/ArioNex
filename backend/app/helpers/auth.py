@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// هبر انطباق و اعتبارسنجی کلیدهای دسترسی API (ArioNex API Key Verification Helper)
+/// Helper for verifying and validating API access keys (ArioNex API Key Verification Helper)
 /// </summary>
 /// <remarks>
-/// این ماژول متد بررسی صحت هدرهای ارسالی درخواست‌های بیرونی (REST API) را بر عهده دارد.
-/// هدرهای مورد پذیرش: x-api-key یا Authorization: Bearer.
+/// This module provides the method for verifying the validity of headers sent in external (REST API) requests.
+/// Accepted headers: x-api-key or Authorization: Bearer.
 /// </remarks>
 """
 
@@ -17,7 +17,7 @@ from app.core.database import get_db_connection
 
 logger = logging.getLogger("arionex.auth")
 
-# تعریف ساختارهای دریافت کلید از هدر
+# Defining structures for extracting the key from headers
 api_key_header_scheme = APIKeyHeader(name="x-api-key", auto_error=False)
 api_key_bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -28,27 +28,27 @@ async def verify_api_key(
 ) -> Optional[str]:
     """
     /// <summary>
-    /// بررسی و اعتبارسنجی کلید API ارسالی از طرف کلاینت‌های خارجی
+    /// Verifies and validates the API key sent by external clients
     /// </summary>
-    /// <param name="api_key_header">کلید خوانده شده از هدر x-api-key</param>
-    /// <param name="api_key_bearer">کلید خوانده شده از هدر Authorization Bearer</param>
-    /// <returns>نام کلید دسترسی در صورت معتبر بودن</returns>
-    /// <exception cref="HTTPException">در صورت نامعتبر بودن یا فعال نبودن کلید</exception>
+    /// <param name="api_key_header">Key read from the x-api-key header</param>
+    /// <param name="api_key_bearer">Key read from the Authorization Bearer header</param>
+    /// <returns>Access key name if valid</returns>
+    /// <exception cref="HTTPException">If the key is invalid or inactive</exception>
     """
-    # استخراج کلید نهایی از یکی از دو روش مجاز
+    # Extract the final key from one of the two allowed methods
     token = api_key_header or (api_key_bearer.credentials if api_key_bearer else None)
 
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            # بررسی تعداد کل کلیدها در سیستم. اگر هیچ کلیدی تعریف نشده باشد،
-            # برای سازگاری عقب‌رو و راحتی توسعه، احراز هویت را غیرفعال می‌کنیم.
+            # Check the total number of keys in the system. If no key is defined,
+            # authentication is disabled for backward compatibility and development convenience.
             cur.execute("SELECT COUNT(*) FROM api_keys")
             count = cur.fetchone()[0]
             
             if count == 0:
-                # سیستم کلید ثبت‌شده‌ای ندارد؛ دسترسی آزاد است
+                # The system has no registered keys; access is unrestricted
                 return "development_bypass"
             
             if not token:
@@ -97,7 +97,7 @@ async def verify_api_key(
                     detail="این کلید API غیرفعال شده است."
                 )
             
-            # به‌روزرسانی زمان آخرین استفاده به صورت پس‌زمینه
+            # Update the last-used time in the background
             cur.execute(
                 "UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE id = %s",
                 (key_id,)
@@ -127,7 +127,7 @@ async def get_current_user_or_api_key(
 ) -> dict:
     """
     /// <summary>
-    /// اعتبارسنجی هدر درخواست و بازیابی هویت کاربر یا نام کلید API
+    /// Validates the request header and retrieves the user identity or API key name
     /// </summary>
     """
     token = api_key_header or (api_key_bearer.credentials if api_key_bearer else None)
@@ -136,14 +136,14 @@ async def get_current_user_or_api_key(
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            # بررسی تعداد کاربران و کلیدها
+            # Check the number of users and keys
             cur.execute("SELECT COUNT(*) FROM users")
             user_count = cur.fetchone()[0]
             
             cur.execute("SELECT COUNT(*) FROM api_keys")
             key_count = cur.fetchone()[0]
             
-            # اگر نه کاربری ثبت شده و نه کلیدی، دسترسی آزمایشی آزاد است (سازگاری عقب‌رو تست‌ها)
+            # If neither a user nor a key is registered, trial access is open (backward compatibility for tests)
             if user_count == 0 and key_count == 0 and not token:
                 return {"username": "development_bypass", "role": "Admin"}
                 
@@ -153,7 +153,7 @@ async def get_current_user_or_api_key(
                     detail="توکن احراز هویت یا کلید API ارسال نشده است."
                 )
                 
-            # ابتدا بررسی می‌کنیم که آیا توکن نشست کاربر است (با بررسی هدر Authorization Bearer)
+            # First, check whether the token is a user session token (by inspecting the Authorization Bearer header)
             from app.routes.auth_routes import verify_session_token
             user_payload = verify_session_token(token)
             if user_payload:
@@ -162,7 +162,7 @@ async def get_current_user_or_api_key(
                     "role": user_payload.get("role")
                 }
                 
-            # اگر توکن نشست نبود، بررسی می‌کنیم کلید API معتبر است یا خیر
+            # If it is not a session token, check whether the API key is valid
             import hashlib
             hashed_token = hashlib.sha256(token.encode("utf-8")).hexdigest()
             cur.execute(
@@ -194,7 +194,7 @@ async def get_current_user_or_api_key(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="این کلید API غیرفعال شده است."
                     )
-                # به‌روزرسانی آخرین زمان استفاده
+                # Update the last-used time
                 cur.execute(
                     "UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE id = %s",
                     (key_id,)

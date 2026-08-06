@@ -1,7 +1,7 @@
 # -------------------------------------------------------
-# بسته بازیابی و تلفیق داده هوشمند آریونکس (ArioNex Retrieval Service Package)
+# ArioNex intelligent data retrieval and synthesis package (ArioNex Retrieval Service Package)
 # -------------------------------------------------------
-# نام‌گذاری جدید فایل‌ها (Refactored filenames):
+# New file naming (Refactored filenames):
 #   synthesizer.py  →  query_router.py
 #   librarian.py    →  vector_search.py
 #   support_lead.py →  qna.py

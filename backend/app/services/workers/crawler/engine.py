@@ -36,7 +36,7 @@ logger = logging.getLogger("arionex.crawler_service")
 class CrawlerService:
     """
     /// <summary>
-    /// سرویس مدیریت موتور کرالر وب
+    /// Web crawler engine management service
     /// </summary>
     """
     def __init__(self):
@@ -57,7 +57,7 @@ class CrawlerService:
     ) -> None:
         """
         /// <summary>
-        /// اجرای کامل یک job کرال به صورت تراکنشی و با استفاده از لایه میانی MinIO و فریمورک Scrapy
+        /// Full execution of a crawl job transactionally using the MinIO staging layer and the Scrapy framework
         /// </summary>
         """
         import sys
@@ -99,7 +99,7 @@ class CrawlerService:
             _update_job_in_db(job_id, status="failed", error_message=error_msg)
             return
 
-        # تنظیم PYTHONPATH برای اینکه subprocess بتواند ماژول‌های پروژه را import کند
+        # Set PYTHONPATH so the subprocess can import the project modules
         env = os.environ.copy()
         pythonpath = f"{backend_dir}{os.pathsep}{app_dir}"
         if 'PYTHONPATH' in env and env['PYTHONPATH']:
@@ -107,7 +107,7 @@ class CrawlerService:
         else:
             env['PYTHONPATH'] = pythonpath
 
-        # در محیط داکر، ریشه با /app هم ارجاع می‌شود
+        # In the Docker environment, the root is also referenced by /app
         if os.path.exists("/app") and "/app" not in env['PYTHONPATH']:
             env['PYTHONPATH'] = f"/app{os.pathsep}{env['PYTHONPATH']}"
 
@@ -180,7 +180,7 @@ class CrawlerService:
                 )
                 return
 
-            # ========== لاگ کامل خروجی ==========
+            # ========== Full output log ==========
             if stdout_data:
                 stdout_str = stdout_data.decode('utf-8', errors='replace')
                 logger.info(f"[CrawlerJob:{job_id}] ===== Spider STDOUT =====\n{stdout_str[:5000]}")

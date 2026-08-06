@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// روتر مدیریت ادغام‌ها و اتصالات آریونکس (ArioNex Integrations Management Router)
+/// ArioNex Integrations Management Router (ArioNex Integrations Management Router)
 /// </summary>
 /// <remarks>
-/// این ماژول اندپوینت‌های مدیریت ابزارک‌های وب‌سایت و کلیدهای API را تعریف می‌کند.
-/// عملیات‌ها مستقیماً روی دیتابیس PostgreSQL با استفاده از کانکشن سراسری اجرا می‌شوند.
+/// This module defines the endpoints for managing website widgets and API keys.
+/// Operations run directly against the PostgreSQL database using the global connection.
 /// </remarks>
 """
 
@@ -95,7 +95,7 @@ async def create_widget(widget: WidgetCreate):
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            # بررسی تکراری نبودن دامنه
+            # Check that the domain is not already registered
             cur.execute("SELECT id FROM website_widgets WHERE url = %s", (widget.url,))
             if cur.fetchone():
                 raise HTTPException(status_code=400, detail="ابزارک با این دامنه قبلاً ثبت شده است.")
@@ -233,7 +233,7 @@ async def list_apikeys():
 async def create_apikey(payload: APIKeyCreate):
     conn = None
     try:
-        # تولید یک توکن رندوم امن با پیشوند آریونکس
+        # Generate a secure random token with the ArioNex prefix
         token = "anx_live_" + secrets.token_hex(24)
         
         # Hash the token using SHA-256 for secure database storage

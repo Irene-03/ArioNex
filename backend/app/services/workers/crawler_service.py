@@ -1,9 +1,9 @@
 """
 /// <summary>
-/// فایل واسط موتور کرالر وب آریونکس (ArioNex Crawler Service Facade)
+/// ArioNex Web Crawler Engine Facade
 /// </summary>
 /// <remarks>
-/// این ماژول برای حفظ سازگاری عقب‌رو قرار دارد و ایمپورت‌ها را به پکیج سازمان‌یافته crawler هدایت می‌کند.
+/// This module exists for backward compatibility and redirects imports to the organized crawler package.
 /// </remarks>
 """
 

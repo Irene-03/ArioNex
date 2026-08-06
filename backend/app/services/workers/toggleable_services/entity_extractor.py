@@ -11,7 +11,7 @@ logger = logging.getLogger("arionex.toggleable_services")
 class EntityExtractorWorker:
     """
     /// <summary>
-    /// کارگر استخراج‌کننده موجودیت‌ها از متون جهت تغذیه به گراف دانش (Entity Extractor)
+    /// Worker that extracts entities from texts to feed the knowledge graph (Entity Extractor)
     /// </summary>
     """
     def __init__(self):
@@ -20,7 +20,7 @@ class EntityExtractorWorker:
     def extract_entities(self, text: str, file_id: Optional[int] = None) -> dict:
         """
         /// <summary>
-        /// استخراج خودکار موجودیت‌ها و روابط بین آن‌ها از متن با استفاده از LLM یا Fallback Mock
+        /// Automatically extract entities and their relationships from text using an LLM or a Mock fallback
         /// </summary>
         """
         if not self.is_enabled:

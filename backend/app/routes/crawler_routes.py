@@ -1,16 +1,16 @@
 """
 /// <summary>
-/// روتر ماژول کرالر وب آریونکس (ArioNex Web Crawler Router)
+/// ArioNex Web Crawler Router (ArioNex Web Crawler Router)
 /// </summary>
 /// <remarks>
-/// این ماژول اندپوینت‌های مدیریت job‌های کرال را تعریف می‌کند.
-/// منطق کامل در crawler_logic.py قرار دارد.
+/// This module defines the endpoints for managing crawl jobs.
+/// The full logic lives in crawler_logic.py.
 ///
-/// اندپوینت‌ها:
-///   POST   /v1/crawl/start          — شروع job کرال جدید با URL و تنظیمات
-///   GET    /v1/crawl/jobs           — لیست تمام job‌ها با pagination
-///   GET    /v1/crawl/{job_id}       — وضعیت real-time یک job خاص
-///   DELETE /v1/crawl/{job_id}       — لغو یک job در حال اجرا
+/// Endpoints:
+///   POST   /v1/crawl/start          — start a new crawl job with a URL and settings
+///   GET    /v1/crawl/jobs           — list all jobs with pagination
+///   GET    /v1/crawl/{job_id}       — real-time status of a specific job
+///   DELETE /v1/crawl/{job_id}       — cancel a running job
 /// </remarks>
 """
 
@@ -50,7 +50,7 @@ async def start_crawl_job(
 ) -> CrawlStartResponse:
     """
     /// <summary>
-    /// اندپوینت شروع یک job کرال — فوری پاسخ می‌دهد و کرال را در پس‌زمینه اجرا می‌کند
+    /// Endpoint to start a crawl job — responds immediately and runs the crawl in the background
     /// </summary>
     """
     return await execute_start_crawl(request)
@@ -72,7 +72,7 @@ async def list_crawl_jobs(
 ) -> list[CrawlJobResponse]:
     """
     /// <summary>
-    /// اندپوینت لیست job‌های کرال با پشتیبانی از pagination و فیلتر وضعیت
+    /// Endpoint to list crawl jobs with pagination and status filter support
     /// </summary>
     """
     return await execute_list_crawl_jobs(limit=limit, offset=offset, status_filter=status)
@@ -87,9 +87,9 @@ async def list_crawl_jobs(
 async def get_crawl_job_status(job_id: str) -> CrawlJobResponse:
     """
     /// <summary>
-    /// اندپوینت وضعیت job — برای polling real-time از فرانت‌اند استفاده می‌شود
+    /// Job status endpoint — used for real-time polling from the frontend
     /// </summary>
-    /// <param name="job_id">شناسه یکتای job</param>
+    /// <param name="job_id">Unique job ID</param>
     """
     return await execute_get_crawl_status(job_id)
 
@@ -105,9 +105,9 @@ async def cancel_crawl_job(
 ) -> dict:
     """
     /// <summary>
-    /// اندپوینت لغو یا حذف تاریخچه job کرال
+    /// Endpoint to cancel a crawl job or delete its history
     /// </summary>
-    /// <param name="job_id">شناسه یکتای job</param>
+    /// <param name="job_id">Unique job ID</param>
     """
     return await execute_cancel_crawl_job(job_id, hard_delete=hard_delete)
 
@@ -121,9 +121,9 @@ async def cancel_crawl_job(
 async def resume_crawl_job(job_id: str) -> CrawlStartResponse:
     """
     /// <summary>
-    /// اندپوینت رزومه کردن job کرال
+    /// Endpoint to resume a crawl job
     /// </summary>
-    /// <param name="job_id">شناسه یکتای job</param>
+    /// <param name="job_id">Unique job ID</param>
     """
     return await execute_resume_crawl(job_id)
 
@@ -136,8 +136,8 @@ async def resume_crawl_job(job_id: str) -> CrawlStartResponse:
 async def delete_crawl_jobdir(job_id: str) -> dict:
     """
     /// <summary>
-    /// اندپوینت حذف پوشه حالت کرال
+    /// Endpoint to delete the crawl state folder
     /// </summary>
-    /// <param name="job_id">شناسه یکتای job</param>
+    /// <param name="job_id">Unique job ID</param>
     """
     return await execute_delete_jobdir(job_id)

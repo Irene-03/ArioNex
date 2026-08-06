@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// فایل تست راستی‌آزمایی بهینه‌سازی استریم چت و رفع نشت حافظه (Streaming Robustness & Memory Optimization Tests)
+/// Test and verification file for chat streaming optimization and memory leak fixes (Streaming Robustness & Memory Optimization Tests)
 /// </summary>
 """
 
@@ -9,7 +9,7 @@ import os
 import asyncio
 from unittest.mock import MagicMock, patch, AsyncMock
 
-# تنظیم خروجی یونیکد برای ویندوز
+# Configure Unicode output for Windows
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -23,7 +23,7 @@ from app.main import app
 from app.schemas.query_schemas import QueryRequest
 from app.logics.query_logic import execute_query_stream_logic
 
-# ایجاد یک کلاینت ماک برای تست
+# Create a mock client for testing
 class MockRequest:
     def __init__(self, disconnect_after_steps=None):
         self.steps = 0
@@ -38,12 +38,12 @@ class MockRequest:
 async def test_streaming_response_capping():
     print("1. Testing streaming response capping (memory limit protection)...")
     
-    # درخواست نمونه کلاینت
+    # Sample client request
     request_data = QueryRequest(query="لیست طولانی بده", session_id="test_cap_session")
     
-    # شبیه‌سازی استریم بازیابی که هر بار مقادیر زیادی کاراکتر برمی‌گرداند
+    # Mock a retrieval stream that returns large amounts of characters each time
     async def mock_generator(*args, **kwargs):
-        # تولید کلیدواژه‌های تکراری تا فراتر از ۱۰۰ هزار کاراکتر برود
+        # Generate repeated keywords to exceed 100 thousand characters
         for i in range(11000):
             yield {"event": "token", "data": "1234567890"}
         yield {"event": "done", "data": {"is_safe": True}}
@@ -55,12 +55,12 @@ async def test_streaming_response_capping():
         async for sse_event in execute_query_stream_logic(request_data):
             events.append(sse_event)
             
-        # بررسی ثبت در ممیزی
+        # Verify audit logging
         assert mock_audit.called, "Audit logging should still be invoked"
-        # استخراج پاسخ ثبت شده در ممیزی
+        # Extract the response recorded in the audit
         audited_response = mock_audit.call_args[1]["response_text"]
         
-        # طول پاسخ ممیزی شده نباید فراتر از ۱۰۰ هزار + طول هشدار برود
+        # The audited response length must not exceed 100 thousand + the warning length
         assert len(audited_response) <= 100025, f"Response size too large: {len(audited_response)}"
         assert audited_response.endswith("... [Answer Truncated]"), "Response should end with truncation message"
         print(f"-> Test 1 (Response Capping): PASSED (Capped at length: {len(audited_response)})")
@@ -70,10 +70,10 @@ async def test_streaming_client_disconnect():
     
     request_data = QueryRequest(query="تست قطع کلاینت", session_id="test_disconnect_session")
     
-    # ساخت شبیه‌ساز قطع اتصال بعد از ۵ مرحله
+    # Build a disconnection simulator after 5 steps
     mock_http_request = MockRequest(disconnect_after_steps=5)
     
-    # ژنراتور استریم مدل که بی‌نهایت یا طولانی ادامه دارد
+    # Model stream generator that continues infinitely or for a long time
     total_yields = 0
     async def mock_generator(*args, **kwargs):
         nonlocal total_yields
@@ -90,7 +90,7 @@ async def test_streaming_client_disconnect():
             if "event: token" in sse_event:
                 tokens_received += 1
                 
-        # ژنراتور باید قبل از اتمام ۵۰ تایی، شکسته شده باشد
+        # The generator should have been aborted before finishing all 50
         assert tokens_received < 50, f"Generator should have aborted early, but received {tokens_received} tokens"
         assert not mock_audit.called, "Audit logging should not be executed if client disconnects early"
         print(f"-> Test 2 (Client Disconnect Check): PASSED (Aborted early at token: {tokens_received})")
@@ -100,26 +100,26 @@ async def test_streaming_timeout_enforcement():
     
     request_data = QueryRequest(query="تست تایم‌اوت", session_id="test_timeout_session")
     
-    # شبیه‌سازی یک موتور RAG بسیار کند
+    # Mock a very slow RAG engine
     async def mock_slow_generator(*args, **kwargs):
         yield {"event": "token", "data": "شروع استریم..."}
-        await asyncio.sleep(10.0) # تاخیر بیش از حد مجاز
+        await asyncio.sleep(10.0) # Excessive delay beyond the allowed limit
         yield {"event": "token", "data": "ادامه استریم..."}
 
-    # برای تست سریع‌تر، مقدار تایم‌اوت را در کد به صورت محلی شبیه‌سازی می‌کنیم یا تایم‌اوت را پایین می‌آوریم
-    # با توجه به اینکه از asyncio.timeout(60.0) استفاده شده، می‌توانیم پچ کنیم یا مستقیماً خطا بیندازیم
+    # For a faster test, we either simulate the timeout value locally in the code or lower the timeout
+    # Since asyncio.timeout(60.0) is used, we can patch it or raise the error directly
     with patch("app.logics.query_logic.synthesize_rag_response_stream", side_effect=mock_slow_generator):
-        # برای سرعت بخشیدن به تست، asyncio.timeout را پچ می‌کنیم که سقف ۱ ثانیه داشته باشد
+        # To speed up the test, we patch asyncio.timeout to have a cap of 1 second
         original_timeout = asyncio.timeout
         def short_timeout(delay):
-            return original_timeout(0.1) # تایم‌اوت کوتاه ۰.۱ ثانیه‌ای
+            return original_timeout(0.1) # Short 0.1 second timeout
             
         with patch("asyncio.timeout", side_effect=short_timeout):
             events = []
             async for sse_event in execute_query_stream_logic(request_data):
                 events.append(sse_event)
                 
-            # بررسی دریافت رویداد خطا در استریم
+            # Verify receiving an error event in the stream
             error_event = [e for e in events if "event: error" in e]
             assert len(error_event) > 0, "Timeout should yield error event in SSE"
             assert "Streaming request timed out." in error_event[0], "Error message must state timeout"

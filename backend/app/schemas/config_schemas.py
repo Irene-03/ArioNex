@@ -1,12 +1,12 @@
 """
 /// <summary>
-/// مدل‌های Pydantic مدیریت پیکربندی سیستم (ArioNex Configuration Schemas)
+/// ArioNex Configuration Schemas (ArioNex Configuration Schemas)
 /// </summary>
 /// <remarks>
-/// این ماژول ساختار داده‌ای درخواست‌های تغییر پیکربندی زنده سیستم را تعریف می‌کند.
-/// ادمین از طریق اندپوینت POST /v1/config با استفاده از این schema، Feature Toggle‌ها را تغییر می‌دهد.
+/// This module defines the data structures for live system configuration change requests.
+/// Admins change Feature Toggles through the POST /v1/config endpoint using this schema.
 ///
-/// تمامی فیلدها Optional هستند — فقط بخش‌هایی که باید تغییر کنند ارسال می‌شوند.
+/// All fields are Optional — only the sections that should change are sent.
 /// </remarks>
 """
 
@@ -17,11 +17,11 @@ from pydantic import BaseModel, Field
 class ConfigUpdateRequest(BaseModel):
     """
     /// <summary>
-    /// مدل درخواست به‌روزرسانی زنده پیکربندی سرویس‌ها، ادغام‌ها و امنیت سیستم
+    /// Request model for the live update of service, integration, and security configuration
     /// </summary>
     /// <remarks>
-    /// هر فیلد یک دیکشنری از نام ویژگی → مقدار boolean است.
-    /// مثال: {"services": {"web_search": true, "qna_processor": false}}
+    /// Each field is a dict of feature name → boolean value.
+    /// Example: {"services": {"web_search": true, "qna_processor": false}}
     /// </remarks>
     """
     services: Optional[dict] = Field(
@@ -40,7 +40,7 @@ class ConfigUpdateRequest(BaseModel):
         default=None,
         description="تنظیمات روشن/خاموش بودن پروایدرهای هوش مصنوعی"
     )
-    # تنظیمات Ollama (حالت محلی آفلاین)
+    # Ollama settings (offline local mode)
     ollama_model: Optional[str] = Field(
         default=None,
         description="نام مدل محلی Ollama — مثال: gemma3:4b, llama3.2:3b"

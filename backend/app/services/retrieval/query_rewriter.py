@@ -1,11 +1,11 @@
 """
 /// <summary>
-/// ماژول بازنویسی مستقل پرسش‌ها بر اساس تاریخچه چت (Standalone Query Rewriter Chain)
+/// Module for rewriting questions as standalone based on chat history (Standalone Query Rewriter Chain)
 /// </summary>
 /// <remarks>
-/// این ماژول تاریخچه چت گذشته را خوانده و با ترکیب پرسش جدید کاربر، یک پرسش مستقل (Standalone)
-/// تولید می‌کند تا ابهامات ارجاعی در چت‌های متوالی (مانند کلمات ضمیر "آن"، "این" و...) مرتفع گردند.
-/// در صورت نامعتبر بودن کلید OpenAI API، سیستم به عنوان زاپاس عین پرسش کاربر را برمی‌گرداند.
+/// This module reads the past chat history and, combined with the user's new question, produces a standalone
+/// question to resolve referential ambiguities in consecutive chats (such as the pronoun words "it", "this", etc.).
+/// If the OpenAI API key is invalid, the system falls back to returning the user's question verbatim.
 /// </remarks>
 """
 
@@ -17,7 +17,7 @@ from app.services.retrieval.query_router.web_search import _get_active_api_key
 
 logger = logging.getLogger("arionex.query_rewriter")
 
-# الگو پرامپت بازنویسی مستقل بر اساس دموی prompts.py
+# Standalone rewriting prompt template based on the prompts.py demo
 STANDALONE_TEMPLATE = """You are an assistant that rewrite the **User Input** to be independent of any prior chat history.
 
 Given the following chat history and the latest **User Input**, rewrite the question while preserving its context.
@@ -34,10 +34,10 @@ Rewritten standalone question:
 def format_chat_history(history: list) -> str:
     """
     /// <summary>
-    /// قالب‌بندی تاریخچه مکالمه به رشته متنی مناسب برای مدل هوشمند
+    /// Format the conversation history into a text string suitable for the language model
     /// </summary>
-    /// <param name="history">لیستی از پیام‌ها به صورت دیکشنری یا نمونه کلاس‌ها</param>
-    /// <returns>یک رشته متنی ساختاریافته</returns>
+    /// <param name="history">List of messages as dicts or class instances</param>
+    /// <returns>A structured text string</returns>
     """
     if not history:
         return "No prior history."
@@ -58,16 +58,16 @@ def format_chat_history(history: list) -> str:
 def rewrite_query(user_input: str, chat_history: list) -> str:
     """
     /// <summary>
-    /// بازنویسی هوشمند پرسش کاربر بر اساس تاریخچه مکالمات گذشته
+    /// Intelligently rewrite the user's question based on past conversation history
     /// </summary>
-    /// <param name="user_input">پرسش جدید کاربر</param>
-    /// <param name="chat_history">لیست پیام‌های گذشته</param>
-    /// <returns>پرسش مستقل و بازنویسی شده نهایی</returns>
+    /// <param name="user_input">User's new question</param>
+    /// <param name="chat_history">List of past messages</param>
+    /// <returns>Final rewritten standalone question</returns>
     """
     if not chat_history:
         return user_input
 
-    # بررسی کلید API برای provider فعال سیستم (نه فقط OpenAI)
+    # Check the API key for the system's active provider (not just OpenAI)
     active_provider = settings.llm_provider
     active_key = _get_active_api_key(active_provider)
     if not active_key or active_key.strip() == "" or "your-" in active_key:
@@ -78,7 +78,7 @@ def rewrite_query(user_input: str, chat_history: list) -> str:
         return user_input
 
     try:
-        # استفاده از get_llm فکتوری — پشتیبانی از هر provider فعال
+        # Use the get_llm factory — supports any active provider
         llm = get_llm(temperature=0)
 
         prompt = PromptTemplate.from_template(STANDALONE_TEMPLATE)

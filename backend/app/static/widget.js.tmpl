@@ -1,12 +1,12 @@
 (function() {
-    // ایجاد شناسه مکالمه منحصربه‌فرد برای کاربر و ذخیره در حافظه محلی مرورگر
+    // Create a unique conversation ID for the user and store it in the browser's local storage
     let sessionId = localStorage.getItem('arionex_widget_session_id');
     if (!sessionId) {
         sessionId = 'widget_' + Math.random().toString(36).substring(2, 15);
         localStorage.setItem('arionex_widget_session_id', sessionId);
     }
 
-    // تزریق مستقیم کدهای استایل CSS به سند جهت استایل‌دهی لوکس و هم‌ساز
+    // Inject CSS style code directly into the document for a polished, consistent look
     const style = document.createElement('style');
     style.innerHTML = `
         @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap');

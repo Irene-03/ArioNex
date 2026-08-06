@@ -1,13 +1,13 @@
 """
 /// <summary>
-/// فایل تست خودکار و راستی‌آزمایی فاز ۴ آریونکس (ArioNex Phase 4 Verification Script)
+/// ArioNex Phase 4 automated test and verification file (ArioNex Phase 4 Verification Script)
 /// </summary>
 """
 
 import sys
 import os
 
-# اضافه کردن مسیر پروژه جهت شناسایی پکیج app
+# Add the project path so the app package can be detected
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
 from app.services.retrieval.query_router import route_query_intent, synthesize_rag_response
@@ -20,10 +20,10 @@ from app.services.retrieval.qna import qna_agent as support_lead_agent
 def test_query_intent_routing():
     print("Testing Query Intent Routing...")
     
-    # تست روتینگ هوشمند کلیدواژه‌های محاسباتی مالی به پانداس
+    # Test smart routing of financial computation keywords to pandas
     intent_calc_1 = route_query_intent("مجموع بدهکاری اسناد چک چقدر است؟")
     intent_calc_2 = route_query_intent("بستانکار فاکتور را فیلتر کن")
-    # تست روتینگ متون عمومی آیین‌نامه‌ای به RAG اسناد
+    # Test routing of general regulatory texts to document RAG
     intent_rag_1 = route_query_intent("آیین‌نامه مرخصی کارمندان سازمان چیست؟")
     intent_rag_2 = route_query_intent("خلاصه اسناد HR مربوط به بیمه")
     
@@ -42,7 +42,7 @@ def test_query_rewriter_fallback():
     print("Testing Query Rewriter Fallback...")
     from unittest.mock import patch
     
-    # تست لایه بازنویسی ورودی به صورت زاپاس (عین متن ورودی باید برگردد)
+    # Test the input rewriting layer in fallback mode (the exact input text must be returned)
     user_input = "این چطور کار میکنه؟"
     chat_history = [{"AI": "آریونکس دستیار شماست."}, {"Human": "ممنون."}]
     
@@ -57,7 +57,7 @@ def test_analyst_graph_execution():
     print("Testing Analyst Graph Mock Solving...")
     from unittest.mock import patch
     
-    # تست مفسر پانداس لنگ گراف در حالت کاذب توسعه محلی با پچ کردن خروجی
+    # Test the LangGraph pandas interpreter in local dev mock mode by patching the output
     query = "مجموع بدهکاری نوع سند چک"
     with patch("app.services.retrieval.analyst.analyst_agent.execute_analysis") as mock_execute:
         mock_execute.return_value = "مجموع بدهکاری اسناد از نوع سند چک برابر با ۶۲۳,۳۴۶ ریال می‌باشد."
@@ -74,8 +74,8 @@ def test_golden_hallucination_guardrail():
     original_strict = settings.security.strict_non_hallucination
     settings.security.strict_non_hallucination = True
     try:
-        # تست قانون طلایی امتناع RAG در صورت خالی بودن نتایج دیتابیس
-        # کوئری درباره موضوعی کاملا نامربوط که تطابقی نخواهد داشت
+        # Test the golden RAG refusal rule when database results are empty
+        # A query about a completely unrelated topic that will have no match
         query = "پرواز فضایی به مریخ چقدر زمان میبرد؟"
         res = synthesize_rag_response(query, chat_history=[])
         
@@ -83,7 +83,7 @@ def test_golden_hallucination_guardrail():
         print(f"Response: {res['answer']}")
         print(f"Sources:  {res['sources']}")
         
-        # چون دیتابیس وکتور خالی است، بلافاصله باید امتناع کند
+        # Since the vector database is empty, it should refuse immediately
         assert res["answer"] == STANDARD_REFUSAL_MESSAGE, "Hallucination guardrail failed to block answer!"
         assert len(res["sources"]) == 0, "No sources should be cited in refusal!"
     finally:

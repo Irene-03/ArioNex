@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// ماژول پردازش، نرمال‌سازی و چانک‌سازی متون فارسی (Farsi Text Normalizer & Chunker Worker)
+/// Farsi Text Normalizer & Chunker Worker
 /// </summary>
 /// <remarks>
-/// این ماژول وظیفه پاک‌سازی متون فارسی خام، حذف علائم زائد، یکدست‌سازی نویسه‌ها و اعداد،
-/// و شکستن متون طولانی به چانک‌های هم‌پوشان (Sliding Window Chunks) را بر عهده دارد.
+/// This module is responsible for cleaning raw Persian texts, removing redundant symbols,
+/// unifying characters and digits, and splitting long texts into overlapping chunks (Sliding Window Chunks).
 /// </remarks>
 """
 
@@ -15,7 +15,7 @@ from hazm import Normalizer
 
 logger = logging.getLogger("arionex.text_processor")
 
-# نمونه‌سازی از نرمال‌ساز Hazm بدون دستکاری اتوماتیک فاصله‌ها برای بالا رفتن سرعت چانک‌ساز
+# Instantiate the Hazm normalizer without automatic spacing manipulation to speed up the chunker
 try:
     normalizer = Normalizer(correct_spacing=False)
 except Exception as e:
@@ -25,39 +25,39 @@ except Exception as e:
 def remove_diacritics(text: str) -> str:
     """
     /// <summary>
-    /// حذف اعراب و حرکت‌های زائد زبان عربی/فارسی از متن
+    /// Remove diacritics and redundant Arabic/Persian vowel marks from the text
     /// </summary>
-    /// <param name="text">متن ورودی</param>
-    /// <returns>متن فاقد اعراب</returns>
+    /// <param name="text">Input text</param>
+    /// <returns>Text without diacritics</returns>
     """
     if not text:
         return ""
-    # الگو حذف تنوین، تشدید، فتحه، ضمه، کسره و سکون
+    # Pattern to remove tanwin, tashdid, fatha, damma, kasra and sukun
     return re.sub(r'[\u064B-\u0652]', '', text)
 
 def normalize_text(text: str) -> str:
     """
     /// <summary>
-    /// یکدست‌سازی و نرمال‌سازی کامل متون فارسی و عربی (Unicode Normalization)
+    /// Complete unification and normalization of Persian and Arabic texts (Unicode Normalization)
     /// </summary>
-    /// <param name="text">رشته متنی خام ورودی</param>
-    /// <returns>رشته متنی کاملاً فارسی و تمیز شده</returns>
+    /// <param name="text">Raw input text string</param>
+    /// <returns>A fully Persian and cleaned text string</returns>
     /// <remarks>
-    /// این متد حروف ی/ک عربی را اصلاح کرده، اعدا عربی و فارسی را به رقم‌های غربی (0-9) تبدیل می‌کند تا
-    /// جستارهای ریاضی و حسابداری REPL روی آن‌ها بدون خطا کار کنند و علائم نگارشی را استاندارد می‌کند.
+    /// This method fixes the Arabic Yeh/Kaf characters, converts Arabic and Persian digits to Western digits (0-9) so that
+    /// mathematical and accounting REPL queries work on them without errors, and standardizes punctuation marks.
     /// </remarks>
     """
     if not text:
         return ""
         
-    # استفاده از نرمال‌ساز هضم در صورت لود موفق
+    # Use the Hazm normalizer if loaded successfully
     if normalizer:
         text = normalizer.normalize(text)
         
-    # جایگزینی نیم‌فاصله‌های غیر استاندارد با فاصله معمولی جهت بهینه‌سازی چانک‌سازی کلمات
+    # Replace non-standard half-spaces with a regular space to optimize word chunking
     text = text.replace("\u200c", " ")
     
-    # یکدست‌سازی حروف عربی و فارسی
+    # Unify Arabic and Persian characters
     arabic_to_persian = {
         "ي": "ی", 
         "ك": "ک", 
@@ -70,25 +70,25 @@ def normalize_text(text: str) -> str:
     for ar, fa in arabic_to_persian.items():
         text = text.replace(ar, fa)
         
-    # تبدیل تمامی رقم‌های عربی و فارسی به اعداد انگلیسی جهت سازگاری کامل با پردازشگر محاسباتی پانداس
+    # Convert all Arabic and Persian digits to English numbers for full compatibility with the pandas computational processor
     arabic_numbers = "٠١٢٣٤٥٦٧٨٩"
     persian_numbers = "۰۱۲۳۴۵۶۷۸۹"
     western_numbers = "0123456789"
     
-    # ابتدا عربی به فارسی
+    # First Arabic to Persian
     text = text.translate(str.maketrans(arabic_numbers, persian_numbers))
-    # سپس فارسی به انگلیسی
+    # Then Persian to English
     text = text.translate(str.maketrans(persian_numbers, western_numbers))
     
-    # یکدست‌سازی علائم نگارشی فارسی به انگلیسی جهت ممانعت از کرش کردن مفسرهای پایتون
+    # Unify Persian punctuation to English to prevent Python interpreter crashes
     persian_punct = "،؛؟«»"
     english_punct = ",;?\"\""
     text = text.translate(str.maketrans(persian_punct, english_punct))
     
-    # حذف حرکت‌ها و اعراب
+    # Remove diacritics and vowel marks
     text = remove_diacritics(text)
     
-    # حذف فواصل اضافی زائد
+    # Remove redundant extra spaces
     text = re.sub(r'\s+', ' ', text).strip()
     
     return text
@@ -96,13 +96,13 @@ def normalize_text(text: str) -> str:
 def chunk_text(text: str, chunk_size: int = 350, overlap: int = 75) -> List[str]:
     """
     /// <summary>
-    /// شکستن متون طولانی به چانک‌های معنایی کوچک‌تر بر اساس تعداد کلمات با هم‌پوشانی لغزان
+    /// Split long texts into smaller semantic chunks based on word count with sliding overlap
     /// </summary>
-    /// <param name="text">متن نرمال‌سازی شده نهایی</param>
-    /// <param name="chunk_size">تعداد کلمات هر چانک (پیش‌فرض: ۳۵۰ کلمه)</param>
-    /// <param name="overlap">تعداد کلمات مشترک هم‌پوشانی (پیش‌فرض: ۷۵ کلمه)</param>
-    /// <returns>لیستی از چانک‌های متنی رشته‌ای</returns>
-    /// <exception cref="ValueError">در صورتی که پارامترها نامعتبر باشند</exception>
+    /// <param name="text">Final normalized text</param>
+    /// <param name="chunk_size">Number of words per chunk (default: 350 words)</param>
+    /// <param name="overlap">Number of shared overlapping words (default: 75 words)</param>
+    /// <returns>A list of string text chunks</returns>
+    /// <exception cref="ValueError">If the parameters are invalid</exception>
     """
     if not text:
         return []
@@ -123,7 +123,7 @@ def chunk_text(text: str, chunk_size: int = 350, overlap: int = 75) -> List[str]
         if end == len(words):
             break
             
-        # شیفت دادن موقعیت شروع پنجره بر اساس میزان اورلپ
+        # Shift the window start position based on the overlap amount
         start += chunk_size - overlap
         
     logger.info(f"Successfully chunked document text into {len(chunks)} overlapping parts (size={chunk_size}, overlap={overlap}).")

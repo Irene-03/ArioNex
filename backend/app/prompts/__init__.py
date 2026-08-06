@@ -1,8 +1,8 @@
 # -------------------------------------------------------
-# بسته مدیریت پرامپت‌های متمرکز ArioNex (Centralized Prompt Templates)
+# ArioNex centralized prompt management package (Centralized Prompt Templates)
 # -------------------------------------------------------
-# تمامی قالب‌های پرامپت LLM از این بسته import می‌شوند.
-# جداسازی پرامپت‌ها از کد منطقی باعث می‌شود تست و بهینه‌سازی آسان‌تر باشد.
+# All LLM prompt templates are imported from this package.
+# Separating prompts from the logic code makes testing and optimization easier.
 from .rag_prompts import (
     RESPONDER_TEMPLATE,
     RESPONDER_TEMPLATE_OPEN,

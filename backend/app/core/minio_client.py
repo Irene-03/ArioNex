@@ -1,16 +1,16 @@
 """
 /// <summary>
-/// مدیریت ذخیره‌ساز آبجکت استوریج مینی‌او (MinIO Object Storage Client Manager)
+/// MinIO object storage manager (MinIO Object Storage Client Manager)
 /// </summary>
 /// <remarks>
-/// این ماژول ارتباط با ذخیره‌ساز ابری MinIO را جهت ذخیره و بازیابی اسناد اصلی خام آپلود شده توسط کاربران
-/// فراهم می‌کند. در صورت عدم در دسترس بودن سرور MinIO در فاز توسعه محلی، سیستم به صورت هوشمند
-/// به پوشه محلی storage/raw_files به عنوان بک‌آپ سوئیچ می‌کند تا برنامه بدون کرش به کار خود ادامه دهد.
+/// This module provides connectivity with the MinIO cloud storage for storing and retrieving raw original documents uploaded by users.
+/// If the MinIO server is unavailable during local development, the system intelligently
+/// switches to the local storage/raw_files folder as a backup so the application keeps working without crashing.
 ///
-/// حالت تست محلی (Local Data Directory Mode):
-///   با تنظیم متغیر محیطی USE_LOCAL_DATA_DIR=true در فایل .env، سیستم به طور کامل
-///   از MinIO صرف‌نظر کرده و تمام فایل‌ها را در پوشه data/ پروژه مدیریت می‌کند.
-///   این حالت برای تست، توسعه و سازمان‌هایی بدون زیرساخت MinIO مناسب است.
+/// Local test mode (Local Data Directory Mode):
+///   By setting the USE_LOCAL_DATA_DIR=true environment variable in the .env file, the system completely
+///   bypasses MinIO and manages all files in the project's data/ folder.
+///   This mode is suitable for testing, development, and organizations without MinIO infrastructure.
 /// </remarks>
 """
 
@@ -20,11 +20,11 @@ from app.core.config import settings
 
 logger = logging.getLogger("arionex.minio")
 
-# --- بررسی فعال بودن حالت دایرکتوری محلی (Local Data Directory Mode) ---
-# با تنظیم USE_LOCAL_DATA_DIR=true در فایل .env، سیستم به کلی از MinIO صرف‌نظر می‌کند
+# --- Check whether the Local Data Directory Mode is enabled ---
+# By setting USE_LOCAL_DATA_DIR=true in the .env file, the system completely bypasses MinIO
 _USE_LOCAL = os.environ.get("USE_LOCAL_DATA_DIR", "false").strip().lower() == "true"
 
-# دایرکتوری محلی برای ذخیره‌سازی بک‌آپ فایل‌ها در صورت عدم اتصال به MinIO
+# Local directory for backing up files in case MinIO is unreachable
 LOCAL_FALLBACK_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
     "storage",
@@ -35,17 +35,17 @@ LOCAL_FALLBACK_DIR = os.path.join(
 class MinioStorageManager:
     """
     /// <summary>
-    /// کلاس مدیریت و آپلود فایل‌ها به MinIO یا فایل سیستم محلی
+    /// Class for managing and uploading files to MinIO or the local file system
     /// </summary>
     """
     def __init__(self):
         self.client = None
         self.is_fallback = False
 
-        # تضمین ایجاد پوشه محلی بک‌آپ
+        # Ensure the local backup folder is created
         os.makedirs(LOCAL_FALLBACK_DIR, exist_ok=True)
 
-        # --- حالت دایرکتوری محلی: از MinIO کاملا صرف‌نظر می‌شود ---
+        # --- Local data directory mode: MinIO is completely bypassed ---
         if _USE_LOCAL:
             self.is_fallback = True
             logger.info(
@@ -55,11 +55,11 @@ class MinioStorageManager:
             )
             return
 
-        # --- حالت عادی: تلاش برای اتصال به MinIO ---
+        # --- Normal mode: attempt to connect to MinIO ---
         try:
             from minio import Minio
 
-            # بررسی نیاز به اتصال امن HTTPS (معمولا برای لوکال هاست غیرفعال است)
+            # Check whether a secure HTTPS connection is required (usually disabled for localhost)
             is_secure = not (
                 "localhost" in settings.minio_endpoint or
                 "127.0.0.1" in settings.minio_endpoint
@@ -73,7 +73,7 @@ class MinioStorageManager:
                 secure=is_secure
             )
 
-            # تست اتصال با دریافت لیست باکت‌ها
+            # Test the connection by fetching the list of buckets
             self.client.list_buckets()
             self._ensure_bucket_exists(settings.minio_bucket_name)
             logger.info("Successfully connected to MinIO Server.")
@@ -88,9 +88,9 @@ class MinioStorageManager:
     def _ensure_bucket_exists(self, bucket_name: str) -> None:
         """
         /// <summary>
-        /// ساخت باکت پیش‌فرض در صورت عدم وجود در سرور MinIO
+        /// Create the default bucket if it does not exist on the MinIO server
         /// </summary>
-        /// <param name="bucket_name">نام باکت</param>
+        /// <param name="bucket_name">Bucket name</param>
         """
         if self.client and not self.client.bucket_exists(bucket_name):
             self.client.make_bucket(bucket_name)
@@ -104,12 +104,12 @@ class MinioStorageManager:
     ) -> str:
         """
         /// <summary>
-        /// آپلود فایل به استوریج اصلی یا فایل سیستم محلی
+        /// Upload a file to the primary storage or the local file system
         /// </summary>
-        /// <param name="object_name">نام ذخیره‌سازی آبجکت</param>
-        /// <param name="file_path">مسیر فیزیکی فایل موقت جهت آپلود</param>
-        /// <param name="content_type">نوع MIME فایل</param>
-        /// <returns>رشته شناسه مسیر ذخیره‌سازی نهایی</returns>
+        /// <param name="object_name">Object storage name</param>
+        /// <param name="file_path">Physical path of the temporary file to upload</param>
+        /// <param name="content_type">MIME type of the file</param>
+        /// <returns>String identifier of the final storage path</returns>
         """
         if self.is_fallback:
             import shutil
@@ -140,10 +140,10 @@ class MinioStorageManager:
     def download_file(self, object_name: str, dest_path: str) -> None:
         """
         /// <summary>
-        /// دانلود فایل از استوریج به یک مسیر موقت
+        /// Download a file from the storage to a temporary path
         /// </summary>
-        /// <param name="object_name">نام آبجکت ذخیره شده</param>
-        /// <param name="dest_path">مسیر مقصد برای دانلود فایل</param>
+        /// <param name="object_name">Stored object name</param>
+        /// <param name="dest_path">Destination path for downloading the file</param>
         """
         if self.is_fallback:
             src_path = os.path.join(LOCAL_FALLBACK_DIR, object_name)
@@ -173,7 +173,7 @@ class MinioStorageManager:
     ) -> str:
         """
         /// <summary>
-        /// ذخیره مستقیم داده باینری (Bytes) در MinIO یا فایل سیستم محلی
+        /// Store binary data (bytes) directly in MinIO or the local file system
         /// </summary>
         """
         if self.is_fallback:
@@ -208,7 +208,7 @@ class MinioStorageManager:
     def get_object_data(self, object_name: str) -> bytes:
         """
         /// <summary>
-        /// دریافت داده باینری (Bytes) یک آبجکت از MinIO یا فایل سیستم محلی
+        /// Retrieve the binary data (bytes) of an object from MinIO or the local file system
         /// </summary>
         """
         if self.is_fallback:
@@ -237,7 +237,7 @@ class MinioStorageManager:
     def list_objects(self, prefix: str) -> list[str]:
         """
         /// <summary>
-        /// لیست کردن نام تمامی آبجکت‌ها تحت یک پیشوند (Prefix) مشخص
+        /// List the names of all objects under a given prefix
         /// </summary>
         """
         if self.is_fallback:
@@ -262,7 +262,7 @@ class MinioStorageManager:
                 return [obj.object_name for obj in objects]
             except Exception as e:
                 logger.error(f"Failed to list objects in MinIO for prefix {prefix}: {str(e)}")
-                # تلاش در فولدر لوکال
+                # Try in the local folder
                 prefix_dir = os.path.join(LOCAL_FALLBACK_DIR, prefix)
                 if os.path.exists(prefix_dir):
                     found = []
@@ -277,7 +277,7 @@ class MinioStorageManager:
     def delete_objects_in_prefix(self, prefix: str) -> None:
         """
         /// <summary>
-        /// حذف تمامی آبجکت‌های تحت یک پیشوند (Prefix) مشخص
+        /// Delete all objects under a given prefix
         /// </summary>
         """
         if self.is_fallback:
@@ -301,5 +301,5 @@ class MinioStorageManager:
 
 
 
-# آبجکت سراسری مدیریت فیزیکی اسناد خام
+# Global object for physically managing raw documents
 storage_manager = MinioStorageManager()

@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// مدیریت ارتباطات پایگاه داده پستگرس و افزونه جی‌پی‌وکتور (PostgreSQL + pgvector connection manager)
+/// PostgreSQL database connection management and the pgvector extension (PostgreSQL + pgvector connection manager)
 /// </summary>
 /// <remarks>
-/// این کلاس وظیفه مدیریت کانکشن‌ها، باز و بسته کردن ارتباطات،
-/// و راه‌اندازی اولیه تیبل‌ها (اگر وجود نداشته باشند) را بر عهده دارد.
+/// This class is responsible for managing connections, opening and closing connections,
+/// and initializing tables (if they do not exist).
 /// </remarks>
 """
 
@@ -19,8 +19,8 @@ from app.core.config import settings
 logger = logging.getLogger("arionex.database")
 
 # -------------------------------------------------------------------
-# اتصال‌پول (Connection Pool) برای کاهش سربار دست‌دادن TCP + احراز هویت
-# در هر فراخوانی — به‌جای ساخت کانکشن جدید برای هر کوئری
+# Connection Pool to reduce the overhead of TCP handshake + authentication
+# on each call — instead of creating a new connection for every query
 # -------------------------------------------------------------------
 _pool = None
 _pool_lock = threading.Lock()
@@ -30,7 +30,7 @@ _POOL_MAX_CONNECTIONS = 30
 def _get_pool():
     """
     /// <summary>
-    /// ساخت یا بازیابی اتصال‌پول سراسری PostgreSQL (lazy init)
+    /// Create or retrieve the global PostgreSQL connection pool (lazy init)
     /// </summary>
     """
     global _pool
@@ -52,7 +52,7 @@ def _get_pool():
 def _reset_connection(conn) -> None:
     """
     /// <summary>
-    /// بازنشانی وضعیت تراکنش کانکشن پیش از برگرداندن به پول
+    /// Reset the transaction state of a connection before returning it to the pool
     /// </summary>
     """
     try:
@@ -76,8 +76,8 @@ def _return_connection(conn) -> None:
 class _PooledConnection:
     """
     /// <summary>
-    /// پوسته کانکشن پول‌شده — متد close() به‌جای بستن واقعی، کانکشن را به پول برمی‌گرداند
-    /// تا تمامی کدهای موجود (conn.close()) بدون تغییر سازگار بمانند.
+    /// Pooled connection wrapper — the close() method returns the connection to the pool instead of actually closing it
+    /// so that all existing code (conn.close()) remains compatible without changes.
     /// </summary>
     """
     __slots__ = ("_conn",)
@@ -104,10 +104,10 @@ class _PooledConnection:
 def get_db_connection():
     """
     /// <summary>
-    /// برقراری ارتباط با پایگاه داده PostgreSQL از اتصال‌پول بر اساس کانفیگ‌های فعال سیستم
+    /// Establish a PostgreSQL database connection from the connection pool based on the system's active configuration
     /// </summary>
-    /// <returns>یک شیء کانکشن پول‌شده سازگار با psycopg2</returns>
-    /// <exception cref="psycopg2.OperationalError">در صورت بروز خطا در اتصال به پایگاه داده</exception>
+    /// <returns>A pooled connection object compatible with psycopg2</returns>
+    /// <exception cref="psycopg2.OperationalError">If an error occurs while connecting to the database</exception>
     """
     try:
         conn = _get_pool().getconn()
@@ -120,11 +120,11 @@ def get_db_connection():
 def _create_vector_indexes(cur) -> None:
     """
     /// <summary>
-    /// ساخت ایندکس برداری بهینه برای جداول جستجوی شباهت (pgvector)
+    /// Create an optimal vector index for similarity search tables (pgvector)
     /// </summary>
     /// <remarks>
-    /// ابتدا HNSW امتحان می‌شود (سریع‌ترین برای داده‌های حجیم). اگر ابعاد امبدینگ
-    /// بیش از سقف ۲۰۰۰ بعدی HNSW باشد، به IVFFlat برمی‌گردد که هر ابعادی را پشتیبانی می‌کند.
+    /// HNSW is tried first (fastest for large datasets). If the embedding dimension
+    /// exceeds HNSW's 2000-dimension limit, it falls back to IVFFlat which supports any dimension.
     /// </remarks>
     """
     index_specs = [
@@ -133,7 +133,7 @@ def _create_vector_indexes(cur) -> None:
         ("idx_pg_dummy_embedding", "pg_dummy"),
     ]
     for name, table in index_specs:
-        # SAVEPOINT: خطای یک ایندکس نباید تراکنش جاری را مسموم کند
+        # SAVEPOINT: an index error must not poison the current transaction
         cur.execute("SAVEPOINT vector_index_sp;")
         try:
             cur.execute(
@@ -164,19 +164,19 @@ def _create_vector_indexes(cur) -> None:
 def init_db() -> None:
     """
     /// <summary>
-    /// راه‌اندازی اولیه پایگاه داده و تعریف جداول مورد نیاز بر اساس خط لوله پردازش اطلاعات (Ingestion Pipeline)
+    /// Initial database setup and definition of required tables based on the information ingestion pipeline
     /// </summary>
     /// <remarks>
-    /// این متد افزونه vector را فعال کرده و جداول pg_supervisor، qna_query، pg_dummy و لاگ‌های ممیزی را در صورت عدم وجود می‌سازد.
+    /// This method enables the vector extension and creates the pg_supervisor, qna_query, pg_dummy and audit log tables if they do not exist.
     /// </remarks>
     """
     logger.info("Initializing Database Tables and Extensions...")
     
     queries = [
-        # فعال کردن اکستنشن وکتور برای ذخیره‌سازی امبدینگ‌های ۳۰۷۲ تایی
+        # Enable the vector extension for storing 3072-dimensional embeddings
         "CREATE EXTENSION IF NOT EXISTS vector;",
         
-        # ۱. جدول پردازشگر اسناد عمومی و متون بدون ساختار (Plain Doc Chunk Storage)
+        # 1. General document processor and unstructured text table (Plain Doc Chunk Storage)
         """
         CREATE TABLE IF NOT EXISTS pg_supervisor (
             id SERIAL PRIMARY KEY,
@@ -188,7 +188,7 @@ def init_db() -> None:
         );
         """,
         
-        # ۲. جدول سوال و جواب‌ها و لاگ‌های پشتیبانی (QnA FAQ Storage)
+        # 2. Questions, answers and support logs table (QnA FAQ Storage)
         """
         CREATE TABLE IF NOT EXISTS qna_query (
             id SERIAL PRIMARY KEY,
@@ -199,7 +199,7 @@ def init_db() -> None:
         );
         """,
         
-        # ۳. جدول قطعات عمومی و فرعی (General Plain Doc Dummies)
+        # 3. General and auxiliary plain doc chunks table (General Plain Doc Dummies)
         """
         CREATE TABLE IF NOT EXISTS pg_dummy (
             id SERIAL PRIMARY KEY,
@@ -208,7 +208,7 @@ def init_db() -> None:
         );
         """,
         
-        # ۴. جدول حسابرسی و لاگ ممیزی مدیران ارشد (Audit Logs)
+        # 4. Audit log table for senior administrators (Audit Logs)
         """
         CREATE TABLE IF NOT EXISTS pg_audit_logs (
             id SERIAL PRIMARY KEY,
@@ -220,10 +220,12 @@ def init_db() -> None:
             status VARCHAR(30) NOT NULL,
             pii_masked_count INT DEFAULT 0,
             total_tokens INT DEFAULT 0,
+            input_tokens INT DEFAULT 0,
+            output_tokens INT DEFAULT 0,
             response_time_ms INT DEFAULT 0
         );
         """,
-        # ۵. جدول ابزارک‌های وب‌سایت (Website Widgets)
+        # 5. Website widgets table (Website Widgets)
         """
         CREATE TABLE IF NOT EXISTS website_widgets (
             id SERIAL PRIMARY KEY,
@@ -236,7 +238,7 @@ def init_db() -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """,
-        # ۶. جدول کلیدهای دسترسی API (API Keys)
+        # 6. API access keys table (API Keys)
         """
         CREATE TABLE IF NOT EXISTS api_keys (
             id SERIAL PRIMARY KEY,
@@ -247,7 +249,7 @@ def init_db() -> None:
             last_used_at TIMESTAMP
         );
         """,
-        # ۷. جدول ردیابی Job‌های کرالر وب (Web Crawler Jobs)
+        # 7. Web crawler job tracking table (Web Crawler Jobs)
         """
         CREATE TABLE IF NOT EXISTS crawler_jobs (
             id SERIAL PRIMARY KEY,
@@ -269,7 +271,7 @@ def init_db() -> None:
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """,
-        # ۸. جدول کاربران سیستم (Users Table)
+        # 8. System users table (Users Table)
         """
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -279,7 +281,7 @@ def init_db() -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """,
-        # ۹. جدول فایل‌های آپلود شده و سطح دسترسی (Documents & ACL)
+        # 9. Uploaded files and access level table (Documents & ACL)
         """
         CREATE TABLE IF NOT EXISTS documents (
             id INT PRIMARY KEY,
@@ -290,7 +292,7 @@ def init_db() -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """,
-        # ۱۰. جدول پرامپت‌های سیستم (System Prompts Table)
+        # 10. System prompts table (System Prompts Table)
         """
         CREATE TABLE IF NOT EXISTS system_prompts (
             key VARCHAR(100) PRIMARY KEY,
@@ -298,7 +300,7 @@ def init_db() -> None:
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """,
-        # ۱۱. جدول موجودیت‌های استخراج شده برای گراف دانش (Extracted Entities)
+        # 11. Extracted entities table for the knowledge graph (Extracted Entities)
         """
         CREATE TABLE IF NOT EXISTS extracted_entities (
             id SERIAL PRIMARY KEY,
@@ -310,7 +312,7 @@ def init_db() -> None:
             UNIQUE (file_id, name)
         );
         """,
-        # ۱۲. جدول روابط بین موجودیت‌ها برای گراف دانش (Extracted Relationships)
+        # 12. Entity relationship table for the knowledge graph (Extracted Relationships)
         """
         CREATE TABLE IF NOT EXISTS extracted_relationships (
             id SERIAL PRIMARY KEY,
@@ -323,7 +325,7 @@ def init_db() -> None:
             UNIQUE (file_id, source, target, relationship)
         );
         """,
-        # ۱۳. جدول قوانین و آیین‌نامه‌های استخراج شده (Extracted Compliance Rules)
+        # 13. Extracted compliance rules table (Extracted Compliance Rules)
         """
         CREATE TABLE IF NOT EXISTS extracted_rules (
             id SERIAL PRIMARY KEY,
@@ -336,7 +338,7 @@ def init_db() -> None:
             UNIQUE (file_id, rule_code)
         );
         """,
-        # ۱۴. جدول گزارش‌های ممیزی انطباق قوانین (Compliance Audit Logs)
+        # 14. Compliance audit logs table (Compliance Audit Logs)
         """
         CREATE TABLE IF NOT EXISTS compliance_audit_logs (
             id SERIAL PRIMARY KEY,
@@ -349,7 +351,7 @@ def init_db() -> None:
             audit_report TEXT
         );
         """,
-        # ۱۵. جدول دسته‌بندی‌ها (Categories Table)
+        # 15. Categories table (Categories Table)
         """
         CREATE TABLE IF NOT EXISTS categories (
             id SERIAL PRIMARY KEY,
@@ -358,7 +360,7 @@ def init_db() -> None:
             is_active BOOLEAN DEFAULT TRUE
         );
         """,
-        # ۱۶. جدول فیلدهای سفارشی‌سازی (Customization Fields Table)
+        # 16. Customization fields table (Customization Fields Table)
         """
         CREATE TABLE IF NOT EXISTS customization_fields (
             id SERIAL PRIMARY KEY,
@@ -374,6 +376,8 @@ def init_db() -> None:
     migrations = [
         "ALTER TABLE pg_audit_logs ADD COLUMN IF NOT EXISTS pii_masked_count INT DEFAULT 0;",
         "ALTER TABLE pg_audit_logs ADD COLUMN IF NOT EXISTS total_tokens INT DEFAULT 0;",
+        "ALTER TABLE pg_audit_logs ADD COLUMN IF NOT EXISTS input_tokens INT DEFAULT 0;",
+        "ALTER TABLE pg_audit_logs ADD COLUMN IF NOT EXISTS output_tokens INT DEFAULT 0;",
         "ALTER TABLE pg_audit_logs ADD COLUMN IF NOT EXISTS response_time_ms INT DEFAULT 0;",
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS pii_masked_count INT DEFAULT 0;",
     ]
@@ -388,10 +392,10 @@ def init_db() -> None:
             for migration in migrations:
                 cur.execute(migration)
 
-            # ایندکس‌های برداری (HNSW یا IVFFlat بسته به ابعاد امبدینگ)
+            # Vector indexes (HNSW or IVFFlat depending on the embedding dimension)
             _create_vector_indexes(cur)
             
-            # ثبت کاربر ادمین پیش‌فرض در صورت عدم وجود (پسورد: admin123)
+            # Register the default admin user if it does not exist (password: admin123)
             from app.routes.auth_routes import hash_password
             admin_username = "admin"
             admin_pwd_hash = hash_password("admin123")
@@ -404,7 +408,7 @@ def init_db() -> None:
                 (admin_username, admin_pwd_hash)
             )
 
-            # ثبت پرامپت سیستم پیش‌فرض
+            # Register the default system prompt
             default_prompt = (
                 "شما یک دستیار دانش حرفه‌ای برای آریونکس هستید. همیشه منابع را دقیق استناد دهید. "
                 "هیچ‌گاه فراتر از اسناد ارائه‌شده گمانه‌زنی نکنید. اگر سند مرتبطی یافت نشد، صادقانه بگویید."
@@ -418,7 +422,7 @@ def init_db() -> None:
                 (default_prompt,)
             )
 
-            # بررسی و سید دسته‌بندی‌ها در صورت خالی بودن جدول
+            # Check and seed the categories if the table is empty
             cur.execute("SELECT COUNT(*) FROM categories;")
             if cur.fetchone()[0] == 0:
                 default_cats = [
@@ -442,7 +446,7 @@ def init_db() -> None:
                 )
                 logger.info("Seeded 13 default categories into database.")
 
-            # بررسی و سید فیلدهای سفارشی‌سازی در صورت خالی بودن جدول
+            # Check and seed the customization fields if the table is empty
             cur.execute("SELECT COUNT(*) FROM customization_fields;")
             if cur.fetchone()[0] == 0:
                 default_fields = [

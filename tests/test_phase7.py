@@ -1,11 +1,11 @@
 """
 /// <summary>
-/// اسکریپت تست تجمیعی سراسری و کنترل کیفیت نهایی آریونکس (ArioNex Global Test Runner)
+/// ArioNex global aggregated test script and final quality control (ArioNex Global Test Runner)
 /// </summary>
 /// <remarks>
-/// این اسکریپت به عنوان اجراکننده مرکزی (Runner) تمامی پرونده‌های تست فازهای پیشین
-/// (فازهای ۲، ۳، ۴ و ۵) را به صورت متوالی و کنترل شده در فرآیندهای فرعی (Subprocesses)
-/// اجرا نموده و تاییدیه سلامت نهایی سامانه را پیش از استقرار صادر می‌نماید.
+/// This script acts as the central runner for all test files from the previous phases
+/// (phases 2, 3, 4, and 5), executing them sequentially and in a controlled manner in subprocesses,
+/// and issues the final system health approval before deployment.
 /// </remarks>
 """
 
@@ -16,10 +16,10 @@ import subprocess
 def run_test_script(script_name: str) -> bool:
     """
     /// <summary>
-    /// اجرای یک اسکریپت تست در فرآیند فرعی سیستم
+    /// Run a test script in a system subprocess
     /// </summary>
-    /// <param name="script_name">نام فایل اسکریپت تست مستقر در پوشه tests</param>
-    /// <returns>مقدار منطقی نشان‌دهنده موفقیت یا شکست اجرای تست</returns>
+    /// <param name="script_name">Name of the test script file located in the tests folder</param>
+    /// <returns>A boolean value indicating the success or failure of the test run</returns>
     """
     tests_dir = os.path.dirname(__file__)
     script_path = os.path.join(tests_dir, script_name)
@@ -27,12 +27,12 @@ def run_test_script(script_name: str) -> bool:
     print(f"\n🏃 Running Test Suite: {script_name}...")
     print("-" * 50)
     
-    # تنظیم انکودینگ خروجی ترمینال جهت نمایش بی نقص متون فارسی
+    # Set the terminal output encoding for flawless display of Persian text
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     
     try:
-        # اجرای اسکریپت تست و هدایت خروجی‌ها به کنسول اصلی
+        # Run the test script and direct its output to the main console
         result = subprocess.run(
             [sys.executable, script_path],
             env=env,
@@ -57,7 +57,7 @@ def main():
     print("STARTING ARIOPLEX GLOBAL INTEGRATION TESTS")
     print("=========================================")
     
-    # لیست سناریوهای تستی فازهای ۲ تا ۵ و فاز ۸
+    # List of test scenarios for phases 2 through 5 and phase 8
     test_suites = [
         "test_phase2.py",
         "test_phase3.py",

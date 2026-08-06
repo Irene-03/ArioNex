@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// روتر مدیریت احراز هویت و کاربران آریونکس (ArioNex User Authentication Router)
+/// ArioNex user authentication and user management router (ArioNex User Authentication Router)
 /// </summary>
 """
 
@@ -24,14 +24,14 @@ import secrets
 from app.core.config import settings
 
 # -------------------------------------------------------------------
-# تنظیمات امنیتی با Salt ثابت
+# Security settings with a fixed Salt
 # -------------------------------------------------------------------
 
-# استفاده از Salt ثابت از تنظیمات - اگر تنظیم نشده باشد از مقدار پیشفرض استفاده میشود
+# Uses the fixed Salt from settings - if not set, uses the default value
 PASSWORD_SALT = settings.password_salt or "arionex_fixed_salt_2026_secure"
 SECRET_KEY = settings.jwt_secret_key or secrets.token_urlsafe(32)
 
-# اگر در محیط توسعه هستیم و کلید تنظیم نشده، یک کلید تولید میکنیم
+# If we are in a development environment and the key is not set, generate one
 if not SECRET_KEY:
     if settings.env == "development":
         SECRET_KEY = secrets.token_urlsafe(32)
@@ -49,8 +49,8 @@ security_bearer = HTTPBearer(auto_error=False)
 
 def hash_password(password: str, salt: Optional[str] = None) -> str:
     """
-    هش کردن رمز عبور با الگوریتم PBKDF2
-    از Salt ثابت استفاده میکند که در config.yaml تعریف شده است
+    Hashing the password with the PBKDF2 algorithm
+    Uses a fixed Salt defined in config.yaml
     """
     salt_to_use = salt or PASSWORD_SALT
     return hashlib.pbkdf2_hmac(
@@ -62,20 +62,20 @@ def hash_password(password: str, salt: Optional[str] = None) -> str:
 
 def verify_password(password: str, stored_hash: str) -> bool:
     """
-    بررسی تطابق رمز عبور با هش ذخیره شده
-    از روشهای مختلف برای سازگاری با هشهای قدیمی استفاده میکند
+    Verify password matches the stored hash
+    Uses multiple methods for compatibility with legacy hashes
     """
-    # 1. بررسی با Salt فعلی
+    # 1. Check against the current Salt
     current_hash = hash_password(password, PASSWORD_SALT)
     if current_hash == stored_hash:
         return True
     
-    # 2. بررسی با Salt پیشفرض قدیمی (برای سازگاری با هشهای قبلی)
+    # 2. Check against the old default Salt (for compatibility with previous hashes)
     legacy_salts = [
         "arionex_secure_salt_2026",
         "arionex_default_salt",
         "arionex_salt",
-        ""  # بدون Salt
+        ""  # No salt
     ]
     
     for legacy_salt in legacy_salts:
@@ -86,7 +86,7 @@ def verify_password(password: str, stored_hash: str) -> bool:
         except Exception:
             continue
     
-    # 3. بررسی هش SHA256 ساده (برای سازگاری با قدیمیترین نسخهها)
+    # 3. Check simple SHA256 hash (for compatibility with the oldest versions)
     try:
         simple_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
         if simple_hash == stored_hash:
@@ -97,7 +97,7 @@ def verify_password(password: str, stored_hash: str) -> bool:
     return False
 
 def create_session_token(payload: dict, expires_in: int = 86400, token_type: str = "access") -> str:
-    """تولید توکن نشست ایمن با الگوریتم HMAC-SHA256"""
+    """Generate a secure session token using the HMAC-SHA256 algorithm"""
     payload_data = payload.copy()
     payload_data["exp"] = int(time.time()) + expires_in
     payload_data["type"] = token_type
@@ -107,7 +107,7 @@ def create_session_token(payload: dict, expires_in: int = 86400, token_type: str
     return f"{encoded_payload}.{sig}"
 
 def verify_session_token(token: str, expected_type: str = "access") -> Optional[dict]:
-    """اعتبارسنجی توکن نشست و بررسی انقضا و نوع توکن"""
+    """Validate the session token and check its expiry and type"""
     try:
         parts = token.split(".")
         if len(parts) != 2:
@@ -131,7 +131,7 @@ def verify_session_token(token: str, expected_type: str = "access") -> Optional[
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer)
 ) -> dict:
-    """دریافت کاربر جاری از روی توکن ارسالی در هدر Authorization Bearer"""
+    """Get the current user from the token sent in the Authorization Bearer header"""
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -150,7 +150,7 @@ async def get_current_user(
     }
 
 async def require_admin(user: dict = Depends(get_current_user)) -> dict:
-    """محدودکننده دسترسی فقط برای کاربران ادمین"""
+    """Access restrictor for admin users only"""
     if user.get("role") != "Admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -200,13 +200,13 @@ class TokenRefreshResponse(BaseModel):
 @router.post("/signup", response_model=UserResponse, summary="ثبتنام عمومی کاربر جدید (نقش تحلیلگر)")
 async def signup_user(payload: UserSignUp):
     """
-    ثبتنام کاربر جدید با نقش Analyst
+    Register a new user with the Analyst role
     """
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            # بررسی تکراری نبودن نام کاربری
+            # Check that the username is not already taken
             cur.execute("SELECT id FROM users WHERE username = %s", (payload.username,))
             if cur.fetchone():
                 raise HTTPException(status_code=400, detail="این نام کاربری قبلاً ثبت شده است.")
@@ -238,7 +238,7 @@ async def signup_user(payload: UserSignUp):
 @router.post("/register", response_model=UserResponse, summary="ثبتنام کاربر جدید (فقط ادمین)")
 async def register_user(payload: UserRegister, admin: dict = Depends(require_admin)):
     """
-    ثبتنام کاربر جدید با نقش مشخص (فقط توسط ادمین)
+    Register a new user with a specified role (admin only)
     """
     if payload.role not in ["Admin", "Analyst"]:
         raise HTTPException(status_code=400, detail="نقش وارد شده نامعتبر است. فقط Admin یا Analyst مجاز است.")
@@ -247,7 +247,7 @@ async def register_user(payload: UserRegister, admin: dict = Depends(require_adm
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            # بررسی تکراری نبودن نام کاربری
+            # Check that the username is not already taken
             cur.execute("SELECT id FROM users WHERE username = %s", (payload.username,))
             if cur.fetchone():
                 raise HTTPException(status_code=400, detail="این نام کاربری قبلاً ثبت شده است.")
@@ -279,13 +279,13 @@ async def register_user(payload: UserRegister, admin: dict = Depends(require_adm
 @router.post("/login", response_model=LoginResponse, summary="ورود کاربر به سیستم")
 async def login_user(payload: UserLogin):
     """
-    ورود کاربر به سیستم و دریافت توکنهای دسترسی
+    Log the user in and return access tokens
     """
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            # دریافت اطلاعات کاربر
+            # Fetch the user info
             cur.execute("SELECT password_hash, role FROM users WHERE username = %s", (payload.username,))
             row = cur.fetchone()
             if not row:
@@ -294,12 +294,12 @@ async def login_user(payload: UserLogin):
             
             stored_hash, role = row
             
-            # بررسی تطابق رمز عبور با استفاده از تابع verify_password
+            # Verify the password using the verify_password function
             if not verify_password(payload.password, stored_hash):
                 logger.warning(f"Login failed: Invalid password for user '{payload.username}'")
                 raise HTTPException(status_code=401, detail="نام کاربری یا رمز عبور اشتباه است.")
             
-            # اگر هش قدیمی بود، آن را به هش جدید با Salt فعلی ارتقاء میدهیم
+            # If the hash is legacy, upgrade it to the new hash with the current Salt
             if hash_password(payload.password, PASSWORD_SALT) != stored_hash:
                 new_hash = hash_password(payload.password, PASSWORD_SALT)
                 cur.execute(
@@ -309,15 +309,15 @@ async def login_user(payload: UserLogin):
                 conn.commit()
                 logger.info(f"Password hash upgraded for user '{payload.username}'")
             
-            # تولید توکنهای نشست
+            # Generate session tokens
             access_token = create_session_token(
                 {"username": payload.username, "role": role}, 
-                expires_in=7200,  # 2 ساعت
+                expires_in=7200,  # 2 hours
                 token_type="access"
             )
             refresh_token = create_session_token(
                 {"username": payload.username, "role": role}, 
-                expires_in=604800,  # 7 روز
+                expires_in=604800,  # 7 days
                 token_type="refresh"
             )
             
@@ -340,7 +340,7 @@ async def login_user(payload: UserLogin):
 @router.post("/refresh", response_model=TokenRefreshResponse, summary="نوسازی توکن دسترسی منقضی شده")
 async def refresh_token(payload: TokenRefreshRequest):
     """
-    نوسازی توکن دسترسی با استفاده از توکن بازنشانی (Refresh Token) معتبر
+    Refresh the access token using a valid refresh token
     """
     token_payload = verify_session_token(payload.refresh_token, expected_type="refresh")
     if not token_payload:
@@ -352,7 +352,7 @@ async def refresh_token(payload: TokenRefreshRequest):
     username = token_payload.get("username")
     role = token_payload.get("role")
     
-    # تولید توکنهای جدید
+    # Generate new tokens
     new_access_token = create_session_token(
         {"username": username, "role": role}, 
         expires_in=7200, 
@@ -374,7 +374,7 @@ async def refresh_token(payload: TokenRefreshRequest):
 @router.get("/users", response_model=List[UserResponse], summary="لیست کل کاربران (فقط ادمین)")
 async def list_users(admin: dict = Depends(require_admin)):
     """
-    دریافت لیست تمام کاربران سیستم (فقط ادمین)
+    Get the list of all system users (admin only)
     """
     conn = None
     try:
@@ -393,7 +393,7 @@ async def list_users(admin: dict = Depends(require_admin)):
 @router.delete("/users/{username}", summary="حذف کاربر (فقط ادمین)")
 async def delete_user(username: str, admin: dict = Depends(require_admin)):
     """
-    حذف یک کاربر از سیستم (فقط ادمین)
+    Delete a user from the system (admin only)
     """
     if username == admin.get("username"):
         raise HTTPException(status_code=400, detail="نمیتوانید خودتان را حذف کنید.")

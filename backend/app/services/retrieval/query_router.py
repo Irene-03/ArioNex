@@ -1,9 +1,9 @@
 """
 /// <summary>
-/// فایل واسط مسیریاب و سنتزکننده پرسش آریونکس (ArioNex Query Router Facade)
+/// ArioNex query router and synthesizer facade file (ArioNex Query Router Facade)
 /// </summary>
 /// <remarks>
-/// این ماژول برای حفظ سازگاری عقب‌رو قرار دارد و ایمپورت‌ها را به پکیج سازمان‌یافته query_router هدایت می‌کند.
+/// This module exists for backward compatibility and forwards imports to the organized query_router package.
 /// </remarks>
 """
 

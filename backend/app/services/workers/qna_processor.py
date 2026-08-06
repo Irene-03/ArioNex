@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// پردازشگر فایل‌های سوال و جواب متداول و لاگ‌های پشتیبانی (FAQ & Support Logs Ingestion Worker)
+/// FAQ files and support logs ingestion worker
 /// </summary>
 /// <remarks>
-/// این ماژول فایل‌های صفحات گسترده (CSV) حاوی پرسش‌ها و پاسخ‌ها را لود کرده، آن‌ها را نرمال‌سازی
-/// و ایمن می‌کند، و هر لوپ Q&A را به عنوان یک شناسه مجزا امبد کرده و در جدول qna_query دیتابیس برداری ایندکس می‌کند.
+/// This module loads spreadsheet (CSV) files containing questions and answers, normalizes
+/// and sanitizes them, and embeds each Q&A pair as a separate identifier, indexing it in the qna_query table of the vector database.
 /// </remarks>
 """
 
@@ -24,22 +24,22 @@ logger = logging.getLogger("arionex.qna_processor")
 class QnaDocumentProcessor:
     """
     /// <summary>
-    /// کلاس پردازشگر ارشد فایل‌های اکسل/سی‌اس‌وی حاوی الگوهای پرسش و پاسخ سازمان
+    /// Senior processor class for Excel/CSV files containing the organization's Q&A patterns
     /// </summary>
     """
     def __init__(self):
-        # بررسی روشن بودن ماژول در فایل تنظیمات
+        # Check whether the module is enabled in the settings file
         self.is_enabled = settings.services.qna_processor
 
     def process_qna_csv(self, temp_file_path: str, original_filename: str, file_id: int) -> dict:
         """
         /// <summary>
-        /// پردازش فایل CSV پرسش و پاسخ: لود ردیف‌ها، قالب‌بندی متون، ماسک اطلاعات و ذخیره در جدول qna_query
+        /// Process the Q&A CSV file: load rows, format texts, mask sensitive information, and store in the qna_query table
         /// </summary>
-        /// <param name="temp_file_path">مسیر فایل موقت آپلود شده در سرور</param>
-        /// <param name="original_filename">نام اصلی فایل ورودی</param>
-        /// <param name="file_id">شناسه منحصر به فرد فایل</param>
-        /// <returns>دیکشینری وضعیت اجرا و تعداد لوپ‌های ثبت شده</returns>
+        /// <param name="temp_file_path">Path of the temporary file uploaded to the server</param>
+        /// <param name="original_filename">Original name of the input file</param>
+        /// <param name="file_id">Unique file identifier</param>
+        /// <returns>Dictionary of execution status and the number of registered pairs</returns>
         """
         if not self.is_enabled:
             logger.warning(f"QnA Processor is disabled in config.yaml. Skipping file: {original_filename}")
@@ -47,22 +47,22 @@ class QnaDocumentProcessor:
             
         logger.info(f"Starting QnA ingestion pipeline for file: {original_filename} (ID: {file_id})")
         
-        # ۱. لود فایل سی‌اس‌وی با استفاده از پانداس
+        # 1. Load the CSV file using pandas
         try:
-            # خواندن فایل با تلاش برای انکودینگ‌های متداول
+            # Read the file trying common encodings
             try:
                 df = pd.read_csv(temp_file_path, encoding="utf-8")
             except UnicodeDecodeError:
                 df = pd.read_csv(temp_file_path, encoding="windows-1256")
                 
-            # یکدست‌سازی نام ستون‌ها (حذف فواصل خالی)
+            # Unify column names (remove blank spaces)
             df.columns = [col.strip() for col in df.columns]
             
-            # بررسی وجود ستون‌های حیاتی پرسش و پاسخ
+            # Check for the critical question and answer columns
             question_col = None
             answer_col = None
             
-            # تطابق هوشمند با زبان‌های فارسی و انگلیسی ستون‌ها
+            # Smart matching of Persian and English column names
             for col in df.columns:
                 col_lower = col.lower()
                 if "question" in col_lower or col == "سوال" or col == "پرسش":
@@ -71,7 +71,7 @@ class QnaDocumentProcessor:
                     answer_col = col
                     
             if not question_col or not answer_col:
-                # تلاش برای انتخاب ستون اول و دوم به عنوان پیش‌فرض در صورت عدم تطابق نامی
+                # Try to pick the first and second columns as defaults if no name match
                 if len(df.columns) >= 2:
                     question_col = df.columns[0]
                     answer_col = df.columns[1]
@@ -83,7 +83,7 @@ class QnaDocumentProcessor:
             logger.error(f"Failed to read or parse QnA CSV file: {str(e)}")
             raise e
 
-        # ۲. آپلود فایل اصلی خام به MinIO جهت مستندسازی و بایگانی
+        # 2. Upload the original raw file to MinIO for documentation and archival
         try:
             object_name = f"qna/{file_id}/{original_filename}"
             archive_url = storage_manager.upload_file(object_name, temp_file_path, "text/csv")
@@ -92,7 +92,7 @@ class QnaDocumentProcessor:
             logger.error(f"Archiving QnA raw file failed: {str(e)}. Continuing database ingestion.")
             archive_url = "fallback_local"
 
-        # ۳. چرخیدن روی تک‌تک سطرها، تولید چانک‌های پرسش و پاسخ و ذخیره‌سازی وکتورها
+        # 3. Iterate over each row, generate Q&A chunks, and store the vectors
         conn = None
         records_indexed = 0
         try:
@@ -103,21 +103,21 @@ class QnaDocumentProcessor:
                     a = str(row[answer_col]).strip()
                     
                     if not q or q.lower() == "nan" or not a or a.lower() == "nan":
-                        continue  # نادیده‌گیری ردیف‌های خالی
+                        continue  # Skip empty rows
                         
-                    # قالب‌بندی متون لوپ پرسش و پاسخ
+                    # Format the Q&A pair texts
                     formatted_chunk = f"Question: {q}, Answer: {a}"
                     
-                    # نرمال‌سازی متون فارسی
+                    # Normalize the Persian texts
                     normalized_chunk = normalize_text(formatted_chunk)
                     
-                    # اعمال فیلتر قفل حریم شخصی در صورت روشن بودن
+                    # Apply the privacy lock filter if enabled
                     if settings.security.pii_redaction:
                         final_chunk = redact_text(normalized_chunk)
                     else:
                         final_chunk = normalized_chunk
                         
-                    # تولید امبدینگ ۳۰۷۲ تایی با استفاده از OpenAI
+                    # Generate the 3072-dimensional embedding using OpenAI
                     embedding = get_embedding(final_chunk)
                     sequence_id = idx + 1
                     
@@ -149,5 +149,5 @@ class QnaDocumentProcessor:
             if conn:
                 conn.close()
 
-# شیء سراسری پردازشگر پرسش و پاسخ‌های سازمان
+# Global object for processing the organization's Q&A pairs
 qna_processor = QnaDocumentProcessor()

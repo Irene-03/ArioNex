@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// عامل جستجوی الگوهای Q&A متداول و لاگ‌های پشتیبانی (ArioNex QnA Retrieval Agent)
+/// Agent for searching common Q&A patterns and support logs (ArioNex QnA Retrieval Agent)
 /// </summary>
 /// <remarks>
-/// این ماژول بر روی الگوهای پرسش و پاسخ ثبت شده در جدول qna_query جستجوی شباهت معنایی انجام می‌دهد.
-/// هدف این عامل پیدا کردن مستقیم لوپ‌های چت پرسش و پاسخ پیشین سازمانی و تیکت‌ها است.
+/// This module performs semantic similarity search over the Q&A patterns stored in the qna_query table.
+/// The goal of this agent is to directly find the organization's previous Q&A chat loops and tickets.
 /// </remarks>
 """
 
@@ -18,25 +18,25 @@ logger = logging.getLogger("arionex.qna")
 class QnAAgent:
     """
     /// <summary>
-    /// کلاس عامل جستجوی Q&A جهت تطبیق مستقیم الگوهای پرسش‌وپاسخ سازمانی
+    /// Q&A search agent class for directly matching organizational Q&A patterns
     /// </summary>
     """
     def __init__(self):
-        # بررسی روشن بودن ماژول در تنظیمات ویژگی‌ها
+        # Check whether the module is enabled in the feature settings
         self.is_enabled = settings.services.qna_processor
 
     def retrieve_context(self, query: str, threshold: float = 0.5, k: int = 4, file_ids: list[int] = None, filters: dict = None, embedding: list = None) -> list[dict]:
         """
         /// <summary>
-        /// بازیابی معنایی و تطبیق مستقیم الگوهای Q&A از جدول qna_query
+        /// Semantic retrieval and direct matching of Q&A patterns from the qna_query table
         /// </summary>
-        /// <param name="query">جستار بازنویسی شده مستقل کاربر</param>
-        /// <param name="threshold">حد آستانه شباهت کسینوسی (پیش‌فرض: ۰.۵)</param>
-        /// <param name="k">تعداد رکوردهای بازگشتی (پیش‌فرض: ۴)</param>
-        /// <param name="file_ids">شناسه‌های فایل محدودکننده RAG</param>
-        /// <param name="filters">فیلترهای سفارشی‌سازی داینامیک</param>
-        /// <param name="embedding">بردار از پیش محاسبه‌شده پرسش (در صورت وجود) برای حذف فراخوانی تکراری API</param>
-        /// <returns>لیستی از الگوهای پرسش و پاسخ متناظر یافت شده فوق آستانه</returns>
+        /// <param name="query">User's rewritten standalone query</param>
+        /// <param name="threshold">Cosine similarity threshold (default: 0.5)</param>
+        /// <param name="k">Number of returned records (default: 4)</param>
+        /// <param name="file_ids">File IDs that limit RAG</param>
+        /// <param name="filters">Dynamic customization filters</param>
+        /// <param name="embedding">Precomputed query embedding (if available) to avoid a duplicate API call</param>
+        /// <returns>List of corresponding Q&A patterns found above the threshold</returns>
         """
         if not self.is_enabled:
             logger.info("Support Lead Agent is disabled in config.yaml. Skipping QnA vector retrieval.")
@@ -44,11 +44,11 @@ class QnAAgent:
             
         logger.info(f"Support Lead Agent starting similarity search for query: '{query}'")
         
-        # ۱. استخراج امبدینگ ۳۰۷۲ تایی برای جستار ورودی (با کش در صورت عدم ارسال از بیرون)
+        # 1. Extract the 3072-dimensional embedding for the input query (cached if not provided externally)
         if embedding is None:
             embedding = get_embedding_cached(query)
         
-        # ۲. فیلترینگ داینامیک بر اساس شناسه‌ها و فیلترهای سفارشی
+        # 2. Dynamic filtering based on IDs and custom filters
         filter_clause = ""
         params = [embedding]
         
@@ -76,7 +76,7 @@ class QnAAgent:
             
         params.append(k)
         
-        # ۳. کوئری روی جدول qna_query
+        # 3. Query the qna_query table
         sql = f"""
         SELECT content, file_id, sequence_id,
                1 - (embedding <=> %s::vector) AS similarity
@@ -99,7 +99,7 @@ class QnAAgent:
             for row in rows:
                 content, file_id, seq_id, similarity = row
                 
-                # اعمال فیلتر شباهت آستانه RAG
+                # Apply the RAG threshold similarity filter
                 if similarity >= threshold:
                     results.append({
                         "content": content,
@@ -120,5 +120,5 @@ class QnAAgent:
         return results
 
 
-# نمونه سراسری عامل جستجوی Q&A
+# Global Q&A search agent instance
 qna_agent = QnAAgent()

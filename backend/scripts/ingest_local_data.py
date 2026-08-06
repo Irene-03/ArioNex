@@ -1,13 +1,13 @@
 """
 /// <summary>
-/// اسکریپت ایندکس‌سازی دسته‌ای داده‌های محلی آریونکس (ArioNex Local Batch Ingest Script)
+/// ArioNex local data batch ingest script (ArioNex Local Batch Ingest Script)
 /// </summary>
 /// <remarks>
-/// این اسکریپت به دولوپران اجازه می‌دهد بدون راه‌اندازی FastAPI یا داشبورد React،
-/// فایل‌های موجود در پوشه‌های data/unstructured، data/structured و data/qna را
-/// مستقیماً پردازش و ایندکس کنند.
+/// This script lets developers, without starting FastAPI or the React dashboard,
+/// process and index the files in the data/unstructured, data/structured, and data/qna folders
+/// directly.
 ///
-/// نحوه اجرا:
+/// How to run:
 ///   cd backend
 ///   python scripts/ingest_local_data.py --type all
 ///   python scripts/ingest_local_data.py --type unstructured
@@ -21,10 +21,10 @@ import os
 import argparse
 import logging
 
-# اضافه کردن مسیر بک‌اند به sys.path
+# Add the backend path to sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# اطمینان از فعال بودن حالت محلی
+# Ensure the local mode is enabled
 os.environ.setdefault("USE_LOCAL_DATA_DIR", "true")
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
@@ -34,7 +34,7 @@ logger = logging.getLogger("arionex.ingest_script")
 
 
 def ingest_unstructured():
-    """پردازش و ایندکس‌سازی اسناد متنی، PDF و Word از data/unstructured/"""
+    """Process and index text, PDF, and Word documents from data/unstructured/"""
     from app.core.local_storage import ingest_from_data_directory
     from app.services.workers.unstructured_processor import unstructured_processor
 
@@ -58,7 +58,7 @@ def ingest_unstructured():
 
 
 def ingest_qna():
-    """پردازش و ایندکس‌سازی فایل‌های CSV پرسش و پاسخ از data/qna/"""
+    """Process and index Q&A CSV files from data/qna/"""
     from app.core.local_storage import ingest_from_data_directory
     from app.services.workers.qna_processor import qna_processor
 
@@ -82,7 +82,7 @@ def ingest_qna():
 
 
 def ingest_structured():
-    """اعتبارسنجی و بایگانی فایل‌های مالی CSV/Excel از data/structured/"""
+    """Validate and archive financial CSV/Excel files from data/structured/"""
     from app.core.local_storage import ingest_from_data_directory
     from app.services.workers.structured_processor import structured_processor
 
@@ -106,7 +106,7 @@ def ingest_structured():
 
 
 def list_data_contents():
-    """لیست محتوای فعلی تمام دایرکتوری‌های داده"""
+    """List the current contents of all data directories"""
     from app.core.local_storage import list_data_directory, DATA_ROOT_DIR
 
     print("\n" + "="*60)

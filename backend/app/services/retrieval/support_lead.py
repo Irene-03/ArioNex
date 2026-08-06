@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// لایه انطباق عقب‌رو عامل سرپرست پشتیبانی (ArioNex Support Lead Agent Backward Compatibility Layer)
+/// Support lead agent backward compatibility layer (ArioNex Support Lead Agent Backward Compatibility Layer)
 /// </summary>
 /// <remarks>
-/// این فایل برای حفظ سازگاری با پرونده‌های تست فازهای قبلی ایجاد شده است
-/// و درخواست‌ها را به ماژول جدید qna هدایت می‌کند.
+/// This file was created to preserve compatibility with the test suites of previous phases
+/// and forwards requests to the new qna module.
 /// </remarks>
 """
 

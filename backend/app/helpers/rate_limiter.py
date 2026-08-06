@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// میدل‌ور محدودکننده نرخ درخواست‌ها جهت مقابله با حملات منع سرویس (Rate Limiter Middleware for DoS Protection)
+/// Request rate-limiting middleware to counter denial-of-service attacks (Rate Limiter Middleware for DoS Protection)
 /// </summary>
 """
 
@@ -16,10 +16,10 @@ logger = logging.getLogger("arionex.rate_limiter")
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
     /// <summary>
-    /// میدل‌ور پیشگیری از سوءاستفاده از منابع سرور با پیاده‌سازی پنجره لغزان (Sliding Window Rate Limiter)
+    /// Middleware that prevents abuse of server resources using a sliding window (Sliding Window Rate Limiter)
     /// </summary>
     """
-    # نگهداری تاریخچه درخواست هر کلاینت بر اساس آی‌پی در حافظه موقت (In-Memory)
+    # Keeps the request history of each client by IP in temporary memory (In-Memory)
     request_history = defaultdict(list)
 
     def __init__(self, app, requests_limit: int = 30, window_seconds: int = 60):
@@ -28,17 +28,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.window_seconds = window_seconds
 
     async def dispatch(self, request: Request, call_next):
-        # اعمال محدودیت فقط روی اندپوینت‌های عمومی API (آدرس‌های شروع شونده با v1)
+        # Apply the limit only to public API endpoints (paths starting with v1)
         if request.url.path.startswith("/v1/"):
             client_ip = request.client.host if request.client else "unknown"
             current_time = time.time()
 
-            # پاکسازی رکوردهای منقضی‌شده خارج از پنجره زمانی
+            # Clean up expired records outside the time window
             history = self.request_history[client_ip]
             valid_history = [t for t in history if current_time - t < self.window_seconds]
             self.request_history[client_ip] = valid_history
 
-            # بررسی تجاوز از سقف مجاز
+            # Check whether the allowed limit is exceeded
             if len(valid_history) >= self.requests_limit:
                 logger.warning(f"Rate limit exceeded for client {client_ip} on path {request.url.path}")
                 return JSONResponse(
@@ -49,7 +49,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     headers={"Retry-After": str(self.window_seconds)}
                 )
 
-            # ثبت زمان درخواست جدید
+            # Record the time of the new request
             self.request_history[client_ip].append(current_time)
 
         return await call_next(request)

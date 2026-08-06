@@ -1,13 +1,13 @@
 """
 /// <summary>
-/// مدل‌های Pydantic پرسش و پاسخ RAG آریونکس (ArioNex RAG Query & Response Schemas)
+/// ArioNex RAG Query & Response Schemas (ArioNex RAG Query & Response Schemas)
 /// </summary>
 /// <remarks>
-/// این ماژول ساختار داده‌ای ورودی و خروجی اندپوینت‌های پرسش RAG را تعریف می‌کند.
-/// هر دو اندپوینت /v1/query و /v1/widget/chat از این schema‌ها استفاده می‌کنند.
+/// This module defines the data structures for the input and output of the RAG query endpoints.
+/// Both /v1/query and /v1/widget/chat endpoints use these schemas.
 ///
-/// QueryRequest: درخواست پرسش کاربر با پشتیبانی از فیلتر فایل
-/// QueryResponse: پاسخ دستیار شامل متن، منابع استنادی و وضعیت ایمنی
+/// QueryRequest: user query request with file filter support
+/// QueryResponse: assistant answer including text, cited sources, and safety status
 /// </remarks>
 """
 
@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 class QueryRequest(BaseModel):
     """
     /// <summary>
-    /// مدل درخواست پرسش RAG از کاربر
+    /// RAG query request model from the user
     /// </summary>
     """
     query: str = Field(
@@ -40,7 +40,7 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     """
     /// <summary>
-    /// مدل پاسخ دستیار هوشمند RAG
+    /// Response model of the smart RAG assistant
     /// </summary>
     """
     answer: str = Field(

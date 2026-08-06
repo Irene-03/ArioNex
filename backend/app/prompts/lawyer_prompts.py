@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// قالب‌های پرامپت عامل حقوقدان و ممیز انطباق قوانین آریونکس (ArioNex Lawyer Compliance Agent Prompt Templates)
+/// Prompt templates for the ArioNex lawyer and compliance auditor agent (ArioNex Lawyer Compliance Agent Prompt Templates)
 /// </summary>
 """
 

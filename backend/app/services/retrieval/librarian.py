@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// لایه انطباق عقب‌رو عامل کتابدار (ArioNex Librarian Agent Backward Compatibility Layer)
+/// Librarian agent backward compatibility layer (ArioNex Librarian Agent Backward Compatibility Layer)
 /// </summary>
 /// <remarks>
-/// این فایل برای حفظ سازگاری با پرونده‌های تست فازهای قبلی ایجاد شده است
-/// و درخواست‌ها را به ماژول جدید vector_search هدایت می‌کند.
+/// This file was created to preserve compatibility with the test suites of previous phases
+/// and forwards requests to the new vector_search module.
 /// </remarks>
 """
 

@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// فایل تست خودکار و راستی‌آزمایی خطاهای کارخانه LLM و انتشار عدم پیکربندی کلیدها (LLM Factory Error Handling Tests)
+/// Automated test and verification file for LLM factory errors and the propagation of unconfigured keys (LLM Factory Error Handling Tests)
 /// </summary>
 """
 
@@ -9,7 +9,7 @@ import os
 import asyncio
 from unittest.mock import MagicMock, patch
 
-# اضافه کردن مسیر پروژه جهت شناسایی پکیج app
+# Add the project path so the app package can be detected
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
 from fastapi.testclient import TestClient

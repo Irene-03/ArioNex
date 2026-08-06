@@ -1,14 +1,14 @@
 """
 /// <summary>
-/// روتر مدیریت پیکربندی آریونکس — GET/POST /v1/config (ArioNex Config Management Router)
+/// ArioNex Config Management Router (ArioNex Config Management Router)
 /// </summary>
 /// <remarks>
-/// این ماژول اندپوینت‌های مدیریت زنده Feature Toggle‌ها را تعریف می‌کند.
-/// منطق به‌روزرسانی به صورت مستقیم در این فایل قرار دارد — چون ساده و بدون dependency پیچیده است.
+/// This module defines the endpoints for live management of Feature Toggles.
+/// The update logic lives directly in this file — since it is simple and has no complex dependencies.
 ///
-/// اندپوینت‌ها:
-///   GET  /v1/config  — دریافت پیکربندی فعال سیستم
-///   POST /v1/config  — به‌روزرسانی زنده Feature Toggle‌ها (ادمین)
+/// Endpoints:
+///   GET  /v1/config  — get the system's active configuration
+///   POST /v1/config  — live update of Feature Toggles (admin)
 /// </remarks>
 """
 
@@ -85,7 +85,7 @@ def _update_env_file(key: str, value: str):
 async def get_active_configuration():
     """
     /// <summary>
-    /// اندپوینت دریافت کانفیگ زنده و وضعیت تمامی Feature Toggle‌ها
+    /// Endpoint for fetching the live config and the state of all Feature Toggles
     /// </summary>
     """
     return {
@@ -123,9 +123,9 @@ async def get_active_configuration():
 async def update_active_configuration(update: ConfigUpdateRequest):
     """
     /// <summary>
-    /// اندپوینت ادمین پنل جهت تغییر زنده تنظیمات سرویس‌ها و درگاه‌های خروجی
+    /// Admin panel endpoint for live changes of service settings and outbound providers
     /// </summary>
-    /// <param name="update">درخواست به‌روزرسانی شامل بخش‌هایی که باید تغییر کنند</param>
+    /// <param name="update">Update request including the sections that should change</param>
     """
     try:
         if update.services:
@@ -162,7 +162,7 @@ async def update_active_configuration(update: ConfigUpdateRequest):
 
         if update.providers and hasattr(settings, "providers"):
             for k, v in update.providers.items():
-                # Ollama: ذخیره در settings به عنوان provider فعال
+                # Ollama: store in settings as the active provider
                 if k == "ollama":
                     if bool(v):
                         settings.llm_provider = "ollama"
@@ -175,7 +175,7 @@ async def update_active_configuration(update: ConfigUpdateRequest):
                 elif hasattr(settings.providers, k):
                     setattr(settings.providers, k, bool(v))
 
-        # تنظیمات Ollama — مدل و آدرس سرور
+        # Ollama settings — model and server URL
         if update.ollama_model:
             settings.ollama_model = update.ollama_model
             _update_env_file("OLLAMA_MODEL", update.ollama_model)
@@ -201,13 +201,13 @@ async def update_active_configuration(update: ConfigUpdateRequest):
             _update_env_file("EMBEDDING_MODEL", update.embedding_model)
             logger.info(f"Embedding model set to: {update.embedding_model}")
 
-        # تغییر provider فعال
+        # Change the active provider
         if update.llm_provider:
             settings.llm_provider = update.llm_provider
             _update_env_file("LLM_PROVIDER", update.llm_provider)
             logger.info(f"LLM provider switched to: {update.llm_provider}")
 
-        # به‌روزرسانی کلیدهای API پروایدرها
+        # Update provider API keys
         api_keys_to_update = {
             "openai_api_key": getattr(update, "openai_api_key", None),
             "openrouter_api_key": getattr(update, "openrouter_api_key", None),
@@ -320,7 +320,7 @@ async def get_system_prompt():
             if row:
                 return {"prompt": row[0]}
             
-            # در صورت عدم وجود، یک مقدار پیش‌فرض برمی‌گردانیم
+            # If not found, return a default value
             default_prompt = (
                 "شما یک دستیار دانش حرفه‌ای برای آریونکس هستید. همیشه منابع را دقیق استناد دهید. "
                 "هیچ‌گاه فراتر از اسناد ارائه‌شده گمانه‌زنی نکنید. اگر سند مرتبطی یافت نشد، صادقانه بگویید."

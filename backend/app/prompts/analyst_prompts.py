@@ -1,16 +1,16 @@
 """
 /// <summary>
-/// قالب‌های پرامپت عامل تحلیلگر داده‌های مالی (ArioNex Analyst Agent Prompt Templates)
+/// Prompt templates for the financial data analyst agent (ArioNex Analyst Agent Prompt Templates)
 /// </summary>
 /// <remarks>
-/// این ماژول پرامپت‌های سیستمی LangGraph Analyst Agent را نگهداری می‌کند.
-/// عامل تحلیلگر با استفاده از این پرامپت و ابزارهای پانداس، به سوالات آماری و حسابداری پاسخ می‌دهد.
+/// This module holds the system prompts for the LangGraph Analyst Agent.
+/// Using this prompt and pandas tools, the analyst agent answers statistical and accounting questions.
 ///
-/// قوانین کلیدی عامل:
-///   - پاسخ فقط باید بر اساس نتایج ابزارها باشد، نه دانش عمومی مدل
-///   - در صورت شکست، پاسخ باید با "DOUBTFUL ANSWER:" شروع شود + دلیل شکست
-///   - تمامی پاسخ‌های نهایی به فارسی ارائه می‌شوند
-///   - متوقف شدن به محض رسیدن به پاسخ کامل (Stop when done)
+/// Key agent rules:
+///   - The answer must be based only on tool results, not on the model's general knowledge
+///   - On failure, the answer must start with "DOUBTFUL ANSWER:" plus the reason for the failure
+///   - All final answers are provided in Persian
+///   - Stop as soon as a complete answer is reached (Stop when done)
 /// </remarks>
 """
 
@@ -20,13 +20,13 @@ from typing import List
 def get_analyst_system_prompt(column_names: List[str]) -> str:
     """
     /// <summary>
-    /// تولید پرامپت سیستمی عامل تحلیلگر با توجه به ستون‌های DataFrame موجود
+    /// Generates the analyst agent's system prompt based on the available DataFrame columns
     /// </summary>
-    /// <param name="column_names">لیست نام ستون‌های DataFrame لود شده</param>
-    /// <returns>رشته پرامپت سیستمی آماده ارسال به مدل LLM</returns>
+    /// <param name="column_names">List of column names of the loaded DataFrame</param>
+    /// <returns>System prompt string ready to be sent to the LLM model</returns>
     /// <remarks>
-    /// پرامپت به صورت پویا بر اساس ستون‌های واقعی DataFrame ساخته می‌شود
-    /// تا مدل دقیقاً بداند با چه داده‌ای کار می‌کند.
+    /// The prompt is built dynamically based on the actual DataFrame columns
+    /// so the model knows exactly what data it is working with.
     /// </remarks>
     """
     return f"""You are an intelligent accounting assistant working with a DataFrame containing accounting records.

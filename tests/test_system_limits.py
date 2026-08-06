@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// فایل تست راستی‌آزمایی محدودیت‌های امنیتی، مکانیزم‌های بازیابی و انتشار خطاها (ArioNex System Limits & Failover Tests)
+/// Test and verification file for security limits, failover mechanisms, and error propagation (ArioNex System Limits & Failover Tests)
 /// </summary>
 """
 
@@ -11,7 +11,7 @@ import asyncio
 import unittest
 from unittest.mock import MagicMock, patch
 
-# تنظیم خروجی یونیکد برای ویندوز
+# Configure Unicode output for Windows
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -31,7 +31,7 @@ client = TestClient(app)
 class TestSystemLimitsAndFailover(unittest.TestCase):
 
     def setUp(self):
-        # پاکسازی سوابق ریت لیمیتر برای جلوگیری از اختلال در تست‌ها
+        # Clear rate limiter history to avoid interfering with tests
         from app.helpers.rate_limiter import RateLimitMiddleware
         RateLimitMiddleware.request_history.clear()
 
@@ -39,13 +39,13 @@ class TestSystemLimitsAndFailover(unittest.TestCase):
         print("1. Testing LRU Session cache capping...")
         cache = LRUCache(maxsize=10)
         
-        # پر کردن کش با ۱۲ کلید متفاوت
+        # Fill the cache with 12 different keys
         for i in range(12):
             cache[f"session_{i}"] = [{"Human": "query"}, {"AI": "answer"}]
             
-        # بررسی اینکه اندازه کش از ۱۰ بیشتر نشده باشد
+        # Verify that the cache size has not exceeded 10
         self.assertEqual(len(cache), 10)
-        # بررسی حذف کلیدهای قدیمی‌تر (سشن 0 و 1)
+        # Verify removal of older keys (sessions 0 and 1)
         self.assertNotIn("session_0", cache)
         self.assertNotIn("session_1", cache)
         self.assertIn("session_2", cache)
@@ -56,11 +56,11 @@ class TestSystemLimitsAndFailover(unittest.TestCase):
     @patch("app.core.embeddings._embed_with_openai")
     def test_embedding_error_propagation(self, mock_embed, mock_val):
         print("\n2. Testing Embedding exception propagation (no silent zero-vector fallback)...")
-        # تنظیم سناریو خطای API
+        # Set up the API error scenario
         mock_val.return_value = None
         mock_embed.side_effect = Exception("OpenAI Service is Down")
         
-        # فراخوانی متد باید استثنا پرتاب کند و بردار صفر برنگرداند
+        # The method call must raise an exception and not return a zero vector
         with self.assertRaises(Exception) as context:
             get_embedding("تست هوش مصنوعی")
             
@@ -69,19 +69,19 @@ class TestSystemLimitsAndFailover(unittest.TestCase):
 
     def test_upload_file_size_limit(self):
         print("\n3. Testing Upload File size limit (max 20MB)...")
-        # ساختن یک فایل فرضی با حجم ۲۱ مگابایت (بزرگتر از حد مجاز)
-        # برای صرفه‌جویی در حافظه، محتوای فایل را در قالب یک ژنراتور بزرگ شبیه‌سازی می‌کنیم یا از BytesIO با طول زیاد استفاده می‌کنیم
+        # Create a hypothetical file of 21 MB (larger than the allowed limit)
+        # To save memory, we simulate the file content as a large generator or use BytesIO with a large length
         import io
         large_content = b"x" * (21 * 1024 * 1024) # 21MB
         
-        # ارسال فایل به اندپوینت /v1/upload
-        # فست‌ایی‌پی‌آی به صورت پیش‌فرض کلاینت تستی را فورا باز می‌کند
+        # Send the file to the /v1/upload endpoint
+        # FastAPI by default opens the test client immediately
         response = client.post(
             "/v1/upload",
             files={"file": ("large_file.txt", io.BytesIO(large_content), "text/plain")}
         )
         
-        # باید خطای 413 Payload Too Large برگردد
+        # A 413 Payload Too Large error should be returned
         self.assertEqual(response.status_code, 413)
         self.assertIn("حجم فایل آپلود شده بیش از حد مجاز", response.json()["detail"])
         print("-> Test 3 (File Upload Capping): PASSED")
@@ -89,32 +89,32 @@ class TestSystemLimitsAndFailover(unittest.TestCase):
     def test_rate_limiting_dos_protection(self):
         print("\n4. Testing Rate limiting protection (max 30 requests/min)...")
         
-        # تمیز کردن تاریخچه ریت لیمیتر برای کلاینت تستی
+        # Clear the rate limiter history for the test client
         from app.helpers.rate_limiter import RateLimitMiddleware
         for middleware in app.user_middleware:
             if hasattr(middleware, "cls") and middleware.cls == RateLimitMiddleware:
-                # به صورت پویا رکوردهای قبلی لیمیتر را پاک می‌کنیم
+                # Dynamically clear the limiter's previous records
                 pass
                 
-        # ارسال پی‌درپی درخواست به اندپوینت کوئری
-        # ما وابستگی لاگین را شبیه‌سازی می‌کنیم تا درخواست با خطای ۴۰۱ شکست نخورد
+        # Send sequential requests to the query endpoint
+        # We mock the login dependency so the request does not fail with a 401 error
         from app.helpers.auth import get_current_user_or_api_key
         app.dependency_overrides[get_current_user_or_api_key] = lambda: {"username": "test_user", "role": "Admin"}
         
-        # ماک کردن پاسخ synthesizer و ممیزی برای جلوگیری از تأخیرهای دیتابیس و اجرای واقعی
+        # Mock the synthesizer response and audit to avoid database delays and real execution
         with patch("app.logics.query_logic.synthesize_rag_response") as mock_synth, \
              patch("app.logics.query_logic.log_audit_event") as mock_audit:
             mock_synth.return_value = {"answer": "پاسخ نمونه", "sources": [], "is_safe": True}
             
             payload = {"query": "سلام", "session_id": "test_limiter_session"}
             
-            # ۳۰ درخواست اول موفقیت‌آمیز خواهند بود
+            # The first 30 requests will be successful
             responses = []
             for i in range(30):
                 res = client.post("/v1/query", json=payload)
                 responses.append(res.status_code)
                 
-            # درخواست ۳۱ام باید با ریت لیمیت ۴۲۹ شکست بخورد
+            # The 31st request must fail with rate limit 429
             rate_limited_res = client.post("/v1/query", json=payload)
             
             self.assertEqual(rate_limited_res.status_code, 429)
@@ -126,8 +126,8 @@ class TestSystemLimitsAndFailover(unittest.TestCase):
     def test_celery_broker_down_thread_fallback(self):
         print("\n5. Testing Celery task thread fallback (when broker/Redis is unreachable)...")
         
-        # تعریف یک تسک تستی سلری
-        # ما celery_app را ایمپورت می‌کنیم
+        # Define a test Celery task
+        # We import celery_app
         from app.core.celery_app import celery_app
         
         execution_check = {"called": False}
@@ -137,15 +137,15 @@ class TestSystemLimitsAndFailover(unittest.TestCase):
             execution_check["called"] = True
             execution_check["arg"] = arg1
             
-        # شبیه‌سازی قطع اتصال به بروکر با پچ کردن متد apply_async اصلی سلری
-        # که در این حالت OperationalError بالا می‌اندازد
+        # Simulate a broker connection failure by patching Celery's main apply_async method
+        # which raises OperationalError in this case
         from kombu.exceptions import OperationalError
         
         with patch("celery.Task.apply_async", side_effect=OperationalError("Connection refused by Redis")):
-            # این فراخوانی به دلیل عدم دسترسی به ردیس باید با موفقیت به ترد پس‌زمینه سوییچ کند
+            # This call should successfully switch to the background thread because Redis is unreachable
             dummy_task.delay("ArioNex test failover")
             
-            # منتظر می‌مانیم تا ترد کار خود را انجام دهد
+            # Wait for the thread to finish its work
             time.sleep(0.1)
             
             self.assertTrue(execution_check["called"], "Task should execute locally in background thread")

@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// پیکربندی و راه‌اندازی Celery Application برای تسک‌های غیرهمزمان (Celery Task Manager)
+/// Celery Application configuration and setup for asynchronous tasks (Celery Task Manager)
 /// </summary>
 """
 
@@ -68,7 +68,7 @@ except ImportError:
 
 from app.core.config import settings
 
-# تعریف اپلیکیشن سلری با استفاده از ردیس به عنوان Broker و Backend
+# Define the Celery application using Redis as the broker and backend
 celery_args = {
     "broker": settings.redis_url,
     "backend": settings.redis_url,
@@ -79,7 +79,7 @@ if FallbackTask:
 
 celery_app = Celery("arionex", **celery_args)
 
-# تنظیمات اضافی برای پایداری و بهبود کارایی
+# Additional settings for stability and improved performance
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
@@ -87,6 +87,6 @@ celery_app.conf.update(
     timezone="Asia/Tehran",
     enable_utc=True,
     task_track_started=True,
-    # در صورت قطع اتصال به بروکر، تلاش مجدد در زمان راه‌اندازی
+    # Retry connecting to the broker at startup if the connection is down
     broker_connection_retry_on_startup=True
 )

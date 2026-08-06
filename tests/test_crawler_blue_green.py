@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// فایل تست خودکار و راستی‌آزمایی تراکنش سوئیچ آبی-سبز کرالر (Crawler Blue-Green Switch Verification Tests)
+/// Automated test and verification file for the crawler blue-green switch transaction (Crawler Blue-Green Switch Verification Tests)
 /// </summary>
 """
 
@@ -9,7 +9,7 @@ import os
 import json
 from unittest.mock import MagicMock, patch
 
-# اضافه کردن مسیر پروژه جهت شناسایی پکیج app
+# Add the project path so the app package can be detected
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
 from app.services.workers.crawler.staging import _commit_staged_data

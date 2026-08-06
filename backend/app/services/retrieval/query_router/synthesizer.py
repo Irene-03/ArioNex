@@ -39,7 +39,7 @@ from app.services.retrieval.query_router.router import route_query_intent
 logger = logging.getLogger("arionex.query_router")
 
 # -------------------------------------------------------------------
-# کش TTL برای داده‌های ثابت پایگاه داده (کاهش فراخوانی‌های DB در مسیر داغ)
+# TTL cache for relatively static database data (reducing DB calls on the hot path)
 # -------------------------------------------------------------------
 _CACHE_TTL_SECONDS = 300
 _cache_store = {}
@@ -48,7 +48,7 @@ _cache_store = {}
 def _ttl_get(key: str, loader) -> object:
     """
     /// <summary>
-    /// کش ساده با انقضای زمانی (TTL) برای داده‌های به‌نسبت ثابت پایگاه داده
+    /// Simple cache with time-to-live (TTL) for relatively static database data
     /// </summary>
     """
     now = time.time()
@@ -56,7 +56,7 @@ def _ttl_get(key: str, loader) -> object:
     if entry is not None and now - entry[0] < _CACHE_TTL_SECONDS:
         return entry[1]
     value = loader()
-    # فقط مقادیر پایه (رشته/لیست) کش می‌شوند تا از کش کردن موک‌های تست جلوگیری شود
+    # Only primitive values (string/list) are cached to avoid caching test mocks
     if isinstance(value, (str, list)):
         _cache_store[key] = (now, value)
     return value
@@ -120,7 +120,7 @@ def _load_customization_fields() -> list:
 
 
 # -------------------------------------------------------------------
-# تعاریف محلی زنجیره‌های پردازشی جهت انطباق با مک‌های یونیت تست
+# Local definitions of processing chains to work with unit test mocks
 # -------------------------------------------------------------------
 
 def greeting_chain():
@@ -199,7 +199,7 @@ def customization_chain():
 def _fetch_system_instruction() -> str:
     """
     /// <summary>
-    /// دریافت system instruction از دیتابیس (با کش TTL) یا استفاده از متن پیش‌فرض
+    /// Get the system instruction from the database (with TTL cache) or use the default text
     /// </summary>
     """
     return _ttl_get("system_instruction", _load_system_instruction_from_db)
@@ -215,16 +215,16 @@ def synthesize_rag_response(
 ) -> dict:
     """
     /// <summary>
-    /// هماهنگ‌کننده نهایی زنجیره خواندن RAG با استفاده از زنجیره‌های LangChain
+    /// Final coordinator of the RAG reading chain using LangChain chains
     /// </summary>
     """
     logger.info(f"Synthesizer received query from chat session. (Session ID: {session_id})")
 
-    # ۱. متصل کردن تاریخچه مکالمه FastAPI به سامانه حافظه متوالی LangChain
+    # 1. Connect the FastAPI conversation history to the LangChain sequential memory system
     main_hist = _get_or_create_main(session_id)
     main_hist._messages = chat_history
 
-    # ۲. دروازه‌بان خوش‌آمدگویی (Greeting Gatekeeper)
+    # 2. Greeting gatekeeper
     if getattr(settings.services, "greeting", False):
         g_chain = greeting_chain()
         greeting_response = g_chain.invoke(
@@ -244,8 +244,8 @@ def synthesize_rag_response(
                 "is_safe": True
             }
 
-    # ۳. دروازه‌بان تشخیص ارتباط با دامنه (Check Structure Gatekeeper)
-    structure_content = "$$$"  # مقدار پیش‌فرض در صورت غیرفعال بودن
+    # 3. Domain relevance gatekeeper (Check Structure Gatekeeper)
+    structure_content = "$$$"  # default value when disabled
     if getattr(settings.services, "check_structure", False):
         tags_str = ", ".join(["سند حسابداری", "شماره سند", "حسابداری", "رسید بانکی", "وضعیت حساب", "سند مالی", "مالی", "بستانکار", "بدهکاری"])
         cs_chain = check_structure_agent_chain()
@@ -258,8 +258,8 @@ def synthesize_rag_response(
         )
         structure_content = structure_response.content.strip()
 
-    # ۴. بازنویسی پرسش مستقل (Standalone Query Rewriter)
-    # در برخی تست‌ها ممکن است standalone_chain با invoke دستی ماک شده باشد
+    # 4. Standalone query rewriting (Standalone Query Rewriter)
+    # In some tests standalone_chain may be mocked with a manual invoke
     standalone_query = user_input
     if chat_history:
         try:
@@ -272,11 +272,11 @@ def synthesize_rag_response(
             raise ve
         except Exception as sa_err:
             logger.warning(f"Standalone chain execution failed: {str(sa_err)}. Falling back to manual or raw query.")
-            # تلاش برای استفاده از query_rewriter قدیمی به عنوان زاپاس
+            # Attempt to use the old query_rewriter as a fallback
             from app.services.retrieval.query_rewriter import rewrite_query
             standalone_query = rewrite_query(user_input, chat_history)
 
-    # هدایت به تحلیلگر در صورت داشتن قصد محاسباتی یا نامرتبط بودن با اسناد عمومی RAG
+    # Route to the analyst when the query has computational intent or is irrelevant to general RAG documents
     is_analyst_intent = route_query_intent(standalone_query) == "analyst"
     if is_analyst_intent or structure_content != "$$$":
         logger.info(f"Running Analyst Agent (intent={is_analyst_intent}, structure={structure_content != '$$$'}) ...")
@@ -303,7 +303,7 @@ def synthesize_rag_response(
                 "is_safe": True
             }
 
-    # ۵. دسته‌بندی موضوعی بر اساس دسته‌بندی‌های دیتابیس (Check Categories)
+    # 5. Topic classification based on database categories (Check Categories)
     category_ids = []
     if getattr(settings.services, "check_categories", False):
         categories_list = _ttl_get("categories", _load_active_categories)
@@ -325,7 +325,7 @@ def synthesize_rag_response(
             except Exception as je:
                 logger.error(f"Error parsing categories JSON: {clean_json}. Error: {str(je)}")
 
-    # ۶. بررسی فیلدهای سفارشی‌سازی (Customization Configs)
+    # 6. Check customization fields (Customization Configs)
     customization_filters = None
     if getattr(settings.services, "customization", False):
         customization_fields = _ttl_get("customization_fields", _load_customization_fields)
@@ -345,8 +345,8 @@ def synthesize_rag_response(
                 if filter_values:
                     customization_filters = {"content": filter_values}
 
-    # ۷. بازیابی سه‌گانه منابع (Hybrid Search - QnA, General, Categorical)
-    # تولید امبدینگ پرسش فقط یک‌بار و استفاده مشترک در تمامی بازیابی‌ها
+    # 7. Triple resource retrieval (Hybrid Search - QnA, General, Categorical)
+    # Generate the query embedding only once and share it across all retrievals
     try:
         query_embedding = get_embedding_cached(standalone_query)
     except Exception:
@@ -402,7 +402,7 @@ def synthesize_rag_response(
             general_results = f_gen.result()
             categorical_results = f_cat.result()
 
-    # ادغام و رتبه‌بندی مجدد بر اساس شباهت کسینوسی (Rerank)
+    # Merge and rerank based on cosine similarity (Rerank)
     all_results = qna_results + general_results + categorical_results
     sorted_results = sorted(all_results, key=lambda x: x.get("similarity", 0), reverse=True)[:k]
 
@@ -421,7 +421,7 @@ def synthesize_rag_response(
             }
         logger.info("Zero relevant context retrieved. Hallucination guard disabled, proceeding with empty context.")
 
-    # مرتب‌سازی قطعات متوالی متعلق به یک سند بر اساس sequence_id (حفظ پیوستگی معنایی)
+    # Sort consecutive chunks belonging to the same document by sequence_id (preserving semantic continuity)
     seq_items = [item for item in sorted_results if item.get("file_id") and item.get("sequence_id")]
     other_items = [item for item in sorted_results if not (item.get("file_id") and item.get("sequence_id"))]
     seq_items_sorted = sorted(seq_items, key=lambda x: (x["file_id"], x["sequence_id"]))
@@ -458,7 +458,7 @@ def synthesize_rag_response(
 
     context_str = "\n\n".join(formatted_context_list)
 
-    # دریافت قوانین ممیزی
+    # Get the audit rules
     rules_list = []
     if settings.services.rule_extractor and active_file_id:
         conn = None
@@ -510,7 +510,7 @@ def synthesize_rag_response(
             logger.info("Responder LLM outputted refusal placeholder but guard is disabled. Returning as-is.")
             final_answer = final_answer if final_answer else "I don't have enough information to answer that."
 
-        # ممیزی قوانین
+        # Rules audit
         if settings.security.strict_non_hallucination:
             audit_result = lawyer_agent.audit_compliance(standalone_query, final_answer, active_file_id)
             if not audit_result.get("is_compliant", True):
@@ -562,16 +562,16 @@ async def synthesize_rag_response_stream(
 ) -> AsyncGenerator[dict, None]:
     """
     /// <summary>
-    /// نسخه streaming موتور RAG
+    /// Streaming version of the RAG engine
     /// </summary>
     """
     logger.info(f"Synthesizer (stream) received query from chat session. (Session ID: {session_id})")
 
-    # ۱. متصل کردن تاریخچه مکالمه
+    # 1. Connect the conversation history
     main_hist = _get_or_create_main(session_id)
     main_hist._messages = chat_history
 
-    # ۲. دروازه‌بان خوش‌آمدگویی
+    # 2. Greeting gatekeeper
     if getattr(settings.services, "greeting", False):
         g_chain = greeting_chain()
         greeting_response = g_chain.invoke(
@@ -589,7 +589,7 @@ async def synthesize_rag_response_stream(
             yield {"event": "token", "data": greeting_content}
             return
 
-    # ۳. دروازه‌بان تشخیص ارتباط با دامنه
+    # 3. Domain relevance gatekeeper
     structure_content = "$$$"
     if getattr(settings.services, "check_structure", False):
         tags_str = ", ".join(["سند حسابداری", "شماره سند", "حسابداری", "رسید بانکی", "وضعیت حساب", "سند مالی", "مالی", "بستانکار", "بدهکاری"])
@@ -603,7 +603,7 @@ async def synthesize_rag_response_stream(
         )
         structure_content = structure_response.content.strip()
 
-    # ۴. بازنویسی پرسش مستقل
+    # 4. Standalone query rewriting
     standalone_query = user_input
     if chat_history:
         try:
@@ -619,21 +619,21 @@ async def synthesize_rag_response_stream(
             from app.services.retrieval.query_rewriter import rewrite_query
             standalone_query = rewrite_query(user_input, chat_history)
 
-    # هدایت به تحلیلگر در صورت داشتن قصد محاسباتی یا نامرتبط بودن با اسناد عمومی RAG
+    # Route to the analyst when the query has computational intent or is irrelevant to general RAG documents
     is_analyst_intent = route_query_intent(standalone_query) == "analyst"
     if is_analyst_intent or structure_content != "$$$":
         logger.info(f"Running Analyst Agent in stream (intent={is_analyst_intent}, structure={structure_content != '$$$'}) ...")
         yield {"event": "sources", "data": [{"name": "accounting_data.csv", "page": "تحلیل آماری حسابداری"}]}
         
         final_answer = ""
-        # استریم کردن مراحل تفکر
+        # Stream the reasoning steps
         for step in analyst_agent.execute_analysis_stream(standalone_query):
             if step["type"] == "thought":
                 yield {"event": "token", "data": step["content"]}
             elif step["type"] == "final":
                 final_answer = step["content"]
 
-        # ارسال پاسخ نهایی
+        # Send the final response
         if "DOUBTFUL ANSWER" not in final_answer:
             yield {"event": "token", "data": final_answer}
         elif settings.security.strict_non_hallucination:
@@ -643,7 +643,7 @@ async def synthesize_rag_response_stream(
             yield {"event": "token", "data": final_answer}
         return
 
-    # ۵. دسته‌بندی موضوعی
+    # 5. Topic classification
     category_ids = []
     if getattr(settings.services, "check_categories", False):
         categories_list = _ttl_get("categories", _load_active_categories)
@@ -665,7 +665,7 @@ async def synthesize_rag_response_stream(
             except Exception as je:
                 logger.error(f"Error parsing categories JSON: {clean_json}. Error: {str(je)}")
 
-    # ۶. بررسی فیلدهای سفارشی‌سازی
+    # 6. Check customization fields
     customization_filters = None
     if getattr(settings.services, "customization", False):
         customization_fields = _ttl_get("customization_fields", _load_customization_fields)
@@ -685,7 +685,7 @@ async def synthesize_rag_response_stream(
                 if filter_values:
                     customization_filters = {"content": filter_values}
 
-    # ۷. بازیابی منابع (QnA, General, Categorical) — امبدینگ مشترک و اجرای موازی
+    # 7. Resource retrieval (QnA, General, Categorical) — shared embedding and parallel execution
     try:
         query_embedding = get_embedding_cached(standalone_query)
     except Exception:
@@ -741,7 +741,7 @@ async def synthesize_rag_response_stream(
             general_results = f_gen.result()
             categorical_results = f_cat.result()
 
-    # ادغام و رتبه‌بندی مجدد
+    # Merge and rerank
     all_results = qna_results + general_results + categorical_results
     sorted_results = sorted(all_results, key=lambda x: x.get("similarity", 0), reverse=True)[:k]
 
@@ -758,7 +758,7 @@ async def synthesize_rag_response_stream(
             return
         logger.info("Zero relevant context in stream, guard disabled. Proceeding with empty context.")
 
-    # حفظ پیوستگی معنایی
+    # Preserve semantic continuity
     seq_items = [item for item in sorted_results if item.get("file_id") and item.get("sequence_id")]
     other_items = [item for item in sorted_results if not (item.get("file_id") and item.get("sequence_id"))]
     seq_items_sorted = sorted(seq_items, key=lambda x: (x["file_id"], x["sequence_id"]))

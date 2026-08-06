@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// فایل تست خودکار و راستی‌آزمایی فاز ۸ آریونکس (ArioNex Phase 8 Verification Script)
+/// ArioNex Phase 8 automated test and verification file (ArioNex Phase 8 Verification Script)
 /// </summary>
 """
 
@@ -20,7 +20,7 @@ if hasattr(sys.stderr, "reconfigure"):
     except Exception:
         pass
 
-# اضافه کردن مسیر پروژه جهت شناسایی پکیج app
+# Add the project path so the app package can be detected
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
 from app.core.config import settings
@@ -32,7 +32,7 @@ from app.prompts.rag_prompts import STANDARD_REFUSAL_MESSAGE
 class TestPhase8Agents(unittest.TestCase):
     
     def setUp(self):
-        # فعال کردن دستی سرویس‌ها جهت تست
+        # Manually enable services for testing
         settings.services.entity_extractor = True
         settings.services.rule_extractor = True
         investigator_agent.is_enabled = True
@@ -42,23 +42,23 @@ class TestPhase8Agents(unittest.TestCase):
     def test_investigator_retrieval_and_formatting(self, mock_get_db):
         print("Testing Investigator retrieval and formatting...")
         
-        # شبیه‌سازی نتایج کوئری پایگاه داده
+        # Mock database query results
         mock_conn = MagicMock()
         mock_cur = MagicMock()
         mock_get_db.return_value = mock_conn
         mock_conn.cursor.return_value.__enter__.return_value = mock_cur
         
-        # شبیه‌سازی موجودیت‌ها در fetchall اول
+        # Mock entities in the first fetchall
         mock_cur.fetchall.side_effect = [
-            [("آریونکس", "ORGANIZATION", "دستیار هوشمند سازمانی")],  # موجودیت‌ها
-            [("مدیریت سیستم", "آریونکس", "EMPLOYEE_OF", "استخدام در سازمان")]  # روابط
+            [("آریونکس", "ORGANIZATION", "دستیار هوشمند سازمانی")],  # entities
+            [("مدیریت سیستم", "آریونکس", "EMPLOYEE_OF", "استخدام در سازمان")]  # relationships
         ]
         
         graph_context = investigator_agent.retrieve_graph_context("اطلاعات درباره شرکت آریونکس", file_id=1)
         
         print(f"Generated Graph Context:\n{graph_context}")
         
-        # بررسی صحت فرمت رندر شبه‌کد
+        # Verify the correctness of the pseudocode render format
         self.assertIn("[اطلاعات ساختاریافته گراف دانش]:", graph_context)
         self.assertIn('- موجودیت "آریونکس" از نوع "ORGANIZATION" است. (توضیحات: دستیار هوشمند سازمانی)', graph_context)
         self.assertIn('- "مدیریت سیستم" رابطه "EMPLOYEE_OF" دارد با "آریونکس". (توضیحات: استخدام در سازمان)', graph_context)
@@ -75,13 +75,13 @@ class TestPhase8Agents(unittest.TestCase):
         mock_get_db.return_value = mock_conn
         mock_conn.cursor.return_value.__enter__.return_value = mock_cur
         
-        # شبیه‌سازی COUNT(*) قوانین (۱) و سپس جزئیات قوانین
+        # Mock COUNT(*) of rules (1) and then the rule details
         mock_cur.fetchone.return_value = [1]
         mock_cur.fetchall.return_value = [
             ("RULE-CONF-2", "هرگونه افشای اطلاعات محرمانه تجاری بدون هماهنگی کتبی ممنوع است", "CONSTRAINT", "حفظ اسرار")
         ]
         
-        # ماک کردن LLM
+        # Mock the LLM
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         from langchain_core.messages import AIMessage
@@ -102,7 +102,7 @@ class TestPhase8Agents(unittest.TestCase):
             AIMessage(content=compliant_json)
         ]
         
-        # تست با پاسخ غیرمنطبق (نقض بحرانی حاوی کلمات کارت بانکی و رمز)
+        # Test with a non-compliant response (critical violation containing bank card and password words)
         non_compliant_response = "اطلاعات مالی محرمانه و رمز عبور شما فاش شد."
         audit_res = lawyer_agent.audit_compliance("سوال درباره رمز", non_compliant_response, file_id=1)
         
@@ -110,7 +110,7 @@ class TestPhase8Agents(unittest.TestCase):
         self.assertFalse(audit_res["is_compliant"])
         self.assertIn("RULE-CONF-2", audit_res["violations"])
         
-        # تست با پاسخ منطبق
+        # Test with a compliant response
         compliant_response = "کاربر گرامی، کلیه اطلاعات در امنیت کامل نگهداری می‌شوند."
         audit_res_ok = lawyer_agent.audit_compliance("سوال درباره امنیت", compliant_response, file_id=1)
         
@@ -129,7 +129,7 @@ class TestPhase8Agents(unittest.TestCase):
     def test_query_router_integration_compliance_blocking(self, mock_get_db, mock_lawyer, mock_investigator, mock_qna, mock_vector, mock_get_llm):
         print("Testing Query Router Integration & Compliance Blocking...")
         
-        # شبیه‌سازی دیتابیس در کل زنجیره RAG
+        # Mock the database throughout the entire RAG chain
         mock_conn = MagicMock()
         mock_cur = MagicMock()
         mock_get_db.return_value = mock_conn
@@ -138,7 +138,7 @@ class TestPhase8Agents(unittest.TestCase):
             ("RULE-CONF-2", "هرگونه افشای اطلاعات محرمانه تجاری بدون هماهنگی کتبی ممنوع است")
         ]
         
-        # شبیه‌سازی نتایج بازیابی
+        # Mock retrieval results
         mock_vector.retrieve_context.return_value = [{
             "content": "متن نمونه سند آریونکس",
             "label": "document.txt",
@@ -149,17 +149,17 @@ class TestPhase8Agents(unittest.TestCase):
         }]
         mock_qna.retrieve_context.return_value = []
         
-        # شبیه‌سازی Investigator
+        # Mock the Investigator
         mock_investigator.retrieve_graph_context.return_value = "[اطلاعات ساختاریافته گراف دانش]:\n- موجودیت آریونکس"
         
-        # ماک کردن LLM
+        # Mock the LLM
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
         from langchain_core.messages import AIMessage
         mock_llm.return_value = AIMessage(content="پاسخ نمونه تولید شده توسط هوش مصنوعی")
         mock_llm.invoke.return_value = AIMessage(content="پاسخ نمونه تولید شده توسط هوش مصنوعی")
         
-        # سناریو اول: عدم انطباق بحرانی (باید پاسخ بلاک شده و پیغام امتناع برگردد)
+        # First scenario: critical non-compliance (the answer must be blocked and a refusal message returned)
         mock_lawyer.audit_compliance.return_value = {
             "is_compliant": False,
             "violations": ["RULE-CONF-2"],
@@ -173,7 +173,7 @@ class TestPhase8Agents(unittest.TestCase):
         self.assertEqual(len(response["sources"]), 0)
         print("  Non-compliant response blocking check PASSED.")
         
-        # سناریو دوم: انطباق کامل (باید پاسخ تایید شده به همراه تگ گزارش انطباق برگردد)
+        # Second scenario: full compliance (the approved answer must be returned along with the compliance report tag)
         mock_lawyer.audit_compliance.return_value = {
             "is_compliant": True,
             "violations": [],

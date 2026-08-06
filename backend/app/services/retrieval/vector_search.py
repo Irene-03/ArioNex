@@ -1,12 +1,13 @@
 """
 /// <summary>
-/// عامل جستجوی برداری اسناد عمومی (ArioNex Vector Search Agent)
+/// General document vector search agent (ArioNex Vector Search Agent)
 /// </summary>
 /// <remarks>
-/// این ماژول جستجوی شباهت کسینوسی (Cosine Similarity Search) را روی امبدینگ‌های ۳۰۷۲ بعدی
-/// در جدول pg_supervisor و pg_dummy انجام می‌دهد و نتایج با فیلترهای داینامیک را استخراج می‌کند.
-/// این ماژول متادیتاهای فایل (مانند نام سند، آیدی فایل و شماره سکانس) را همراه با متن بازمی‌گرداند تا
-/// در بخش فرانت‌اند چت‌بات به صورت تگ‌های استناد دقیق (Source Tags) نمایش داده شوند.
+/// This module performs cosine similarity search on 3072-dimensional embeddings
+/// in the pg_supervisor and pg_dummy tables and extracts results with dynamic filters.
+/// It also returns file metadata (such as document name, file ID, and sequence number)
+/// alongside the text so it can be displayed as precise citation tags (Source Tags)
+/// in the chatbot frontend.
 /// </remarks>
 """
 
@@ -20,17 +21,17 @@ logger = logging.getLogger("arionex.vector_search")
 class VectorSearchAgent:
     """
     /// <summary>
-    /// کلاس عامل جستجوی برداری اسناد جهت بازیابی معنایی از pg_supervisor
+    /// Document vector search agent class for semantic retrieval from pg_supervisor
     /// </summary>
     """
     def __init__(self):
-        # بررسی روشن بودن کارگر اسناد در تنظیمات ویژگی‌ها
+        # Check whether the document worker is enabled in the feature settings
         self.is_enabled = settings.services.unstructured_document_processor
 
     def retrieve_categorical(self, query: str, threshold: float = 0.3, k: int = 5, file_ids: list[int] = None, embedding: list = None) -> list[dict]:
         """
         /// <summary>
-        /// بازیابی معنایی قطعات از جدول pg_supervisor با فیلتر دسته‌بندی / شناسه فایل
+        /// Semantic retrieval of chunks from the pg_supervisor table with category / file ID filtering
         /// </summary>
         """
         if not self.is_enabled:
@@ -97,7 +98,7 @@ class VectorSearchAgent:
     def retrieve_general(self, query: str, threshold: float = 0.3, k: int = 5, embedding: list = None) -> list[dict]:
         """
         /// <summary>
-        /// بازیابی معنایی قطعات عمومی از جدول pg_dummy
+        /// Semantic retrieval of general chunks from the pg_dummy table
         /// </summary>
         """
         if not self.is_enabled:
@@ -151,7 +152,7 @@ class VectorSearchAgent:
     def retrieve_context(self, query: str, threshold: float = 0.5, k: int = 4, file_ids: list[int] = None, embedding: list = None) -> list[dict]:
         """
         /// <summary>
-        /// بازیابی ترکیبی (سازگاری عقب‌رو)
+        /// Combined retrieval (backward compatibility)
         /// </summary>
         """
         categorical = self.retrieve_categorical(query, threshold=threshold, k=k, file_ids=file_ids, embedding=embedding)
@@ -162,6 +163,6 @@ class VectorSearchAgent:
         general = self.retrieve_general(query, threshold=threshold, k=remaining, embedding=embedding)
         return categorical + general
 
-# نمونه سراسری عامل جستجوی برداری اسناد
+# Global document vector search agent instance
 vector_search_agent = VectorSearchAgent()
 

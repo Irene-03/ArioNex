@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// فایل تست خودکار و راستی‌آزمایی فاز ۵ آریونکس (ArioNex Phase 5 Verification Script)
+/// ArioNex Phase 5 automated test and verification file (ArioNex Phase 5 Verification Script)
 /// </summary>
 """
 
@@ -9,7 +9,7 @@ import os
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-# اضافه کردن مسیر پروژه جهت شناسایی پکیج app
+# Add the project path so the app package can be detected
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
 from fastapi.testclient import TestClient
@@ -52,7 +52,7 @@ def test_fastapi_endpoints():
         }
         
         try:
-            # ۱. تست اندپوینت سلامت سیستم
+            # 1. Test the system health endpoint
             response = client.get("/health")
             print(f"GET /health: {response.status_code}")
             assert response.status_code == 200
@@ -60,7 +60,7 @@ def test_fastapi_endpoints():
             assert data["status"] == "online"
             assert "telegram_bot" in data["active_features"]
             
-            # ۲. تست دریافت فیچر تاگل‌ها
+            # 2. Test retrieving the feature toggles
             response = client.get("/v1/config")
             print(f"GET /v1/config: {response.status_code}")
             assert response.status_code == 200
@@ -68,7 +68,7 @@ def test_fastapi_endpoints():
             assert "services" in config_data
             assert "integrations" in config_data
             
-            # ۳. تست تغییر پویای تنظیمات
+            # 3. Test dynamic settings changes
             update_payload = {
                 "services": {"entity_extractor": True},
                 "integrations": {"telegram_bot": False}
@@ -79,21 +79,21 @@ def test_fastapi_endpoints():
             res_json = response.json()
             assert res_json["status"] == "success"
             
-            # بازیابی تنظیمات به حالت اولیه
+            # Restore settings to their initial state
             restore_payload = {
                 "services": {"entity_extractor": False},
                 "integrations": {"telegram_bot": True}
             }
             client.post("/v1/config", json=restore_payload)
             
-            # ۴. تست دریافت اسکریپت ابزارک چت وب‌سایت
+            # 4. Test retrieving the website chat widget script
             response = client.get("/v1/widget.js")
             print(f"GET /v1/widget.js: {response.status_code}")
             assert response.status_code == 200
             assert "arionex-widget-bubble" in response.text
             assert "application/javascript" in response.headers["content-type"]
             
-            # ۵. تست اندپوینت ثبت پیام ابزارک چت
+            # 5. Test the chat widget message endpoint
             chat_payload = {
                 "query": "مجموع بدهکاری اسناد نوع چک چقدر است؟",
                 "session_id": "test_widget_session"
@@ -105,7 +105,7 @@ def test_fastapi_endpoints():
             assert "answer" in chat_response
             assert "sources" in chat_response
             
-            # ۶. تست اندپوینت ثبت پرسش عمومی RAG
+            # 6. Test the general RAG query endpoint
             query_payload = {
                 "query": "قوانین استخدام شرکت چیست؟",
                 "session_id": "test_rest_session"
@@ -124,11 +124,11 @@ def test_telegram_bot_session_manager():
     print("Testing Telegram Bot Session Manager...")
     
     chat_id = 987654321
-    # پاکسازی تاریخچه تستی احتمالی
+    # Clear any possible test history
     history = get_chat_history(chat_id)
     history.clear()
     
-    # تست افزودن پیام به نشست کاربر
+    # Test adding a message to the user session
     update_chat_history(chat_id, "سلام", "درود بر شما")
     history = get_chat_history(chat_id)
     
@@ -136,7 +136,7 @@ def test_telegram_bot_session_manager():
     assert history[0]["Human"] == "سلام"
     assert history[1]["AI"] == "درود بر شما"
     
-    # تست محدودیت سقف تاریخچه به ۱۰ پیام اخیر
+    # Test the history cap limit to the latest 10 messages
     for i in range(15):
         update_chat_history(chat_id, f"سوال {i}", f"پاسخ {i}")
         
@@ -147,7 +147,7 @@ def test_telegram_bot_session_manager():
 async def test_telegram_bot_handlers():
     print("Testing Telegram Bot Async Handlers...")
     
-    # شبیه‌سازی (Mocking) آپدیت و کانتکست تلگرام
+    # Mock the Telegram update and context
     mock_update = MagicMock()
     mock_update.effective_chat.id = 123456789
     mock_update.message = MagicMock()
@@ -168,21 +168,21 @@ async def test_telegram_bot_handlers():
             "is_safe": True
         }
         
-        # ۱. تست هندلر استارت
+        # 1. Test the start handler
         await start_command(mock_update, mock_context)
         mock_update.message.reply_text.assert_called()
         welcome_call_args = mock_update.message.reply_text.call_args[0][0]
         assert "آریونکس" in welcome_call_args
         print("  Start Handler check PASSED.")
         
-        # ۲. تست هندلر راهنما
+        # 2. Test the help handler
         await help_command(mock_update, mock_context)
         mock_update.message.reply_text.assert_called()
         help_call_args = mock_update.message.reply_text.call_args[0][0]
         assert "راهنمای استفاده" in help_call_args
         print("  Help Handler check PASSED.")
         
-        # ۳. تست هندلر پیام‌های متنی و اتصال به موتور RAG
+        # 3. Test the text message handler and connection to the RAG engine
         mock_update.message.reply_text = AsyncMock()
         await message_handler(mock_update, mock_context)
         mock_update.message.reply_text.assert_called()
@@ -195,7 +195,7 @@ async def test_telegram_bot_handlers():
 async def test_telegram_lifecycle_and_safety():
     print("Testing Telegram Bot Lifecycle & Safety Airlock...")
     
-    # شبیه‌سازی پکیج‌های پایتون-تلگرام-بات جهت ممانعت از ارسال اتصالات واقعی
+    # Mock the python-telegram-bot packages to prevent sending real connections
     with patch("app.services.integrations.telegram_bot.ApplicationBuilder") as mock_builder:
         mock_app = MagicMock()
         mock_app.initialize = AsyncMock()
@@ -205,7 +205,7 @@ async def test_telegram_lifecycle_and_safety():
         
         mock_builder.return_value.token.return_value.build.return_value = mock_app
         
-        # تست روشن بودن فیچر و بالا آمدن موفق ربات
+        # Test the feature being enabled and the bot starting up successfully
         settings.telegram_bot_token = "mock_token_123"
         settings.integrations.telegram_bot = True
         
@@ -216,7 +216,7 @@ async def test_telegram_lifecycle_and_safety():
         mock_app.updater.start_polling.assert_called_once()
         print("  Bot Startup sequence completed without blocking.")
         
-        # تست خاموش شدن موفق ربات
+        # Test the bot shutting down successfully
         mock_app.stop = AsyncMock()
         mock_app.shutdown = AsyncMock()
         mock_app.updater.stop = AsyncMock()
@@ -238,7 +238,7 @@ if __name__ == "__main__":
         test_fastapi_endpoints()
         test_telegram_bot_session_manager()
         
-        # اجرای هندلرهای async در لوپ رویداد جاری
+        # Run the async handlers in the current event loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(test_telegram_bot_handlers())

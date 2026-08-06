@@ -12,7 +12,7 @@ logger = logging.getLogger("arionex.toggleable_services")
 class RuleExtractorWorker:
     """
     /// <summary>
-    /// کارگر هوشمند استخراج قوانین کسب‌وکار و آیین‌نامه‌ها از متون خام اسناد (Rule Extractor)
+    /// Smart worker that extracts business rules and regulations from raw document texts (Rule Extractor)
     /// </summary>
     """
     def __init__(self):
@@ -21,7 +21,7 @@ class RuleExtractorWorker:
     def extract_rules(self, text: str, file_id: Optional[int] = None) -> list:
         """
         /// <summary>
-        /// شناسایی و استخراج بندهای قانونی و شروط انطباق با استفاده از LLM یا Fallback Mock
+        /// Identify and extract legal clauses and compliance conditions using an LLM or a Mock fallback
         /// </summary>
         """
         if not self.is_enabled:

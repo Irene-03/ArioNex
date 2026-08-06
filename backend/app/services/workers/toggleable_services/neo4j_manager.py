@@ -7,7 +7,7 @@ logger = logging.getLogger("arionex.toggleable_services")
 class Neo4jDatabaseManager:
     """
     /// <summary>
-    /// مدیر ارتباط با پایگاه داده گرافی نئوفورجی (Neo4j Graph Database Manager)
+    /// Manager for connecting to the Neo4j graph database (Neo4j Graph Database Manager)
     /// </summary>
     """
     def __init__(self):
@@ -19,7 +19,7 @@ class Neo4jDatabaseManager:
     def insert_relationship(self, source: str, relation: str, target: str) -> bool:
         """
         /// <summary>
-        /// درج یک یال ارتباطی گرافی در پایگاه داده Neo4j
+        /// Insert a graph relationship edge into the Neo4j database
         /// </summary>
         """
         if not self.is_enabled:

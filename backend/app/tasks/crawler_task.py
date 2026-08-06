@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// تسک‌های Celery برای پردازش پس‌زمینه کرالر وب (Celery Crawler Tasks)
+/// Celery tasks for background web crawler processing (Celery Crawler Tasks)
 /// </summary>
 """
 
@@ -28,11 +28,11 @@ def run_crawler_task(
 ):
     """
     /// <summary>
-    /// تسک اجرای ناهمزمان کرالر وب با Celery
+    /// Task that runs the web crawler asynchronously with Celery
     /// </summary>
     /// <remarks>
-    /// از asyncio.run مستقیم استفاده می‌شود که در worker‌های Celery
-    /// (که هیچ event loop فعالی ندارند) ایمن‌ترین روش است.
+    /// Uses asyncio.run directly, which is the safest approach in Celery workers
+    /// (which have no active event loop).
     /// </remarks>
     """
     logger.info(f"Celery task started for crawler job_id: {job_id}")

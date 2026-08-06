@@ -50,7 +50,7 @@ logger.setLevel(logging.DEBUG)
 
 class RotateProxyMiddleware:
     """
-    Middleware برای چرخش پروکسی در هر درخواست Scrapy
+    Middleware for rotating the proxy on every Scrapy request
     """
     def process_request(self, request, spider):
         prx = _proxy_provider.get_proxy()
@@ -61,8 +61,8 @@ class RotateProxyMiddleware:
 
 class PlaywrightMiddleware:
     """
-    Middleware برای رندر کردن صفحات JavaScript با Playwright.
-    به صورت سنکرون اجرا می‌شود تا با Twisted/Scrapy سازگار باشد.
+    Middleware for rendering JavaScript pages with Playwright.
+    It runs synchronously to stay compatible with Twisted/Scrapy.
     """
     async def process_request(self, request, spider):
         if not getattr(spider, 'js_render', False):
@@ -79,8 +79,8 @@ class PlaywrightMiddleware:
         prx = _proxy_provider.get_proxy()
 
         try:
-            # با توجه به اینکه reactor از نوع AsyncioSelectorReactor است،
-            # مستقیماً await می‌کنیم و از توابع thread/block استفاده نمی‌کنیم.
+            # Since the reactor is an AsyncioSelectorReactor,
+            # we await directly and do not use thread/blocking functions.
             html = await _fetch_page_js(request.url, proxy=prx, user_agent=ua)
 
             if html:
@@ -93,7 +93,7 @@ class PlaywrightMiddleware:
         except Exception as e:
             spider.logger.warning(f"Playwright JS render failed for {request.url}: {str(e)}")
 
-        # Fallback به درخواست HTTP معمولی
+        # Fallback to a normal HTTP request
         return None
 
 
@@ -127,14 +127,14 @@ class ArioNexSpider(scrapy.Spider):
     @classmethod
     def from_crawler(cls, crawler, *args, **kwargs):
         """
-        اتصال به سیگنال‌های Scrapy برای مدیریت چرخه حیات اسپایدر
+        Connect to Scrapy signals to manage the spider lifecycle.
         """
         spider = super().from_crawler(crawler, *args, **kwargs)
         crawler.signals.connect(spider.spider_closed, signal=signals.spider_closed)
         return spider
 
     def spider_closed(self, spider, reason):
-        """لاگ کردن دلیل بسته شدن اسپایدر"""
+        """Log the reason the spider was closed."""
         self.logger.info(
             f"Spider closed. Reason: {reason}. "
             f"Pages crawled: {self.pages_crawled}, "
@@ -170,8 +170,8 @@ class ArioNexSpider(scrapy.Spider):
 
     def _check_cancellation(self) -> bool:
         """
-        بررسی لغو شدن job با کش کردن نتایج برای کاهش بار دیتابیس.
-        هر 10 صفحه یک بار به دیتابیس مراجعه می‌کند.
+        Check whether the job has been cancelled, caching results to reduce database load.
+        It queries the database once every 10 pages.
         """
         if self.is_cancelled:
             return True
@@ -184,14 +184,14 @@ class ArioNexSpider(scrapy.Spider):
 
     def start_requests(self):
         """
-        تولید درخواست اولیه - بدون استفاده از asyncio.create_task
-        که با Scrapy/Twisted ناسازگار است.
+        Generate the initial request - without using asyncio.create_task,
+        which is incompatible with Scrapy/Twisted.
         """
         for url in self.start_urls:
             yield scrapy.Request(url, callback=self.parse)
 
     def parse(self, response):
-        # بررسی لغو در هر parse
+        # Check for cancellation on every parse
         if self._check_cancellation():
             self.logger.info("Cancellation detected during page parse. Closing spider...")
             self.crawler.engine.close_spider(self, reason="cancelled")
@@ -204,7 +204,7 @@ class ArioNexSpider(scrapy.Spider):
 
         page_url = response.url
 
-        # اسکیپ کردن فایل‌های غیر-HTML (تصاویر، PDF و ...)
+        # Skip non-HTML files (images, PDFs, etc.)
         from app.services.workers.crawler.utils import _is_skippable_url
         if _is_skippable_url(page_url):
             self.logger.debug(f"Skipping non-HTML URL: {page_url}")
@@ -293,11 +293,11 @@ class ArioNexSpider(scrapy.Spider):
 
 def create_scrapy_settings(concurrency: int, respect_robots: bool, jobdir_path: str, delay_s: float) -> Settings:
     """
-    ایجاد تنظیمات Scrapy بدون نیاز به ساختار پروژه Scrapy (بدون get_project_settings)
+    Create Scrapy settings without needing a Scrapy project structure (no get_project_settings)
     """
     scrapy_settings = Settings()
 
-    # تنظیم reactor برای سازگاری با asyncio
+    # Configure the reactor for asyncio compatibility
     scrapy_settings.set(
         'TWISTED_REACTOR',
         'twisted.internet.asyncioreactor.AsyncioSelectorReactor',
@@ -308,32 +308,32 @@ def create_scrapy_settings(concurrency: int, respect_robots: bool, jobdir_path: 
         'https': 'scrapy.core.downloader.handlers.http11.HTTP11DownloadHandler',
     }, priority='project')
 
-    # تنظیمات همزمانی
+    # Concurrency settings
     scrapy_settings.set('CONCURRENT_REQUESTS', concurrency, priority='project')
     scrapy_settings.set('CONCURRENT_REQUESTS_PER_DOMAIN', concurrency, priority='project')
 
-    # رعایت robots.txt
+    # Respect robots.txt
     scrapy_settings.set('ROBOTSTXT_OBEY', respect_robots, priority='project')
 
-    # مسیر ذخیره وضعیت برای قابلیت Resume
+    # Job directory path to support Resume
     scrapy_settings.set('JOBDIR', jobdir_path, priority='project')
 
-    # تأخیر بین درخواست‌ها
+    # Delay between requests
     scrapy_settings.set('DOWNLOAD_DELAY', delay_s, priority='project')
 
-    # غیرفعال کردن محدودیت عمق برای کنترل دستی توسط اسپایدر
+    # Disable the depth limit so the spider can control it manually
     scrapy_settings.set('DEPTH_LIMIT', 0, priority='project')
 
-    # تنظیم middleware‌ها
+    # Configure middlewares
     scrapy_settings.set('DOWNLOADER_MIDDLEWARES', {
         RotateProxyMiddleware: 100,
         PlaywrightMiddleware: 200,
     }, priority='project')
 
-    # غیرفعال کردن کوکی‌ها برای پایداری بیشتر
+    # Disable cookies for more stability
     scrapy_settings.set('COOKIES_ENABLED', False, priority='project')
 
-    # تنظیم User-Agent پیش‌فرض
+    # Set a default User-Agent
     scrapy_settings.set('USER_AGENT', random.choice(_USER_AGENTS), priority='project')
 
     return scrapy_settings
@@ -360,7 +360,7 @@ def main():
     os.makedirs(jobs_dir, exist_ok=True)
     jobdir_path = os.path.join(jobs_dir, args.job_id)
 
-    # ساخت تنظیمات Scrapy بدون get_project_settings
+    # Build Scrapy settings without get_project_settings
     respect_robots_bool = args.respect_robots.lower() == "true"
     concurrency_int = int(args.concurrency)
     delay_s = settings.crawler.request_delay_ms / 1000.0

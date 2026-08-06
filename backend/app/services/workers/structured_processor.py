@@ -1,12 +1,12 @@
 """
 /// <summary>
-/// پردازشگر فایل‌های داده ساختاریافته و حسابداری (Structured Data Ingestion Worker)
+/// Structured and accounting data files ingestion worker
 /// </summary>
 /// <remarks>
-/// این ماژول صفحات گسترده حاوی کدهای تراکنش و حسابداری سازمان را مدیریت می‌کند.
-/// فایل‌های آپلود شده ابتدا اعتبارسنجی شده، در آبجکت استوریج مینی‌او یا فایل‌سیستم محلی بایگانی شده،
-/// و سپس هر سطر به عنوان یک chunk در pg_supervisor ایندکس می‌شود تا در RAG جستجوی معنایی انجام شود.
-/// همچنین مسیر معتبر جهت دسترسی مفسر پانداس (Analyst Agent) ثبت می‌گردد.
+/// This module manages spreadsheets containing the organization's transaction and accounting codes.
+/// Uploaded files are first validated, archived in the MinIO object storage or the local file system,
+/// and then each row is indexed as a chunk in pg_supervisor so semantic search can be performed in RAG.
+/// A valid path is also registered for access by the pandas interpreter (Analyst Agent).
 /// </remarks>
 """
 
@@ -26,22 +26,22 @@ logger = logging.getLogger("arionex.structured_processor")
 class StructuredDataProcessor:
     """
     /// <summary>
-    /// کلاس مدیریت و اعتبارسنجی فایل‌های ساختاریافته مالی و حسابداری
+    /// Management and validation class for structured financial and accounting files
     /// </summary>
     """
     def __init__(self):
-        # بررسی روشن بودن ماژول از تنظیمات
+        # Check whether the module is enabled in the settings
         self.is_enabled = settings.services.structured_data_analytics
 
     def process_structured_csv(self, temp_file_path: str, original_filename: str, file_id: int) -> dict:
         """
         /// <summary>
-        /// اعتبارسنجی ساختار CSV، آپلود به MinIO و ایندکس هر سطر در pgvector برای جستجوی معنایی
+        /// Validate the CSV structure, upload to MinIO, and index each row in pgvector for semantic search
         /// </summary>
-        /// <param name="temp_file_path">مسیر فیزیکی فایل آپلود شده موقت</param>
-        /// <param name="original_filename">نام اصلی سند</param>
-        /// <param name="file_id">شناسه عددی فایل</param>
-        /// <returns>یک دیکشنری شامل وضعیت موفقیت و اطلاعات ستون‌ها</returns>
+        /// <param name="temp_file_path">Physical path of the temporary uploaded file</param>
+        /// <param name="original_filename">Original document name</param>
+        /// <param name="file_id">Numeric file identifier</param>
+        /// <returns>A dictionary containing the success status and column information</returns>
         """
         if not self.is_enabled:
             logger.warning(f"Structured Data Ingestion is disabled in config.yaml. Skipping file: {original_filename}")
@@ -49,7 +49,7 @@ class StructuredDataProcessor:
 
         logger.info(f"Starting structured data ingestion pipeline for: {original_filename} (ID: {file_id})")
 
-        # ۱. اعتبارسنجی اولیه ساختار داده با پانداس جهت تضمین سلامت تراکنش‌ها
+        # 1. Initial data structure validation with pandas to guarantee transaction integrity
         try:
             try:
                 df = pd.read_csv(temp_file_path, encoding="utf-8")
@@ -63,7 +63,7 @@ class StructuredDataProcessor:
             logger.error(f"Structured data validation failed: {str(e)}")
             raise ValueError(f"Invalid or corrupted CSV format: {str(e)}")
 
-        # ۲. آپلود فایل فیزیکی اصلی به مینی‌او جهت ارجاع تحلیلگر (Analyst Agent)
+        # 2. Upload the original physical file to MinIO for reference by the analyst (Analyst Agent)
         try:
             object_name = f"structured/{file_id}/{original_filename}"
             archive_url = storage_manager.upload_file(object_name, temp_file_path, "text/csv")
@@ -72,7 +72,7 @@ class StructuredDataProcessor:
             logger.error(f"Archiving structured spreadsheet failed: {str(e)}")
             archive_url = "fallback_local"
 
-        # ۳. ایندکس هر سطر در pgvector برای جستجوی معنایی RAG
+        # 3. Index each row in pgvector for RAG semantic search
         chunks_indexed = 0
         pii_masked_count = 0
         conn = None
@@ -80,7 +80,7 @@ class StructuredDataProcessor:
             conn = get_db_connection()
             with conn.cursor() as cur:
                 for idx, row in df.iterrows():
-                    # فرمت‌بندی هر سطر به صورت "col1: val1 | col2: val2 | ..."
+                    # Format each row as "col1: val1 | col2: val2 | ..."
                     row_parts = []
                     for col in columns_list:
                         val = str(row[col]).strip()
@@ -92,17 +92,17 @@ class StructuredDataProcessor:
 
                     raw_chunk = " | ".join(row_parts)
 
-                    # نرمال‌سازی متون فارسی
+                    # Normalize the Persian texts
                     normalized_chunk = normalize_text(raw_chunk)
 
-                    # اعمال PII Redaction در صورت فعال بودن
+                    # Apply PII Redaction if enabled
                     if settings.security.pii_redaction:
                         final_chunk, pii_audit = redact_and_audit(normalized_chunk)
                         pii_masked_count += sum(pii_audit.values())
                     else:
                         final_chunk = normalized_chunk
 
-                    # تولید embedding با fallback صفر
+                    # Generate the embedding with a zero fallback
                     try:
                         embedding = get_embedding(final_chunk)
                     except Exception as emb_err:
@@ -143,15 +143,15 @@ class StructuredDataProcessor:
     def get_local_path_for_analysis(self, file_id: int, filename: str) -> str:
         """
         /// <summary>
-        /// دریافت آدرس فیزیکی فایل روی سرور جهت تغذیه به موتور پانداس و LangGraph
+        /// Get the file's physical address on the server to feed the pandas and LangGraph engine
         /// </summary>
-        /// <param name="file_id">شناسه سند</param>
-        /// <param name="filename">نام فایل</param>
-        /// <returns>یک رشته شامل مسیر فیزیکی محلی برای خواندن فایل</returns>
+        /// <param name="file_id">Document identifier</param>
+        /// <param name="filename">File name</param>
+        /// <returns>A string containing the local physical path for reading the file</returns>
         """
         object_name = f"structured/{file_id}/{filename}"
 
-        # در صورت فعال بودن لایه Fallback محلی، مسیر فیزیکی را مستقیما برمی‌گردانیم
+        # If the local Fallback layer is enabled, return the physical path directly
         if storage_manager.is_fallback:
             local_path = os.path.join(LOCAL_FALLBACK_DIR, object_name)
             if os.path.exists(local_path):
@@ -159,7 +159,7 @@ class StructuredDataProcessor:
             else:
                 raise FileNotFoundError(f"Local spreadsheet file not found at: {local_path}")
         else:
-            # در صورتی که فایل روی مینی‌او باشد، آن را موقتا به پوشه محلی دانلود می‌کنیم
+            # If the file is on MinIO, temporarily download it to the local folder
             local_temp_path = os.path.join(LOCAL_FALLBACK_DIR, object_name)
             os.makedirs(os.path.dirname(local_temp_path), exist_ok=True)
 
@@ -170,5 +170,5 @@ class StructuredDataProcessor:
                 logger.error(f"Failed to fetch file from MinIO to local analysis environment: {str(e)}")
                 raise e
 
-# شیء سراسری پردازشگر و اعتبارسنج اسناد مالی ساختاریافته
+# Global processor and validator object for structured financial documents
 structured_processor = StructuredDataProcessor()

@@ -1,16 +1,16 @@
 """
 /// <summary>
-/// تشخیص‌دهنده هوشمند نوع فایل‌های CSV (ArioNex Smart CSV Type Detector)
+/// Smart CSV file type detector (ArioNex Smart CSV Type Detector)
 /// </summary>
 /// <remarks>
-/// این ماژول با خواندن چند ردیف اول فایل CSV، تشخیص می‌دهد که فایل حاوی
-/// الگوهای پرسش‌و‌پاسخ (QnA) است یا داده‌های ساختاریافته مالی/حسابداری.
+/// This module reads the first few rows of a CSV file to determine whether it contains
+/// question-and-answer (QnA) patterns or structured financial/accounting data.
 ///
-/// منطق تشخیص:
-///   - اگر هر یک از ستون‌ها شامل کلمه "question"، "answer"، "سوال" یا "پاسخ" باشد → QnA
-///   - در غیر این صورت → Structured (مالی/حسابداری)
+/// Detection logic:
+///   - If any column contains the word "question", "answer", or a Persian QnA keyword (e.g. "Sual", "Pasokh") → QnA
+///   - Otherwise → Structured (financial/accounting)
 ///
-/// این helper از endpoint آپلود استخراج شده تا قابل تست مستقل و استفاده مجدد باشد.
+/// This helper was extracted from the upload endpoint so it can be tested independently and reused.
 /// </remarks>
 """
 
@@ -19,31 +19,31 @@ from typing import Literal
 
 logger = logging.getLogger("arionex.csv_detector")
 
-# نوع CSV قابل بازگشت
+# Returnable CSV type
 CsvType = Literal["qna", "structured"]
 
 
 def detect_csv_type(file_path: str) -> CsvType:
     """
     /// <summary>
-    /// تشخیص هوشمند نوع CSV بر اساس عنوان ستون‌ها (QnA در مقابل داده ساختاریافته)
+    /// Smart CSV type detection based on column headers (QnA vs. structured data)
     /// </summary>
-    /// <param name="file_path">مسیر کامل فایل CSV آپلود شده روی سرور</param>
-    /// <returns>"qna" اگر فایل الگوی پرسش‌وپاسخ دارد، "structured" در غیر این صورت</returns>
+    /// <param name="file_path">Full path of the CSV file uploaded to the server</param>
+    /// <returns>"qna" if the file follows a Q&A pattern, "structured" otherwise</returns>
     /// <remarks>
-    /// برای بهینه‌سازی، فقط ۵ ردیف اول خوانده می‌شود (nrows=5).
-    /// تطابق با زبان فارسی و انگلیسی ستون‌ها هر دو پشتیبانی می‌شود.
-    /// در صورت بروز هرگونه خطا در خواندن CSV، "structured" به عنوان پیش‌فرض ایمن برمی‌گردد.
+    /// For performance, only the first 5 rows are read (nrows=5).
+    /// Matching of both Persian and English column headers is supported.
+    /// On any error while reading the CSV, "structured" is returned as a safe default.
     /// </remarks>
     """
     try:
         import pandas as pd
 
-        # خواندن فقط header جهت کارایی بالا
+        # Read only the header for high performance
         df = pd.read_csv(file_path, nrows=5)
         cols_lower = [str(c).lower().strip() for c in df.columns]
 
-        # بررسی کلمات کلیدی QnA در نام ستون‌ها (فارسی + انگلیسی)
+        # Check QnA keywords in column names (Persian + English)
         is_qna = any(
             "question" in c
             or "answer" in c

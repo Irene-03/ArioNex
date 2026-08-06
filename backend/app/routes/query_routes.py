@@ -1,14 +1,14 @@
 """
 /// <summary>
-/// روتر پرسش RAG آریونکس — POST /v1/query (ArioNex RAG Query Router)
+/// ArioNex RAG Query Router — POST /v1/query (ArioNex RAG Query Router)
 /// </summary>
 /// <remarks>
-/// این ماژول اندپوینت اصلی پرسش‌وپاسخ RAG را تعریف می‌کند.
-/// منطق کامل پردازش در query_logic.py قرار دارد — این فایل فقط تعریف route است.
+/// This module defines the main RAG Q&A endpoint.
+/// The full processing logic lives in query_logic.py — this file only defines routes.
 ///
-/// اندپوینت‌ها:
-///   POST /v1/query         — دریافت پرسش کاربر و بازگرداندن پاسخ RAG (یکجا)
-///   POST /v1/query/stream  — پاسخ RAG به صورت Server-Sent Events (SSE) — توکن به توکن
+/// Endpoints:
+///   POST /v1/query         — accept a user query and return the RAG answer (one-shot)
+///   POST /v1/query/stream  — RAG answer as Server-Sent Events (SSE) — token by token
 /// </remarks>
 """
 
@@ -33,7 +33,7 @@ async def process_rag_query(
 ):
     """
     /// <summary>
-    /// اندپوینت اصلی ارسال پرسش به دستیار هوشمند RAG (پاسخ یکجا)
+    /// Main endpoint for sending a query to the smart RAG assistant (one-shot answer)
     /// </summary>
     """
     return await execute_query_logic(request, current_user)
@@ -51,9 +51,9 @@ async def stream_rag_query(
 ):
     """
     /// <summary>
-    /// اندپوینت streaming پرسش RAG — مناسب برای UIهای چت زنده
+    /// RAG query streaming endpoint — suitable for live chat UIs
     /// </summary>
-    /// <returns>StreamingResponse با media-type text/event-stream</returns>
+    /// <returns>StreamingResponse with media-type text/event-stream</returns>
     """
     return StreamingResponse(
         execute_query_stream_logic(request, current_user, http_request),

@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// قالب‌های پرامپت مسیریابی پرسش‌های ورودی آریونکس (ArioNex Query Router Prompt Templates)
+/// ArioNex prompt templates for routing incoming queries (ArioNex Query Router Prompt Templates)
 /// </summary>
 """
 

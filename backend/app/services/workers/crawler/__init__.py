@@ -1,22 +1,22 @@
 """
 /// <summary>
-/// ماژول کرالر وب آریونکس
+/// ArioNex Web Crawler module
 /// </summary>
 /// <remarks>
-/// از lazy loading برای جلوگیری از مشکلات circular import استفاده می‌کند.
+/// Uses lazy loading to avoid circular import problems.
 /// </remarks>
 """
 
 from app.services.workers.crawler.engine import CrawlerService
 
-# ایجاد instance به صورت lazy
+# Create the instance lazily
 _crawler_service = None
 
 
 def get_crawler_service() -> CrawlerService:
     """
-    دریافت instance سرویس کرالر با lazy loading.
-    از این الگو برای جلوگیری از مشکلات import در زمان startup استفاده می‌شود.
+    Get the crawler service instance with lazy loading.
+    This pattern is used to avoid import problems at startup time.
     """
     global _crawler_service
     if _crawler_service is None:
@@ -24,7 +24,7 @@ def get_crawler_service() -> CrawlerService:
     return _crawler_service
 
 
-# برای سازگاری با کدهای قبلی که مستقیماً crawler_service را import می‌کنند
+# For compatibility with previous code that imports crawler_service directly
 crawler_service = get_crawler_service()
 
 __all__ = ['CrawlerService', 'crawler_service', 'get_crawler_service']

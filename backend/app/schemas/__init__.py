@@ -1,7 +1,7 @@
 # -------------------------------------------------------
-# بسته schema های Pydantic آریونکس (ArioNex Pydantic Schemas Package)
+# ArioNex Pydantic Schemas Package (ArioNex Pydantic Schemas Package)
 # -------------------------------------------------------
-# تمامی مدل‌های درخواست و پاسخ API از این بسته import می‌شوند.
-# جداسازی schema از endpoint باعث می‌شود مدل‌ها قابل استفاده مجدد باشند.
+# All API request and response models are imported from this package.
+# Separating schemas from endpoints makes the models reusable.
 from .query_schemas import QueryRequest, QueryResponse
 from .config_schemas import ConfigUpdateRequest

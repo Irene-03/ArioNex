@@ -1,16 +1,17 @@
 """
 /// <summary>
-/// موتور ایمنی و ماسک‌گذاری خودکار اطلاعات حساس شخصی (PII Redactor Safety Airlock)
+/// Automatic masking and safety engine for sensitive personal information (PII Redactor Safety Airlock)
 /// </summary>
 /// <remarks>
-/// این ماژول وظیفه پایش و سانسور کردن اطلاعات شخصی حساس کاربران (کد ملی، شماره تلفن همراه،
-/// ایمیل، شماره کارت‌های بانکی، شماره شبا و حساب) را با الگوهای منظم عبارات باقاعده بر عهده دارد
-/// تا از ورود ناخواسته دیتای کاربری حساس به پایگاه برداری ممانعت شود.
+/// This module is responsible for monitoring and censoring users' sensitive personal information
+/// (national ID, mobile phone number, email, bank card numbers, IBAN and account numbers)
+/// using regular expression patterns, so that unwanted sensitive user data is prevented from
+/// entering the vector database.
 ///
-/// برای جلوگیری از ماسک‌گذاری بیش از حد (False Positive)، الگوهای پرتکرار عددی (کد ملی و شماره
-/// کارت بانکی) با الگوریتم‌های اعتبارسنجی چک‌سام و لوهن فیلتر می‌شوند؛ یعنی فقط اعدادی که
-/// ساختار واقعی کد ملی ایرانی یا شماره کارت بانکی دارند ماسک می‌شوند و کدهای تراکنش، شناسه
-/// سفارش و مقادیر عددی عادی دست‌نخورده باقی می‌مانند.
+/// To prevent over-masking (False Positive), high-frequency numeric patterns (national ID and
+/// bank card number) are filtered using the check-sum and Luhn validation algorithms; that is,
+/// only numbers that have the actual structure of an Iranian national ID or bank card number
+/// are masked, while transaction codes, order IDs and ordinary numeric values remain untouched.
 /// </remarks>
 """
 
@@ -21,10 +22,10 @@ from typing import Callable, Dict, Tuple
 logger = logging.getLogger("arionex.pii_redactor")
 
 # ------------------------------------------------------------------
-# اعتبارسنج‌های ساختاری جهت کاهش مثبت‌های کاذب
+# Structural validators to reduce false positives
 # ------------------------------------------------------------------
 def _is_valid_national_id(value: str) -> bool:
-    """اعتبارسنجی کد ملی ایرانی با الگوریتم چک‌سام (Mod 11)."""
+    """Validate Iranian national ID with the check-sum (Mod 11) algorithm."""
     digits = re.sub(r"\D", "", value)
     if len(digits) != 10 or digits[0] == "0":
         return False
@@ -38,7 +39,7 @@ def _is_valid_national_id(value: str) -> bool:
 
 
 def _is_valid_card_number(value: str) -> bool:
-    """اعتبارسنجی شماره کارت بانکی با الگوریتم لوهن (Luhn)."""
+    """Validate bank card number with the Luhn algorithm."""
     digits = re.sub(r"\D", "", value)
     if len(digits) != 16:
         return False
@@ -52,31 +53,31 @@ def _is_valid_card_number(value: str) -> bool:
     return total % 10 == 0
 
 
-# تعریف الگوهای عبارات منظم برای شناسایی اطلاعات حساس ایرانی و بین‌المللی
+# Regular expression patterns for identifying sensitive Iranian and international information
 PII_PATTERNS: Dict[str, str] = {
-    # کد ملی ده رقمی ایرانی (بررسی ۱۰ رقم متوالی عددی)
+    # Iranian ten-digit national ID (checking 10 consecutive numeric digits)
     "national_id": r"\b\d{10}\b|\b\d{3}-\d{6}-\d\b",
 
-    # شماره تلفن همراه ایرانی (نظیر 09123456789 یا +989123456789 یا 00989123456789)
+    # Iranian mobile phone number (e.g., 09123456789 or +989123456789 or 00989123456789)
     "mobile_number": r"\b(?:0098|\+98|0)?9\d{9}\b",
 
-    # شماره کارت بانکی ۱۶ رقمی (با یا بدون خط فاصله و فاصله معمولی)
+    # 16-digit bank card number (with or without hyphen and regular space)
     "card_number": r"\b\d{16}\b|\b(?:\d{4}[- ]){3}\d{4}\b",
 
-    # شماره شبا بانکی ایران (شامل پیشوند IR و ۲۴ رقم متوالی)
+    # Iranian bank IBAN number (including the IR prefix and 24 consecutive digits)
     "iban_number": r"\bIR\d{24}\b|\bIR\d{2}[- ]?(?:\d{4}[- ]?){5}\d{2}\b",
 
-    # آدرس پست الکترونیکی (ایمیل عمومی)
+    # Email address (general email)
     "email_address": r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b"
 }
 
-# اعتبارسنج‌های ساختاری — فقط تطابق‌هایی که از این توابع عبور کنند ماسک می‌شوند
+# Structural validators — only matches passing through these functions are masked
 PII_VALIDATORS: Dict[str, Callable[[str], bool]] = {
     "national_id": _is_valid_national_id,
     "card_number": _is_valid_card_number,
 }
 
-# تعاریف برچسب‌های جایگزین فارسی جهت نمایش شکیل در خروجی داشبورد و پیش‌نمایش
+# Persian replacement tag definitions for polished display in the dashboard output and preview
 MASK_TAGS: Dict[str, str] = {
     "national_id": "[کد ملی]",
     "mobile_number": "[شماره تلفن همراه]",
@@ -87,7 +88,7 @@ MASK_TAGS: Dict[str, str] = {
 
 
 def _mask_matches(text: str, key: str, pattern: str, tag: str, validator: Callable[[str], bool]) -> Tuple[str, int]:
-    """یافتن تطابق‌های معتبر الگو و جایگزینی آن‌ها با برچسب ماسک."""
+    """Find valid pattern matches and replace them with the mask tag."""
     hits = [
         match for match in re.finditer(pattern, text)
         if validator is None or validator(match.group(0))
@@ -100,10 +101,10 @@ def _mask_matches(text: str, key: str, pattern: str, tag: str, validator: Callab
 def redact_text(text: str) -> str:
     """
     /// <summary>
-    /// ماسک‌گذاری خودکار تمامی فیلدهای اطلاعاتی حساس یافت شده در متن خام
+    /// Automatically mask all sensitive information fields found in the raw text
     /// </summary>
-    /// <param name="text">متن نرمال‌سازی شده خام</param>
-    /// <returns>متن نهایی سانسور شده و امن جهت ایندکس در دیتابیس برداری</returns>
+    /// <param name="text">Raw normalized text</param>
+    /// <returns>Final sanitized and secure text ready for indexing in the vector database</returns>
     """
     redacted, _ = redact_and_audit(text)
     return redacted
@@ -112,10 +113,10 @@ def redact_text(text: str) -> str:
 def redact_and_audit(text: str) -> Tuple[str, Dict[str, int]]:
     """
     /// <summary>
-    /// ماسک‌گذاری متن خام به همراه شمارش دقیق تعداد موجودیت‌های پنهان شده جهت گزارش به پنل ادمین
+    /// Mask the raw text along with an accurate count of the hidden entities for reporting to the admin panel
     /// </summary>
-    /// <param name="text">متن ورودی</param>
-    /// <returns>یک توپل شامل متن سانسور شده و دیکشنری تعداد سانسورها به تفکیک مدل</returns>
+    /// <param name="text">Input text</param>
+    /// <returns>A tuple containing the sanitized text and a dictionary of masking counts per model</returns>
     """
     if not text:
         return "", {}

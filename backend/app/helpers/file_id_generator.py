@@ -1,19 +1,19 @@
 """
 /// <summary>
-/// مولد شناسه فایل‌های آپلود شده (ArioNex File ID Generator)
+/// Generator of IDs for uploaded files (ArioNex File ID Generator)
 /// </summary>
 /// <remarks>
-/// این ماژول یک شمارنده thread-safe برای تولید شناسه‌های منحصر‌به‌فرد فایل‌های آپلود شده
-/// فراهم می‌کند. این شمارنده به عنوان جایگزین موقت sequence دیتابیس در مرحله توسعه استفاده می‌شود.
+/// This module provides a thread-safe counter for generating unique IDs for uploaded files.
+/// It is used as a temporary replacement for the database sequence during development.
 ///
-/// نکته مهم: در محیط تولید، باید از SERIAL/SEQUENCE پستگرس یا UUID استفاده شود.
-/// شمارنده فعلی در حافظه نگهداری می‌شود و پس از restart سرور reset می‌شود.
+/// Important: in production, use PostgreSQL SERIAL/SEQUENCE or UUID instead.
+/// The current counter is kept in memory and resets after a server restart.
 /// </remarks>
 """
 
 import threading
 
-# شمارنده سراسری با lock برای thread-safety
+# Global counter with a lock for thread-safety
 _lock = threading.Lock()
 _file_id_counter: int = 100
 _initialized: bool = False
@@ -22,7 +22,7 @@ _initialized: bool = False
 def get_next_file_id() -> int:
     """
     /// <summary>
-    /// تولید شناسه یکتای افزایشی برای فایل‌های آپلود شده
+    /// Generates a unique incremental ID for uploaded files
     /// </summary>
     """
     global _file_id_counter, _initialized
@@ -38,7 +38,7 @@ def get_next_file_id() -> int:
                 conn.close()
                 _initialized = True
             except Exception:
-                # در صورت عدم امکان دسترسی به دیتابیس در زمان شروع، با مقدار پیش‌فرض ادامه بده
+                # If the database cannot be reached at startup, continue with the default value
                 pass
                 
         _file_id_counter += 1

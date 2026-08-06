@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// روتر مدیریت اسناد و سطح دسترسی‌ها (ArioNex Knowledge Base ACL Router)
+/// ArioNex Knowledge Base ACL Router (ArioNex Knowledge Base ACL Router)
 /// </summary>
 /// <remarks>
-/// این ماژول امکان مشاهده لیست اسناد بارگذاری شده را بر اساس نقش کاربر فراهم ساخته
-/// و به مدیران اجازه تغییر سطح دسترسی و حذف اسناد را می‌دهد.
+/// This module lets users view the list of uploaded documents based on their role,
+/// and allows admins to change access levels and delete documents.
 /// </remarks>
 """
 
@@ -45,6 +45,8 @@ class KnowledgeStatsResponse(BaseModel):
     other_count: int
     disk_usage_gb: float
     total_tokens_used: int
+    input_tokens_used: int = 0
+    output_tokens_used: int = 0
 
 # -------------------------------------------------------------------
 # Endpoints
@@ -55,7 +57,7 @@ async def get_knowledge_stats(user: dict = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            # ۱. تعداد کل اسناد دارای قطعات ایندکس شده (رکوردهای یتیم و بدون chunk حذف می‌شوند)
+            # 1. Total number of documents with indexed chunks (orphan records without chunks are excluded)
             cur.execute(
                 """
                 SELECT COUNT(*) FROM documents d
@@ -65,7 +67,7 @@ async def get_knowledge_stats(user: dict = Depends(get_current_user)):
             )
             total_documents = cur.fetchone()[0]
 
-            # ۲. تعداد قطعات در pg_supervisor و qna_query (فقط مربوط به اسناد ثبت شده)
+            # 2. Number of chunks in pg_supervisor and qna_query (only for registered documents)
             cur.execute(
                 "SELECT COUNT(*) FROM pg_supervisor WHERE file_id IN (SELECT id FROM documents)"
             )
@@ -76,11 +78,11 @@ async def get_knowledge_stats(user: dict = Depends(get_current_user)):
             chunks_qna = cur.fetchone()[0]
             total_chunks = chunks_sup + chunks_qna
 
-            # ۳. تعداد پرسش‌های امروز
+            # 3. Number of today's queries
             cur.execute("SELECT COUNT(*) FROM pg_audit_logs WHERE timestamp >= CURRENT_DATE")
             total_queries_today = cur.fetchone()[0]
 
-            # ۴. میانگین زمان پاسخ RAG (امروز — هماهنگ با total_queries_today)
+            # 4. Average RAG response time (today — in sync with total_queries_today)
             cur.execute(
                 "SELECT COALESCE(AVG(response_time_ms), 0) FROM pg_audit_logs "
                 "WHERE response_time_ms > 0 AND timestamp >= CURRENT_DATE"
@@ -88,15 +90,19 @@ async def get_knowledge_stats(user: dict = Depends(get_current_user)):
             avg_response_ms = cur.fetchone()[0]
             average_response_time = round(float(avg_response_ms) / 1000.0, 1)
 
-            # ۵. تعداد کل PIIهای ماسک شده — جمع واقعی ثبت‌شده هنگام آپلود هر سند
+            # 5. Total masked PII count — actual sum recorded at upload time of each document
             cur.execute("SELECT COALESCE(SUM(pii_masked_count), 0) FROM documents")
             total_pii_masked = cur.fetchone()[0]
 
-            # ۵.۱ توکن‌های مصرفی
+            # 5.1 Tokens consumed
             cur.execute("SELECT COALESCE(SUM(total_tokens), 0) FROM pg_audit_logs")
             total_tokens_used = cur.fetchone()[0]
+            cur.execute("SELECT COALESCE(SUM(input_tokens), 0) FROM pg_audit_logs")
+            input_tokens_used = cur.fetchone()[0]
+            cur.execute("SELECT COALESCE(SUM(output_tokens), 0) FROM pg_audit_logs")
+            output_tokens_used = cur.fetchone()[0]
 
-            # ۶. تفکیک فرمت‌ها (فقط اسناد دارای chunk)
+            # 6. Format breakdown (only documents with chunks)
             indexed_sql = """
                 AND (SELECT COUNT(*) FROM pg_supervisor s WHERE s.file_id = d.id) +
                     (SELECT COUNT(*) FROM qna_query q WHERE q.file_id = d.id) > 0
@@ -110,7 +116,7 @@ async def get_knowledge_stats(user: dict = Depends(get_current_user)):
             cur.execute(f"SELECT COUNT(*) FROM documents d WHERE file_type NOT IN ('pdf', 'PDF', 'csv', 'CSV', 'xlsx', 'XLSX') {indexed_sql}")
             other_count = cur.fetchone()[0]
 
-            # ۷. تخمین حجم دیسک (مثلاً هر چانک ۱۵ کیلوبایت در دیتابیس)
+            # 7. Estimate disk usage (e.g., each chunk is 15 kilobytes in the database)
             disk_usage_gb = round((total_chunks * 15) / (1024 * 1024), 3)
 
             return KnowledgeStatsResponse(
@@ -123,7 +129,9 @@ async def get_knowledge_stats(user: dict = Depends(get_current_user)):
                 csv_excel_count=csv_excel_count,
                 other_count=other_count,
                 disk_usage_gb=disk_usage_gb,
-                total_tokens_used=total_tokens_used
+                total_tokens_used=total_tokens_used,
+                input_tokens_used=input_tokens_used,
+                output_tokens_used=output_tokens_used
             )
     except Exception as e:
         logger.error(f"Failed to fetch knowledge stats: {str(e)}")
@@ -139,8 +147,8 @@ async def list_documents(user: dict = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            # فقط اسنادی که واقعاً قطعات برداری ایندکس شده دارند برمی‌گردد.
-            # رکوردهای قدیمی و یتیم (بدون هیچ chunk) نمایش داده نمی‌شوند.
+            # Only documents that actually have indexed vector chunks are returned.
+            # Old and orphan records (without any chunk) are not shown.
             role_filter = "AND d.min_role_required = 'Analyst'" if role != "Admin" else ""
             cur.execute(
                 f"""
@@ -206,7 +214,7 @@ async def update_document_role(
                 raise HTTPException(status_code=404, detail="سند مورد نظر یافت نشد.")
             conn.commit()
 
-            # محاسبه تعداد قطعات ایندکس شده برای پاسخ سازگار
+            # Count indexed chunks for a consistent response
             cur.execute(
                 """
                 SELECT (SELECT COUNT(*) FROM pg_supervisor s WHERE s.file_id = %s) +
@@ -241,7 +249,7 @@ async def delete_document(file_id: int, admin: dict = Depends(require_admin)):
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            # بررسی وجود فایل
+            # Check the file exists
             cur.execute("SELECT filename FROM documents WHERE id = %s", (file_id,))
             row = cur.fetchone()
             if not row:
@@ -249,17 +257,17 @@ async def delete_document(file_id: int, admin: dict = Depends(require_admin)):
             
             filename = row[0]
             
-            # حذف چانک‌های متنی از pg_supervisor
+            # Delete text chunks from pg_supervisor
             cur.execute("DELETE FROM pg_supervisor WHERE file_id = %s", (file_id,))
-            # حذف چانک‌های FAQ از qna_query
+            # Delete FAQ chunks from qna_query
             cur.execute("DELETE FROM qna_query WHERE file_id = %s", (file_id,))
-            # حذف استخراج‌های دانش و ممیزی‌ها
+            # Delete knowledge extractions and audits
             cur.execute("DELETE FROM extracted_entities WHERE file_id = %s", (file_id,))
             cur.execute("DELETE FROM extracted_relationships WHERE file_id = %s", (file_id,))
             cur.execute("DELETE FROM extracted_rules WHERE file_id = %s", (file_id,))
             cur.execute("DELETE FROM compliance_audit_logs WHERE file_id = %s", (file_id,))
             
-            # حذف نهایی از جدول documents
+            # Final deletion from the documents table
             cur.execute("DELETE FROM documents WHERE id = %s", (file_id,))
             
             conn.commit()

@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// فایل تست خودکار و راستی‌آزمایی امنیت و پیکربندی‌های سیستم (Security & Hardening Tests)
+/// Automated test and verification file for system security and configurations (Security & Hardening Tests)
 /// </summary>
 """
 
@@ -11,7 +11,7 @@ import json
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
-# اضافه کردن مسیر پروژه جهت شناسایی پکیج app
+# Add the project path so the app package can be detected
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend"))
 
 from app.main import app

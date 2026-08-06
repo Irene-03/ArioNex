@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// مدیریت و چرخش پروکسی‌ها (Proxy Rotation & Provider Abstraction)
+/// Proxy management and rotation (Proxy Rotation & Provider Abstraction)
 /// </summary>
 /// <remarks>
-/// این ماژول ساختار منعطف و انتزاعی برای مدیریت پروکسی‌ها فراهم می‌کند.
-/// شامل اینترفیس BaseProxyProvider و کلاس StaticListProxyProvider.
+/// This module provides a flexible, abstract structure for managing proxies.
+/// It includes the BaseProxyProvider interface and the StaticListProxyProvider class.
 /// </remarks>
 """
 
@@ -19,16 +19,16 @@ logger = logging.getLogger("arionex.proxy_helper")
 class BaseProxyProvider(ABC):
     """
     /// <summary>
-    /// کلاس انتزاعی پایه برای تامین پروکسی (Abstract Base Proxy Provider)
+    /// Abstract base class for providing proxies (Abstract Base Proxy Provider)
     /// </summary>
     """
     @abstractmethod
     def get_proxy(self) -> Optional[str]:
         """
         /// <summary>
-        /// دریافت آدرس یک پروکسی به صورت چرخشی یا تصادفی
+        /// Gets a proxy address in a rotating or random manner
         /// </summary>
-        /// <returns>آدرس پروکسی به صورت رشته یا None</returns>
+        /// <returns>Proxy address as a string or None</returns>
         """
         pass
 
@@ -36,7 +36,7 @@ class BaseProxyProvider(ABC):
     def report_failure(self, proxy: str) -> None:
         """
         /// <summary>
-        /// گزارش عدم پاسخ‌دهی پروکسی برای اهداف آماری یا حذف موقت
+        /// Reports a non-responsive proxy for statistical purposes or temporary removal
         /// </summary>
         """
         pass
@@ -45,11 +45,11 @@ class BaseProxyProvider(ABC):
 class StaticListProxyProvider(BaseProxyProvider):
     """
     /// <summary>
-    /// تأمین‌کننده پروکسی بر اساس لیست دستی استاتیک لود شده از کانفیگ
+    /// Proxy provider based on a static manual list loaded from configuration
     /// </summary>
     """
     def __init__(self, proxies: List[str]):
-        # پاکسازی آدرس پروکسی‌ها
+        # Clean proxy addresses
         self.proxies = [p.strip() for p in proxies if p and p.strip()]
         self.failed_proxies: set = set()
         self._lock = threading.Lock()
@@ -59,26 +59,26 @@ class StaticListProxyProvider(BaseProxyProvider):
         with self._lock:
             if not self.proxies:
                 return None
-            # حذف پروکسی‌های ناموفق از لیست انتخاب
+            # Exclude failed proxies from the selection list
             available = [p for p in self.proxies if p not in self.failed_proxies]
             if not available:
-                # اگر همه پروکسی‌ها ناموفق بودند، ریست می‌کنیم
+                # If all proxies have failed, reset the list
                 logger.warning("All proxies have failed. Resetting failed proxies list.")
                 self.failed_proxies.clear()
                 available = self.proxies.copy()
-            # انتخاب تصادفی پروکسی برای توزیع بار
+            # Random proxy selection for load distribution
             selected = random.choice(available)
             logger.debug(f"Rotating proxy selected: {selected}")
             return selected
 
     def report_failure(self, proxy: str) -> None:
-        """ثبت thread-safe یک پروکسی ناموفق"""
+        """Thread-safely records a failed proxy"""
         with self._lock:
             self.failed_proxies.add(proxy)
             logger.warning(f"Proxy marked as failed: {proxy}. Total failed: {len(self.failed_proxies)}/{len(self.proxies)}")
 
     def reset_failures(self) -> None:
-        """ریست کردن لیست پروکسی‌های ناموفق"""
+        """Resets the list of failed proxies"""
         with self._lock:
             self.failed_proxies.clear()
             logger.info("Proxy failure list has been reset.")

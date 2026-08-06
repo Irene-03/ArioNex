@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// عامل حقوقدان و ممیز انطباق قوانین (The Lawyer - Compliance & Constraint Auditing Agent)
+/// Legal counsel and rule compliance auditor agent (The Lawyer - Compliance & Constraint Auditing Agent)
 /// </summary>
 /// <remarks>
-/// این عامل پاسخ‌های نهایی تولید شده را در برابر قوانین کسب‌وکار استخراج شده از سند ممیزی می‌کند.
-/// در صورت وجود هرگونه عدم انطباق با سیاست‌های سازمانی، نقض قانون را گزارش نموده و لاگ ممیزی را ثبت می‌کند.
+/// This agent audits the generated final responses against the business rules extracted from the audit document.
+/// If any non-compliance with organizational policies is found, it reports the rule violation and records an audit log.
 /// </remarks>
 """
 
@@ -22,17 +22,17 @@ logger = logging.getLogger("arionex.lawyer")
 class LawyerAgent:
     """
     /// <summary>
-    /// کلاس عامل حقوقدان جهت ممیزی و پایش انطباق پاسخ‌ها با قوانین سازمانی
+    /// Legal counsel agent class for auditing and monitoring compliance of responses with organizational rules
     /// </summary>
     """
     def __init__(self):
-        # این عامل بر اساس فعال بودن ماژول استخراج قوانین کار می‌کند
+        # This agent operates based on whether the rule extraction module is enabled
         self.is_enabled = settings.services.rule_extractor
 
     def get_rules_count(self, file_id: Optional[int] = None) -> int:
         """
         /// <summary>
-        /// دریافت تعداد قوانین ثبت شده برای یک سند جهت تصمیم‌گیری در مورد اجرای ممیز
+        /// Get the number of rules registered for a document to decide whether to run the auditor
         /// </summary>
         """
         conn = None
@@ -54,17 +54,17 @@ class LawyerAgent:
     def audit_compliance(self, query: str, response: str, file_id: Optional[int] = None) -> dict:
         """
         /// <summary>
-        /// ممیزی انطباق پاسخ تولیدی با قوانین سازمان به صورت متوالی (Sequential LLM Audit)
+        /// Audit the generated response's compliance with organizational rules sequentially (Sequential LLM Audit)
         /// </summary>
-        /// <param name="query">سوال کاربر</param>
-        /// <param name="response">پاسخ پیشنهادی سیستم</param>
-        /// <param name="file_id">شناسه سند مربوطه</param>
-        /// <returns>دیکشنری شامل وضعیت انطباق، جزئیات نقض قوانین، و گزارش متنی</returns>
+        /// <param name="query">User question</param>
+        /// <param name="response">System's proposed response</param>
+        /// <param name="file_id">Related document ID</param>
+        /// <returns>Dictionary containing compliance status, rule violation details, and a text report</returns>
         /// </summary>
         """
-        # Soft Enable: حتی اگر toggle خاموش باشد، اگر قوانین در دیتابیس موجود باشند ممیزی را اجرا می‌کنیم
+        # Soft Enable: even if the toggle is off, we run the audit if rules exist in the database
         if not self.is_enabled:
-            # بررسی سریع وجود قوانین کلی قبل از skip کردن
+            # Quickly check for any overall rules before skipping
             try:
                 conn_check = get_db_connection()
                 with conn_check.cursor() as cur:
@@ -77,7 +77,7 @@ class LawyerAgent:
             except Exception:
                 return {"is_compliant": True, "violations": [], "audit_report": ""}
 
-        # ۱. بررسی سریع وجود قوانین برای این فایل (بای‌پاس سریع در صورت نبود قانون)
+        # 1. Quickly check whether rules exist for this file (fast bypass if there are no rules)
         rules_count = self.get_rules_count(file_id)
         if rules_count == 0:
             logger.info(f"[The Lawyer] No compliance rules found for file_id={file_id}. Bypassing audit.")
@@ -85,7 +85,7 @@ class LawyerAgent:
 
         logger.info(f"[The Lawyer] Initiating compliance audit. Found {rules_count} rules for file_id={file_id}.")
 
-        # ۲. بازیابی بندهای قانونی از دیتابیس
+        # 2. Retrieve legal clauses from the database
         rules = []
         conn = None
         try:
@@ -105,13 +105,13 @@ class LawyerAgent:
                     })
         except Exception as e:
             logger.error(f"[The Lawyer] Database error during rules retrieval: {str(e)}")
-            # در صورت بروز خطای دیتابیس، برای ایمنی دسترسی را مجاز فرض می‌کنیم تا سیستم قفل نشود
+            # On database error, assume access is allowed for safety so the system is not locked up
             return {"is_compliant": True, "violations": [], "audit_report": ""}
         finally:
             if conn:
                 conn.close()
 
-        # فرمت‌دهی قوانین جهت تزریق به پرامپت
+        # Format the rules for injection into the prompt
         formatted_rules = []
         for r in rules:
             formatted_rules.append(
@@ -119,13 +119,13 @@ class LawyerAgent:
             )
         rules_str = "\n\n".join(formatted_rules)
 
-        # ۳. فراخوانی LLM جهت ارزیابی انطباق پاسخ
+        # 3. Call the LLM to evaluate response compliance
         audit_result = {"is_compliant": True, "violations": [], "audit_report": ""}
         
         try:
-            llm = get_llm(temperature=0.0)  # دمای صفر برای دریافت نتیجه قطعی
+            llm = get_llm(temperature=0.0)  # zero temperature for a definitive result
             
-            # پرامپت ممیز حقوقی
+            # Legal auditor prompt
             audit_prompt = f"""You are an expert enterprise compliance auditor (The Lawyer). Your job is to loosely audit the proposed RESPONSE.
 
 JSON format:
@@ -152,7 +152,7 @@ PROPOSED RESPONSE:
         except Exception as e:
             logger.error(f"[The Lawyer] LLM auditing failed: {str(e)}. Defaulting to compliant for safety.")
 
-        # ۴. ذخیره گزارش ممیزی در جدول compliance_audit_logs جهت مانیتورینگ ادمین
+        # 4. Save the audit report in the compliance_audit_logs table for admin monitoring
         conn = None
         try:
             conn = get_db_connection()
@@ -184,5 +184,5 @@ PROPOSED RESPONSE:
 
         return audit_result
 
-# نمونه سراسری جهت استفاده در RAG
+# Global instance for use in RAG
 lawyer_agent = LawyerAgent()

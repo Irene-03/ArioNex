@@ -1,16 +1,16 @@
 """
 /// <summary>
-/// قالب‌های پرامپت زنجیره بازیابی و پاسخ‌دهی RAG آریونکس (ArioNex RAG Prompt Templates)
+/// ArioNex RAG retrieval and response chain prompt templates (ArioNex RAG Prompt Templates)
 /// </summary>
 /// <remarks>
-/// این ماژول قالب‌های پرامپت مورد استفاده در دو مرحله کلیدی زنجیره RAG را نگهداری می‌کند:
-///   ۱. بازنویسی مستقل پرسش (Standalone Query Rewriter) — جلوگیری از ابهام ارجاعی در چت‌های متوالی
-///   ۲. پاسخ‌دهنده نهایی با استناد به منابع (Context-Aware Responder) — همراه با قانون عدم توهم
+/// This module holds the prompt templates used in the two key stages of the RAG chain:
+///   1. Standalone query rewriting (Standalone Query Rewriter) — prevents referential ambiguity in consecutive chats
+///   2. Final responder citing sources (Context-Aware Responder) — with a no-hallucination rule
 /// </remarks>
 """
 
 # -------------------------------------------------------------------
-# ۱. پرامپت بازنویسی مستقل پرسش (Standalone Query Rewriter)
+# 1. Standalone query rewriting prompt (Standalone Query Rewriter)
 # -------------------------------------------------------------------
 STANDALONE_TEMPLATE = """You are an assistant that rewrite the **User Input** to be independent of any prior chat history.
 
@@ -26,7 +26,7 @@ Rewritten standalone question:
 """
 
 # -------------------------------------------------------------------
-# ۲. پرامپت پاسخ‌دهنده نهایی RAG با استناد به منابع (RAG Responder)
+# 2. RAG final responder prompt citing sources (RAG Responder)
 # -------------------------------------------------------------------
 RESPONDER_TEMPLATE = """System Instruction:
 {system_instruction}
@@ -54,7 +54,7 @@ AI Assistant Response:
 """
 
 # -------------------------------------------------------------------
-# ۲-ب. پرامپت پاسخ‌دهنده بدون قانون سخت‌گیرانه (Open Responder - no #### guard)
+# 2-b. Responder prompt without the strict rule (Open Responder - no #### guard)
 # -------------------------------------------------------------------
 RESPONDER_TEMPLATE_OPEN = """System Instruction:
 {system_instruction}
@@ -81,12 +81,12 @@ AI Assistant Response:
 """
 
 # -------------------------------------------------------------------
-# ۳. متن امتناع استاندارد فارسی (Standard Persian Refusal Message)
+# 3. Standard Persian refusal text (Standard Persian Refusal Message)
 # -------------------------------------------------------------------
 STANDARD_REFUSAL_MESSAGE = "منابع استفاده‌شده اطلاعات کافی و مناسبی درباره‌ی پرسش شما ارائه نمی‌دهند."
 
 # -------------------------------------------------------------------
-# ۴. پرامپت خوش‌آمدگویی و احوالپرسی (Greeting Prompt)
+# 4. Greeting and salutation prompt (Greeting Prompt)
 # -------------------------------------------------------------------
 GREETING_TEMPLATE = """You are an AI assistant named {assistant_name}.If the **User Input** is only greeting, farewell, thank you message respond naturally in Persian and mention that you can assist with answering questions in {assistant_field}.
 Otherwise, return exactly this text: "####".
@@ -98,7 +98,7 @@ AI Assistant:
 """
 
 # -------------------------------------------------------------------
-# ۵. پرامپت بررسی ساختار ارتباط با دامنه (Check Structure Prompt)
+# 5. Prompt for checking relevance to the domain (Check Structure Prompt)
 # -------------------------------------------------------------------
 CHECK_STRUCTURE_TEMPLATE = """You are a Tag Relevance Judge. Given a **User Input** and an authoritative **Tags List**, decide whether the input is related to at least one tag.
 
@@ -126,7 +126,7 @@ AI Assistant:
 """
 
 # -------------------------------------------------------------------
-# ۶. پرامپت دسته‌بندی موضوعی اسناد (Check Categories Prompt)
+# 6. Topic categorization prompt for documents (Check Categories Prompt)
 # -------------------------------------------------------------------
 CHECK_CATEGORIES_TEMPLATE = """You are a classification assistant. Given a **User Input** and a **Categories List** (array of objects with fields `category_id` (int) and `category_name` (string)), select all category objects that clearly match the user’s intent.
 
@@ -156,7 +156,7 @@ Output format (strict, DO NOT add json formatting):
 """
 
 # -------------------------------------------------------------------
-# ۷. پرامپت انطباق و فیلتر سفارشی (Customization Template)
+# 7. Custom matching and filtering prompt (Customization Template)
 # -------------------------------------------------------------------
 CUSTOMIZATION_TEMPLATE = """You are a name matching assistant. Your job is to match names from the **User Input** to the **Name List** with high accuracy.
 

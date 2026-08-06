@@ -7,7 +7,7 @@ logger = logging.getLogger("arionex.toggleable_services")
 class LocalGemmaSafetyAuditor:
     """
     /// <summary>
-    /// بازرس امنیتی و ممیزی سوالات مبتنی بر هوش مصنوعی محلی (Local Gemma-2b Auditor)
+    /// Local AI-based safety auditor that inspects and audits questions (Local Gemma-2b Auditor)
     /// </summary>
     """
     def __init__(self):

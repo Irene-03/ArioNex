@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// قالب‌های پرامپت استخراج معنایی موجودیت‌ها، روابط و قوانین (ArioNex Semantic Extractor Prompt Templates)
+/// Prompt templates for semantic extraction of entities, relationships, and rules (ArioNex Semantic Extractor Prompt Templates)
 /// </summary>
 """
 

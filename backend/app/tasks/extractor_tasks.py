@@ -1,6 +1,6 @@
 """
 /// <summary>
-/// تسک‌های Celery برای پردازش پس‌زمینه استخراج موجودیت‌ها و قوانین (Celery Knowledge Extraction Tasks)
+/// Celery tasks for background extraction of entities and rules (Celery Knowledge Extraction Tasks)
 /// </summary>
 """
 
@@ -15,12 +15,12 @@ logger = logging.getLogger("arionex.extractor_tasks")
 def run_knowledge_extraction_pipeline_task(text: str, file_id: int, run_entities: bool, run_rules: bool):
     """
     /// <summary>
-    /// تسک واحد پس‌زمینه برای انجام کل خط لوله استخراج دانش (موجودیت‌ها و قوانین) از سند با تقسیم‌بندی معنایی
+    /// Single background task that runs the entire knowledge extraction pipeline (entities and rules) from a document with semantic segmentation
     /// </summary>
     """
     logger.info(f"Celery knowledge extraction pipeline task started for file_id={file_id}")
     
-    # وارد کردن تابع تقسیم‌بندی به صورت داینامیک جهت ممانعت از Circular Import
+    # Import the segmentation function dynamically to avoid Circular Import
     from app.services.workers.unstructured_processor import split_into_semantic_windows
     
     text_windows = split_into_semantic_windows(text, window_size=3000, overlap=500)
@@ -29,15 +29,15 @@ def run_knowledge_extraction_pipeline_task(text: str, file_id: int, run_entities
     for idx, window in enumerate(text_windows):
         logger.info(f"Processing semantic window {idx + 1}/{len(text_windows)} for file_id={file_id}...")
         
-        # استخراج موجودیت‌ها
+        # Extract entities
         if run_entities:
             try:
                 entity_extractor_worker.extract_entities(window, file_id)
             except Exception as e:
                 logger.error(f"Failed to extract entities at window {idx + 1} for file_id={file_id}: {str(e)}")
-                # ادامه پردازش بقیه تکه‌ها حتی در صورت شکست یک تکه
+                # Continue processing the remaining windows even if one window fails
                 
-        # استخراج قوانین
+        # Extract rules
         if run_rules:
             try:
                 rule_extractor_worker.extract_rules(window, file_id)

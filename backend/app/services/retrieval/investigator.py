@@ -1,10 +1,11 @@
 """
 /// <summary>
-/// عامل بازپرس گراف (The Investigator - Graph RAG Retrieval Agent)
+/// Graph investigator agent (The Investigator - Graph RAG Retrieval Agent)
 /// </summary>
 /// <remarks>
-/// این عامل وظیفه استخراج موجودیت‌های کلیدی از پرسش کاربر، انطباق آن‌ها با جداول رابطه گرافی Postgres
-/// و Neo4j، بازیابی گره‌ها و یال‌های مرتبط، و رندر کردن آن‌ها به فرمت متنی ساختاریافته شبه‌کد جهت تزریق به RAG را دارد.
+/// This agent extracts key entities from the user's question, matches them against the Postgres graph
+/// relationship tables and Neo4j, retrieves the related nodes and edges, and renders them into a structured
+/// pseudo-code text format for injection into RAG.
 /// </remarks>
 """
 
@@ -21,27 +22,27 @@ logger = logging.getLogger("arionex.investigator")
 class InvestigatorAgent:
     """
     /// <summary>
-    /// کلاس عامل بازپرس گراف جهت بازیابی هوشمند کانتکست ساختاریافته گرافی
+    /// Graph investigator agent class for intelligent retrieval of structured graph context
     /// </summary>
     """
     def __init__(self):
-        # این عامل بر اساس فعال بودن ماژول استخراج موجودیت کار می‌کند
+        # This agent operates based on whether the entity extraction module is enabled
         self.is_enabled = settings.services.entity_extractor
 
     def retrieve_graph_context(self, query: str, file_id: Optional[int] = None, max_entities: int = 5) -> str:
         """
         /// <summary>
-        /// بازیابی موجودیت‌ها و روابط گرافی مرتبط با پرسش از دیتابیس و فرمت‌دهی آن‌ها
+        /// Retrieve the graph entities and relationships relevant to the question from the database and format them
         /// </summary>
-        /// <param name="query">پرسش مستقل کاربر</param>
-        /// <param name="file_id">شناسه عددی فایل جهت فیلتر نتایج (اختیاری)</param>
-        /// <param name="max_entities">حداکثر تعداد موجودیت‌های انتخابی</param>
-        /// <returns>رشته کانتکست ساختاریافته گرافی به زبان فارسی</returns>
+        /// <param name="query">User's standalone question</param>
+        /// <param name="file_id">Numeric file ID used to filter results (optional)</param>
+        /// <param name="max_entities">Maximum number of selected entities</param>
+        /// <returns>Structured graph context string in Persian</returns>
         /// </summary>
         """
-        # Soft Enable: حتی اگر toggle خاموش باشد، اگر داده در دیتابیس وجود داشته باشد کار می‌کنیم
+        # Soft Enable: even if the toggle is off, we work if data exists in the database
         if not self.is_enabled:
-            # بررسی وجود داده پیش از skip کردن کامل
+            # Check whether data exists before skipping entirely
             try:
                 conn_check = get_db_connection()
                 with conn_check.cursor() as cur:
@@ -58,7 +59,7 @@ class InvestigatorAgent:
 
         logger.info(f"[The Investigator] Extracting graph context for query: '{query}' (file_id={file_id})")
 
-        # ۱. استخراج کلمات و توکن‌های پرسش جهت انطباق
+        # 1. Extract query words and tokens for matching
         words = [w.strip() for w in re.split(r"[\s،,.;()?!]+", query) if len(w.strip()) > 2]
         if not words:
             return ""
@@ -66,13 +67,13 @@ class InvestigatorAgent:
         entities = []
         relationships = []
 
-        # ۲. بازیابی موجودیت‌های منطبق از PostgreSQL
+        # 2. Retrieve matching entities from PostgreSQL
         conn = None
         try:
             conn = get_db_connection()
             with conn.cursor() as cur:
-                # جستجو برای موجودیت‌هایی که نام آن‌ها در پرسش آمده است یا پرسش شامل آن‌هاست
-                # از OR برای پوشش هر دو جهت انطباق استفاده می‌کنیم
+                # Search for entities whose names appear in the query, or where the query contains them
+                # Use OR to cover both matching directions
                 query_param = f"%{query}%"
                 cur.execute(
                     """
@@ -97,7 +98,7 @@ class InvestigatorAgent:
                 if entities:
                     entity_names = [ent["name"] for ent in entities]
                     
-                    # بازیابی روابط مربوط به موجودیت‌های منطبق شده
+                    # Retrieve relationships related to the matched entities
                     cur.execute(
                         """
                         SELECT source, target, relationship, description FROM extracted_relationships
@@ -121,30 +122,30 @@ class InvestigatorAgent:
             if conn:
                 conn.close()
 
-        # ۳. بازیابی موازی از Neo4j در صورت فعال بودن
+        # 3. Parallel retrieval from Neo4j if enabled
         if settings.services.neo4j:
             logger.info("[The Investigator] Neo4j is enabled. Querying mock neo4j graph database...")
-            # در نسخه واقعی، کوئری Cypher برای استخراج زیرگراف‌ها از neo4j_manager اجرا می‌شود
+            # In the real version, a Cypher query is executed via neo4j_manager to extract subgraphs
             for ent in entities:
                 neo4j_manager.insert_relationship(ent["name"], "QUERY_MATCHED", "USER_QUESTION")
 
-        # ۴. فرمت‌دهی ساختاریافته خروجی گرافی به صورت گزاره‌های کوتاه (شبه‌کد)
+        # 4. Format the graph output structurally as short statements (pseudo-code)
         if not entities and not relationships:
             return ""
 
         formatted_lines = ["[اطلاعات ساختاریافته گراف دانش]:"]
         
-        # موجودیت‌ها
+        # entities
         for ent in entities:
             desc_part = f" (توضیحات: {ent['description']})" if ent["description"] else ""
             formatted_lines.append(f'- موجودیت "{ent["name"]}" از نوع "{ent["type"]}" است.{desc_part}')
 
-        # روابط
+        # relationships
         for rel in relationships:
             desc_part = f" (توضیحات: {rel['description']})" if rel['description'] else ""
             formatted_lines.append(f'- "{rel["source"]}" رابطه "{rel["relationship"]}" دارد با "{rel["target"]}".{desc_part}')
 
         return "\n".join(formatted_lines)
 
-# نمونه سراسری جهت ایمپورت و استفاده در زنجیره RAG
+# Global instance for import and use in the RAG chain
 investigator_agent = InvestigatorAgent()

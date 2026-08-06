@@ -1,9 +1,9 @@
 """
 /// <summary>
-/// اسکیمای درخواست و پاسخ ماژول کرالر وب آریونکس (ArioNex Web Crawler Schemas)
+/// ArioNex Web Crawler Schemas (ArioNex Web Crawler Schemas)
 /// </summary>
 /// <remarks>
-/// این ماژول مدل‌های Pydantic برای اعتبارسنجی ورودی و خروجی اندپوینت‌های کرالر را تعریف می‌کند.
+/// This module defines the Pydantic models for validating the input and output of the crawler endpoints.
 /// </remarks>
 """
 
@@ -15,10 +15,10 @@ from pydantic import BaseModel, HttpUrl, Field
 class CrawlStartRequest(BaseModel):
     """
     /// <summary>
-    /// مدل درخواست شروع یک job کرال جدید
+    /// Request model for starting a new crawl job
     /// </summary>
     /// <remarks>
-    /// تمامی پارامترها به جز url اختیاری هستند و مقادیر پیش‌فرض از config.yaml خوانده می‌شوند.
+    /// All parameters except url are optional and their default values are read from config.yaml.
     /// </remarks>
     """
     url: str = Field(
@@ -70,7 +70,7 @@ class CrawlStartRequest(BaseModel):
 class CrawlJobResponse(BaseModel):
     """
     /// <summary>
-    /// مدل پاسخ وضعیت یک job کرال
+    /// Response model for the status of a crawl job
     /// </summary>
     """
     job_id: str
@@ -96,7 +96,7 @@ class CrawlJobResponse(BaseModel):
 class CrawlStartResponse(BaseModel):
     """
     /// <summary>
-    /// پاسخ فوری پس از شروع یک job کرال — شامل job_id برای polling وضعیت
+    /// Immediate response after starting a crawl job — includes job_id for status polling
     /// </summary>
     """
     job_id: str

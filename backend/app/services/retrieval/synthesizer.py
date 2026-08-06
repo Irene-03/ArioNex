@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// لایه انطباق عقب‌رو سنتزکننده پاسخ (ArioNex Synthesizer Backward Compatibility Layer)
+/// Response synthesizer backward compatibility layer (ArioNex Synthesizer Backward Compatibility Layer)
 /// </summary>
 /// <remarks>
-/// این فایل برای حفظ سازگاری با کدهای فازهای قبلی و تست‌های سیستمی ایجاد شده است
-/// و درخواست‌ها را به ماژول جدید query_router هدایت می‌کند.
+/// This file was created to preserve compatibility with previous-phase code and system tests
+/// and forwards requests to the new query_router module.
 /// </remarks>
 """
 

@@ -1,11 +1,11 @@
 # ================================================================
-#   داکرفایل بک‌اند آریونکس (ArioNex Backend Dockerfile)
-#   توسعه داده شده بر اساس اصول SRP و کانتینرسازی تجاری
+#   ArioNex backend Dockerfile (ArioNex Backend Dockerfile)
+#   Developed based on SRP principles and commercial containerization
 # ================================================================
 
 FROM python:3.11-slim
 
-# تنظیم متغیرهای محیطی برای اجرای صحیح پایتون و ممانعت از ایجاد بافرهای کاذب
+# Set environment variables for correct Python execution and to prevent false buffering
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONIOENCODING=utf-8
@@ -16,7 +16,7 @@ WORKDIR /app
 
 
 
-# کپی و نصب وابستگی‌های پایتونی پروژه
+# Copy and install the project's Python dependencies
 COPY requirements.txt /app/
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip \
@@ -28,11 +28,11 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         libxtst6 libcups2 libpango-1.0-0 || echo "WARNING: apt-get failed, skipping playwright deps") \
     && rm -rf /var/lib/apt/lists/*
 
-# کپی کدهای بک‌اند به محیط کاربری کانتینر
+# Copy the backend code into the container working environment
 COPY . /app/
 
-# پورت پیش‌فرض وب‌سرور FastAPI
+# Default FastAPI web server port
 EXPOSE 8000
 
-# دستور پیش‌فرض راه‌اندازی سرور بک‌اند با uvicorn
+# Default command to start the backend server with uvicorn
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
