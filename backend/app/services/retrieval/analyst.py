@@ -22,6 +22,7 @@ from langchain_core.tools import tool
 from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage, AIMessage, HumanMessage
 from langgraph.graph import StateGraph, END, add_messages
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import interrupt, Command
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
@@ -47,6 +48,9 @@ ANALYST_MAX_TOKENS = 2048
 
 # Maximum number of compiled graphs kept in the module-level cache
 GRAPH_CACHE_MAX = 16
+
+# How many times the human can reject the agent's answer before we accept it anyway
+MAX_APPROVAL_ROUNDS = 3
 
 # Persian runtime guidance injected when the model answers without calling any tool.
 RUNTIME_TOOL_NUDGE = (
@@ -89,6 +93,8 @@ class QueryDataInput(BaseModel):
 # Module-level graph cache and shared checkpointer
 _graph_cache: Dict[str, Any] = {}
 _chkdpt_memory = MemorySaver()
+# In-flight human-in-the-loop sessions: thread_id -> {"graph": graph, "config": config}
+_hitl_sessions: Dict[str, Dict[str, Any]] = {}
 
 _SQL_DISALLOWED_KEYWORDS = re.compile(
     r"\b(insert|update|delete|drop|alter|create|attach|detach|copy|call|set|pragma|load|install|replace|truncate|vacuum)\b",
@@ -195,10 +201,23 @@ def _enrich_jalali_dates(df: pd.DataFrame) -> pd.DataFrame:
     return df_out
 
 
+def _collect_tool_history(messages: List[BaseMessage]) -> List[Dict[str, Any]]:
+    """Summarize which tools the agent invoked during the run (for the approval payload)."""
+    calls = []
+    for m in messages:
+        if isinstance(m, AIMessage) and getattr(m, "tool_calls", None):
+            for tc in m.tool_calls:
+                calls.append({"tool": tc.get("name", ""), "args": tc.get("args") or {}})
+    return calls
+
+
 # 1. Define agent state structure
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     nudges: Annotated[int, operator.add]
+    approved: bool
+    human_feedback: str
+    approval_rounds: Annotated[int, operator.add]
 
 # 2. Main class implementing the data analyst agent
 class AnalystAgent:
@@ -476,25 +495,61 @@ class AnalystAgent:
             nudges = state.get("nudges", 0) or 0
             if not used_tools and ("DOUBTFUL" in content or not content.strip()) and nudges < MAX_RUNTIME_NUDGES:
                 return "nudge"
-            return "end"
+            # Human-in-the-loop: before ending, pause so the answer can be approved.
+            return "approve"
 
         def nudge_node(state: AgentState):
             return {"messages": [HumanMessage(content=RUNTIME_TOOL_NUDGE)], "nudges": 1}
+
+        def approve_node(state: AgentState):
+            last_message = state["messages"][-1]
+            answer = str(getattr(last_message, "content", "") or "")
+            decision = interrupt({
+                "type": "analyst_answer_approval",
+                "answer": answer,
+                "tools_used": _collect_tool_history(state["messages"]),
+            })
+            if isinstance(decision, bool):
+                decision = {"approved": decision, "feedback": ""}
+            if not isinstance(decision, dict):
+                decision = {"approved": bool(decision), "feedback": ""}
+            if decision.get("approved", False):
+                return {"approved": True, "human_feedback": ""}
+            feedback = str(decision.get("feedback", "") or "").strip()
+            if not feedback:
+                feedback = "پاسخ ارائه‌شده مورد تأیید نیست. لطفاً تحلیل را دوباره انجام بده و پاسخ صحیح را بر اساس داده‌ها بده."
+            return {
+                "approved": False,
+                "human_feedback": feedback,
+                "approval_rounds": 1,
+                "messages": [HumanMessage(content=feedback)],
+            }
+
+        def after_approve(state: AgentState):
+            if state.get("approved", False) or (state.get("approval_rounds", 0) or 0) >= MAX_APPROVAL_ROUNDS:
+                return "end"
+            return "agent"
 
         # 5. Compile the graph
         workflow = StateGraph(AgentState)
         workflow.add_node("agent", call_model)
         workflow.add_node("tools", run_tools)
         workflow.add_node("nudge", nudge_node)
+        workflow.add_node("approve", approve_node)
 
         workflow.set_entry_point("agent")
         workflow.add_conditional_edges(
             "agent",
             should_continue,
-            {"tools": "tools", "nudge": "nudge", "end": END},
+            {"tools": "tools", "nudge": "nudge", "approve": "approve"},
         )
         workflow.add_edge("tools", "agent")
         workflow.add_edge("nudge", "agent")
+        workflow.add_conditional_edges(
+            "approve",
+            after_approve,
+            {"agent": "agent", "end": END},
+        )
 
         graph = workflow.compile(checkpointer=_chkdpt_memory)
         if len(_graph_cache) >= GRAPH_CACHE_MAX:
@@ -514,6 +569,9 @@ class AnalystAgent:
             state_input = {
                 "messages": [HumanMessage(content=df_context), HumanMessage(content=query)],
                 "nudges": 0,
+                "approved": False,
+                "human_feedback": "",
+                "approval_rounds": 0,
             }
             # NOTE: recursion_limit MUST be top-level in config; thread_id is fresh per run so
             # state never bleeds between calls even though the graph+checkpointer are shared.
@@ -523,6 +581,11 @@ class AnalystAgent:
             }
 
             result = graph.invoke(state_input, config=config)
+            # Human-in-the-loop: if the graph paused for answer approval, auto-approve it.
+            # This keeps the non-interactive synthesizer call working; callers wanting a real
+            # pause/resume round-trip use start_hitl()/resume_hitl() instead.
+            while "__interrupt__" in result:
+                result = graph.invoke(Command(resume={"approved": True}), config=config)
             last_message = result["messages"][-1]
 
             logger.info("LangGraph Analyst successfully computed the response.")
@@ -545,6 +608,9 @@ class AnalystAgent:
             state_input = {
                 "messages": [HumanMessage(content=df_context), HumanMessage(content=query)],
                 "nudges": 0,
+                "approved": False,
+                "human_feedback": "",
+                "approval_rounds": 0,
             }
             config = {
                 "recursion_limit": ANALYST_RECURSION_LIMIT,
@@ -554,46 +620,132 @@ class AnalystAgent:
             yield {"type": "thought", "content": "🤖 *شروع فرآیند تحلیل داده توسط عامل محاسباتی آریونکس...*\n\n"}
 
             pending_final = None
-            for chunk in graph.stream(state_input, config=config, stream_mode="updates"):
-                for node_name, node_state in chunk.items():
-                    if node_name == "agent":
-                        messages = node_state.get("messages", [])
-                        if messages:
-                            last_msg = messages[-1]
-                            if getattr(last_msg, "tool_calls", None):
-                                for tool_call in last_msg.tool_calls:
-                                    t_name = tool_call.get("name", "")
-                                    t_args = tool_call.get("args", {})
-                                    yield {
-                                        "type": "thought",
-                                        "content": f"🔍 *تصمیم عامل:* استفاده از ابزار `{t_name}` جهت تحلیل داده‌ها.\n"
-                                                   f"📥 *پارامترها:* `{t_args}`\n\n",
-                                    }
-                            else:
-                                # Buffer the potential final answer; it is only flushed if the
-                                # graph ends without a subsequent nudge step.
-                                pending_final = last_msg.content
-                    elif node_name == "tools":
-                        messages = node_state.get("messages", [])
-                        if messages:
-                            last_msg = messages[-1]
-                            tool_out = str(last_msg.content)
-                            if len(tool_out) > 200:
-                                tool_out = tool_out[:200] + "..."
-                            yield {
-                                "type": "thought",
-                                "content": f"📊 *خروجی ابزار:* \n```\n{tool_out}\n```\n\n",
-                            }
-                    elif node_name == "nudge":
-                        # The model was nudged to actually query the data; discard the buffered
-                        # premature DOUBTFUL answer and let the agent run again.
-                        pending_final = None
+            stream_iter = graph.stream(state_input, config=config, stream_mode="updates")
+            while True:
+                interrupted_payload = None
+                for chunk in stream_iter:
+                    if "__interrupt__" in chunk:
+                        intr = chunk["__interrupt__"][0]
+                        interrupted_payload = intr.value if hasattr(intr, "value") else intr
+                        break
+                    for node_name, node_state in chunk.items():
+                        if node_name == "agent":
+                            messages = node_state.get("messages", [])
+                            if messages:
+                                last_msg = messages[-1]
+                                if getattr(last_msg, "tool_calls", None):
+                                    for tool_call in last_msg.tool_calls:
+                                        t_name = tool_call.get("name", "")
+                                        t_args = tool_call.get("args", {})
+                                        yield {
+                                            "type": "thought",
+                                            "content": f"🔍 *تصمیم عامل:* استفاده از ابزار `{t_name}` جهت تحلیل داده‌ها.\n"
+                                                       f"📥 *پارامترها:* `{t_args}`\n\n",
+                                        }
+                                else:
+                                    # Buffer the potential final answer; it is only flushed if the
+                                    # graph ends without a subsequent nudge step.
+                                    pending_final = last_msg.content
+                        elif node_name == "tools":
+                            messages = node_state.get("messages", [])
+                            if messages:
+                                last_msg = messages[-1]
+                                tool_out = str(last_msg.content)
+                                if len(tool_out) > 200:
+                                    tool_out = tool_out[:200] + "..."
+                                yield {
+                                    "type": "thought",
+                                    "content": f"📊 *خروجی ابزار:* \n```\n{tool_out}\n```\n\n",
+                                }
+                        elif node_name == "nudge":
+                            # The model was nudged to actually query the data; discard the buffered
+                            # premature DOUBTFUL answer and let the agent run again.
+                            pending_final = None
+
+                if interrupted_payload is None:
+                    break
+
+                # Human-in-the-loop: surface the answer-approval gate to the caller.
+                yield {"type": "approval", "content": interrupted_payload}
+                # Auto-approve so the non-interactive SSE stream completes normally.
+                stream_iter = graph.stream(
+                    Command(resume={"approved": True}), config=config, stream_mode="updates"
+                )
 
             if pending_final is not None:
                 yield {"type": "final", "content": pending_final}
         except Exception as e:
             logger.error(f"LangGraph streaming crashed: {str(e)}")
             yield {"type": "final", "content": f"DOUBTFUL ANSWER: LangGraph streaming failure: {str(e)}"}
+
+    def start_hitl(self, query: str, file_id: int = None, custom_file_path: str = None) -> dict:
+        """
+        Begin a human-in-the-loop analysis session.
+
+        Runs the graph up to the first answer-approval gate (interrupt). Returns:
+          {"status": "awaiting_approval", "thread_id": ..., "payload": {...}}
+        when the human must review the answer, or
+          {"status": "completed", "thread_id": ..., "answer": "..."}
+        if the run finished without needing approval (or errored early).
+        """
+        graph, system_prompt, df_context, error_msg = self._prepare_graph(file_id, custom_file_path)
+        if error_msg:
+            return {"status": "error", "message": error_msg}
+
+        thread_id = str(uuid.uuid4())
+        config = {
+            "recursion_limit": ANALYST_RECURSION_LIMIT,
+            "configurable": {"thread_id": thread_id},
+        }
+        state_input = {
+            "messages": [HumanMessage(content=df_context), HumanMessage(content=query)],
+            "nudges": 0,
+            "approved": False,
+            "human_feedback": "",
+            "approval_rounds": 0,
+        }
+        try:
+            result = graph.invoke(state_input, config=config)
+        except Exception as e:
+            logger.error(f"LangGraph HITL start crashed: {str(e)}")
+            return {"status": "error", "message": f"DOUBTFUL ANSWER: {str(e)}"}
+
+        if "__interrupt__" in result:
+            intr = result["__interrupt__"][0]
+            payload = intr.value if hasattr(intr, "value") else intr
+            _hitl_sessions[thread_id] = {"graph": graph, "config": config}
+            if len(_hitl_sessions) > GRAPH_CACHE_MAX:
+                _hitl_sessions.pop(next(iter(_hitl_sessions)))
+            return {"status": "awaiting_approval", "thread_id": thread_id, "payload": payload}
+
+        last_message = result["messages"][-1]
+        return {"status": "completed", "thread_id": thread_id, "answer": last_message.content}
+
+    def resume_hitl(self, thread_id: str, decision: dict) -> dict:
+        """
+        Resume a paused human-in-the-loop session with the human's decision.
+
+        decision: {"approved": True} to accept the answer, or
+                  {"approved": False, "feedback": "..."} to reject with feedback
+                  (the agent re-runs with the feedback and pauses again for re-approval).
+        """
+        session = _hitl_sessions.get(thread_id)
+        if session is None:
+            return {"status": "error", "message": "No pending approval session for this thread_id."}
+        try:
+            result = session["graph"].invoke(Command(resume=decision), config=session["config"])
+        except Exception as e:
+            logger.error(f"LangGraph HITL resume crashed: {str(e)}")
+            return {"status": "error", "message": f"DOUBTFUL ANSWER: {str(e)}"}
+
+        if "__interrupt__" in result:
+            intr = result["__interrupt__"][0]
+            payload = intr.value if hasattr(intr, "value") else intr
+            return {"status": "awaiting_approval", "thread_id": thread_id, "payload": payload}
+
+        _hitl_sessions.pop(thread_id, None)
+        last_message = result["messages"][-1]
+        return {"status": "completed", "thread_id": thread_id, "answer": last_message.content}
 
 # Global data analyst agent instance
 analyst_agent = AnalystAgent()

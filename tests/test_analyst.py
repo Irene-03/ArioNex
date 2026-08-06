@@ -81,6 +81,7 @@ def _patched(tmp_path, monkeypatch, mode):
     fake = _FakeModel(mode=mode)
     monkeypatch.setattr(analyst_mod, "get_llm", lambda **kw: fake)
     monkeypatch.setattr(analyst_mod, "_graph_cache", {})
+    monkeypatch.setattr(analyst_mod, "_hitl_sessions", {})
     return csv_path, fake
 
 
@@ -183,3 +184,54 @@ def test_recursion_limit_enforced(tmp_path, monkeypatch):
     assert "DOUBTFUL" in out
     # loop terminated instead of running forever
     assert fake.call_count < 30
+
+
+# ---------- human-in-the-loop (interrupt/resume) ----------
+def test_hitl_start_pauses_for_approval(tmp_path, monkeypatch):
+    csv_path, fake = _patched(tmp_path, monkeypatch, "good")
+    agent = AnalystAgent()
+    res = agent.start_hitl("مجموع", custom_file_path=str(csv_path))
+    assert res["status"] == "awaiting_approval"
+    assert res["thread_id"]
+    assert res["payload"]["type"] == "analyst_answer_approval"
+    assert "3500" in res["payload"]["answer"]
+
+
+def test_hitl_resume_approve_completes(tmp_path, monkeypatch):
+    csv_path, fake = _patched(tmp_path, monkeypatch, "good")
+    agent = AnalystAgent()
+    res = agent.start_hitl("مجموع", custom_file_path=str(csv_path))
+    assert res["status"] == "awaiting_approval"
+    out = agent.resume_hitl(res["thread_id"], {"approved": True})
+    assert out["status"] == "completed"
+    assert "3500" in out["answer"]
+
+
+def test_hitl_resume_reject_reruns_agent(tmp_path, monkeypatch):
+    csv_path, fake = _patched(tmp_path, monkeypatch, "good")
+    agent = AnalystAgent()
+    res = agent.start_hitl("مجموع", custom_file_path=str(csv_path))
+    assert res["status"] == "awaiting_approval"
+    calls_after_start = fake.call_count
+    # reject with feedback -> agent re-runs, then pauses again for approval
+    out = agent.resume_hitl(res["thread_id"], {"approved": False, "feedback": "عدد اشتباه است"})
+    assert out["status"] == "awaiting_approval"
+    assert fake.call_count > calls_after_start
+    # second approval finishes
+    out2 = agent.resume_hitl(res["thread_id"], {"approved": True})
+    assert out2["status"] == "completed"
+
+
+def test_hitl_unknown_thread_errors(tmp_path, monkeypatch):
+    csv_path, fake = _patched(tmp_path, monkeypatch, "good")
+    agent = AnalystAgent()
+    out = agent.resume_hitl("nope", {"approved": True})
+    assert out["status"] == "error"
+
+
+def test_stream_emits_approval_event_then_final(tmp_path, monkeypatch):
+    csv_path, fake = _patched(tmp_path, monkeypatch, "doubtful")
+    agent = AnalystAgent()
+    types = [s["type"] for s in agent.execute_analysis_stream("مجموع", custom_file_path=str(csv_path))]
+    assert "approval" in types
+    assert types.count("final") == 1
