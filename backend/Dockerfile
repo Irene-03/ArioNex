@@ -10,6 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONIOENCODING=utf-8
 ENV PLAYWRIGHT_BROWSERS_PATH=/app/ms-playwright
+ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
 
 WORKDIR /app
 
@@ -29,9 +30,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # کپی کدهای بک‌اند به محیط کاربری کانتینر
 COPY . /app/
-
-# نصب مرورگر Chromium برای Playwright (اختیاری — در صورت تحریم CDN، build fail نمی‌شود)
-RUN python -m playwright install chromium 2>/dev/null || echo "[INFO] Playwright Chromium download failed (likely due to region restrictions). JS rendering will fall back to non-JS mode."
 
 # پورت پیش‌فرض وب‌سرور FastAPI
 EXPOSE 8000

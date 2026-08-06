@@ -137,7 +137,8 @@ class QnaDocumentProcessor:
                 "total_rows": len(df),
                 "question_column": question_col,
                 "answer_column": answer_col,
-                "storage_url": archive_url
+                "storage_url": archive_url,
+                "pii_masked_count": pii_masked_count
             }
         except Exception as e:
             logger.error(f"Failed to insert QnA records into database: {str(e)}")

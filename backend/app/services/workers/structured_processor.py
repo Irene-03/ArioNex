@@ -19,7 +19,7 @@ from app.core.database import get_db_connection
 from app.core.minio_client import storage_manager, LOCAL_FALLBACK_DIR
 from app.core.embeddings import get_embedding
 from app.services.workers.text_processor import normalize_text
-from app.services.safety.pii_redactor import redact_text
+from app.services.safety.pii_redactor import redact_and_audit
 
 logger = logging.getLogger("arionex.structured_processor")
 
@@ -74,6 +74,7 @@ class StructuredDataProcessor:
 
         # ۳. ایندکس هر سطر در pgvector برای جستجوی معنایی RAG
         chunks_indexed = 0
+        pii_masked_count = 0
         conn = None
         try:
             conn = get_db_connection()
@@ -96,7 +97,8 @@ class StructuredDataProcessor:
 
                     # اعمال PII Redaction در صورت فعال بودن
                     if settings.security.pii_redaction:
-                        final_chunk = redact_text(normalized_chunk)
+                        final_chunk, pii_audit = redact_and_audit(normalized_chunk)
+                        pii_masked_count += sum(pii_audit.values())
                     else:
                         final_chunk = normalized_chunk
 
@@ -134,7 +136,8 @@ class StructuredDataProcessor:
             "rows_count": rows_count,
             "chunks_count": chunks_indexed,
             "columns": columns_list,
-            "storage_url": archive_url
+            "storage_url": archive_url,
+            "pii_masked_count": pii_masked_count
         }
 
     def get_local_path_for_analysis(self, file_id: int, filename: str) -> str:

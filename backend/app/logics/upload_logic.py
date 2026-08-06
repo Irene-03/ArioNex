@@ -118,19 +118,21 @@ async def execute_upload_logic(file: UploadFile) -> dict:
 
         # ثبت فایل در دیتابیس برای سیستم ACL/RBAC
         from app.core.database import get_db_connection
+        pii_total_masked = result_data.get("pii_masked_count", 0) or 0
         conn = None
         try:
             conn = get_db_connection()
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO documents (id, filename, file_type, min_role_required)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO documents (id, filename, file_type, min_role_required, pii_masked_count)
+                    VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (id) DO UPDATE SET
                         filename = EXCLUDED.filename,
-                        file_type = EXCLUDED.file_type
+                        file_type = EXCLUDED.file_type,
+                        pii_masked_count = EXCLUDED.pii_masked_count
                     """,
-                    (file_id, filename, ext[1:] if ext.startswith('.') else ext, "Analyst")
+                    (file_id, filename, ext[1:] if ext.startswith('.') else ext, "Analyst", pii_total_masked)
                 )
                 conn.commit()
         except Exception as db_err:
@@ -151,6 +153,7 @@ async def execute_upload_logic(file: UploadFile) -> dict:
             "archive_url": result_data.get("storage_url", "local"),
             "pii_audit_counts": pii_audit_counts,
             "pii_preview": pii_preview_text,
+            "pii_masked_count": pii_total_masked,
         }
 
     except HTTPException:

@@ -51,8 +51,8 @@ def test_text_chunking():
 def test_pii_redaction():
     print("Running PII Redaction tests...")
     
-    # متنی شامل تمام الگوهای حساس PII
-    sensitive_text = "کد ملی من 2980345678 است و شماره کارتم 6037-9912-3456-7890 و شبا من IR760120000000001234567890. جهت هماهنگی با شماره 09123456789 یا ایمیل test@gmail.com تماس بگیرید."
+    # متنی شامل تمام الگوهای حساس PII (کد ملی و کارت باید معتبر باشند تا ماسک شوند)
+    sensitive_text = "کد ملی من 1234567891 است و شماره کارتم 6037-9912-3456-7893 و شبا من IR760120000000001234567890. جهت هماهنگی با شماره 09123456789 یا ایمیل test@gmail.com تماس بگیرید."
     
     redacted, audit = redact_and_audit(sensitive_text)
     print(f"Original: {sensitive_text}")
@@ -75,6 +75,26 @@ def test_pii_redaction():
     
     print(" PII Redaction test PASSED.\n")
 
+def test_pii_no_false_positive_on_financial_data():
+    print("Running PII False-Positive Reduction tests...")
+    
+    # اعداد بدون ساختار معتبر (کد تراکنش، شناسه سفارش و مقادیر مالی) نباید ماسک شوند
+    financial_text = "کد تراکنش 1234567890 به مبلغ 5,000,000 ریال و شناسه سفارش 1234567890123456 ثبت شد."
+    
+    redacted, audit = redact_and_audit(financial_text)
+    print(f"Original: {financial_text}")
+    print(f"Redacted: {redacted}")
+    print(f"Audit Log Counts: {audit}")
+    
+    # هیچ PII معتبری در متن مالی عادی نباید ماسک شود
+    assert "[کد ملی]" not in redacted
+    assert "[شماره کارت بانکی]" not in redacted
+    assert "1234567890" in redacted, "Transaction code must not be masked!"
+    assert "1234567890123456" in redacted, "Order reference must not be masked!"
+    assert audit == {}, f"Unexpected PII masking in financial data: {audit}"
+    
+    print(" PII False-Positive Reduction test PASSED.\n")
+
 if __name__ == "__main__":
     print("=========================================")
     print("STARTING PHASE 2 AUTOMATED TEST SUITE")
@@ -83,6 +103,7 @@ if __name__ == "__main__":
         test_farsi_normalization()
         test_text_chunking()
         test_pii_redaction()
+        test_pii_no_false_positive_on_financial_data()
         print("=========================================")
         print("ALL PHASE 2 TESTS COMPLETED SUCCESSFULLY! ")
         print("=========================================")

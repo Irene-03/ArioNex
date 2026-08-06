@@ -21,7 +21,7 @@ from app.core.database import get_db_connection
 from app.core.minio_client import storage_manager
 from app.core.embeddings import get_embedding
 from app.services.workers.text_processor import normalize_text, chunk_text
-from app.services.safety.pii_redactor import redact_text
+from app.services.safety.pii_redactor import redact_and_audit
 
 logger = logging.getLogger("arionex.unstructured_processor")
 
@@ -234,8 +234,10 @@ class UnstructuredDocumentProcessor:
         normalized_text = normalize_text(raw_text)
         
         # ۳. لایه ایرلاک امنیتی (PII Redaction) در صورت فعال بودن در سیستم
+        pii_masked_count = 0
         if settings.security.pii_redaction:
-            redacted_text = redact_text(normalized_text)
+            redacted_text, pii_audit = redact_and_audit(normalized_text)
+            pii_masked_count = sum(pii_audit.values())
         else:
             redacted_text = normalized_text
             
@@ -288,7 +290,8 @@ class UnstructuredDocumentProcessor:
             return {
                 "status": "success",
                 "chunks_count": chunks_indexed,
-                "storage_url": archive_url
+                "storage_url": archive_url,
+                "pii_masked_count": pii_masked_count
             }
         except Exception as e:
             logger.error(f"Failed to insert chunks into database: {str(e)}")
