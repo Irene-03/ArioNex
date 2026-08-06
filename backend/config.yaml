@@ -1,72 +1,81 @@
 # ----------------------------------------------------
-# پیکربندی پویای سیستم هوشمند آریونکس (ArioNex Configuration)
-# این فایل مدیریت روشن/خاموش بودن تمامی سرویس‌ها را بر عهده دارد
+# Dynamic configuration of the ArioNex smart system (ArioNex Configuration)
+# This file manages enabling/disabling all services
 # ----------------------------------------------------
 
 services:
-  # پردازشگر اسناد بدون ساختار (فایل‌های متنی، PDF، Word)
+  # Unstructured document processor (text files, PDF, Word)
   unstructured_document_processor:
     enabled: true
 
-  # پردازشگر پرسش و پاسخ‌های پشتیبانی (سوالات متداول FAQ)
+  # Unlimited-OCR (baidu/Unlimited-OCR) served via vLLM/SGLang.
+  # Disabled by default: keep this false until an OpenAI-compatible OCR server
+  # is reachable at `base_url`. When disabled, PaddleOCR remains the fallback.
+  unlimited_ocr:
+    enabled: false
+    base_url: "http://localhost:8000"
+    model_name: "baidu/Unlimited-OCR"
+    image_mode: "gundam"
+
+  # Support Q&A processor (FAQ)
   qna_processor:
     enabled: true
 
-  # پردازشگر فایل‌های لاگ سیستمی
+  # System log file processor
   log_processor:
     enabled: true
 
-  # تحلیلگر داده‌های ساختاریافته (CSV و تراکنش‌های حسابداری)
+  # Structured data analytics (CSV and accounting transactions)
   structured_data_analytics:
     enabled: true
 
-  # جستجوی زنده وب (با استفاده از Tavily API)
+  # Live web search (using the Tavily API)
   web_search:
     enabled: true
 
-  # کرالر وب‌سایت — استخراج محتوای صفحات برای RAG
+  # Web crawler — extracts page content for RAG
   web_crawler:
     enabled: true
 
-  # استخراج‌کننده موجودیت‌ها (بخش گراف دانش)
+  # Entity extractor (knowledge graph section)
   entity_extractor:
     enabled: false
 
-  # استخراج‌کننده قوانین کسب‌وکار (بخش گراف دانش)
+  # Business rule extractor (knowledge graph section)
   rule_extractor:
     enabled: false
 
-  # دیتابیس گرافی نئو فور جی (Neo4j)
+  # Neo4j graph database (Neo4j)
   neo4j:
     enabled: false
 
-  # بازرس محلی ایمنی (Local Gemma-2b Auditor) - در فازهای بعدی مستقر خواهد شد
+  # Local safety auditor (Local Gemma-2b Auditor) - will be deployed in later phases
   safety_auditor:
     enabled: false
 
 integrations:
-  # فعال بودن ربات تلگرام سازمانی
+  # Whether the organizational Telegram bot is enabled
   telegram_bot:
     enabled: true
     
-  # فعال بودن ویجت پاپ‌آپ وب‌سایت
+  # Whether the website popup widget is enabled
   popup_widget:
     enabled: true
     
-  # فعال بودن خروجی وب‌سرویس REST API
+  # Whether the REST API web service output is enabled
   rest_api:
     enabled: true
 
 security:
-  # فعال بودن ماسک خودکار اطلاعات شخصی (PII Redaction)
+  # Whether automatic PII redaction is enabled (PII Redaction)
   pii_redaction:
     enabled: true
     
-  # قانون سخت‌گیرانه عدم توهم و الزام استناد دقیق به منابع
+  # Strict no-hallucination policy and the requirement to cite sources accurately
   strict_non_hallucination:
     enabled: false
 
-# وضعیت فعال/غیرفعال بودن پروایدرهای هوش مصنوعی
+# Enabled/disabled status of AI providers
 providers:
   openai:
     enabled: true
@@ -88,41 +97,41 @@ providers:
     enabled: true
 
 # ----------------------------------------------------
-# تنظیمات موتور کرالر وب (Web Crawler Engine Settings)
+# Web crawler engine settings (Web Crawler Engine Settings)
 # ----------------------------------------------------
 crawler:
-  # رندر صفحات JavaScript (React/Vue/Angular) با استفاده از Playwright
-  # هشدار: فعال کردن این گزینه نیاز به نصب playwright و chromium دارد
+  # Render JavaScript pages (React/Vue/Angular) using Playwright
+  # Warning: enabling this option requires installing playwright and chromium
   js_render:
     enabled: true
 
-  # دنبال کردن لینک‌های خارجی (خارج از دامنه اصلی)
-  # با سختگیری زیاد — فقط دامنه‌های مرتبط و ارزشمند دنبال می‌شوند
+  # Follow external links (outside the main domain)
+  # With high strictness — only related and valuable domains are followed
   follow_external_domains:
     enabled: false
 
-  # حداکثر تعداد صفحات پیش‌فرض برای هر job کرال
+  # Default maximum number of pages per crawl job
   default_max_pages:
     value: 50
 
-  # حداکثر عمق لینک از URL ریشه
+  # Maximum link depth from the root URL
   default_max_depth:
     value: 3
 
-  # تعداد درخواست‌های HTTP همزمان
+  # Number of concurrent HTTP requests
   default_concurrency:
     value: 5
 
-  # تاخیر بین هر درخواست HTTP (میلی‌ثانیه) — رعایت ادب با سرور هدف
+  # Delay between each HTTP request (milliseconds) — being polite to the target server
   request_delay_ms:
     value: 300
 
-  # حداکثر زمان اجرای یک job کرال (ثانیه) — جهت جلوگیری از قفل شدن سرور
+  # Maximum execution time of a crawl job (seconds) — to prevent the server from locking up
   job_timeout_seconds:
     value: 3600
 
-  # لیست دستی پروکسی‌ها برای چرخش و دور زدن ضدبات‌ها (فرمت منعطف و قابل توسعه در آینده)
-  # ساختار: لیستی از رشته‌های URL پروکسی
+  # Manual proxy list for rotation and bypassing anti-bot measures (flexible format, extensible in the future)
+  # Structure: a list of proxy URL strings
   proxy_pool: []
 
 # ========== LLM and Embedding Providers ==========

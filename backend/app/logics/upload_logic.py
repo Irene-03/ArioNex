@@ -1,15 +1,15 @@
 """
 /// <summary>
-/// منطق کسب‌وکار اندپوینت آپلود و پردازش اسناد (ArioNex Upload Business Logic)
+/// ArioNex Upload Business Logic (ArioNex Upload Business Logic)
 /// </summary>
 /// <remarks>
-/// این ماژول منطق دریافت فایل آپلود شده، مسیریابی هوشمند و ایمن‌سازی آن را از لایه روتر جدا می‌کند.
-/// مسئولیت‌ها:
-///   ۱. ذخیره موقت فیزیکی فایل
-///   ۲. پیش‌نمایش PII Redaction برای فایل‌های متنی
-///   ۳. تشخیص هوشمند نوع CSV با csv_detector
-///   ۴. مسیریابی به پردازشگر مناسب (QnA / Structured / Unstructured)
-///   ۵. پاکسازی فایل موقت پس از پردازش
+/// This module separates the logic of receiving an uploaded file, smart routing, and sanitization from the router layer.
+/// Responsibilities:
+///   1. Temporarily store the file physically
+///   2. PII Redaction preview for text files
+///   3. Smart CSV type detection with csv_detector
+///   4. Route to the appropriate processor (QnA / Structured / Unstructured)
+///   5. Clean up the temporary file after processing
 /// </remarks>
 """
 
@@ -34,24 +34,24 @@ logger = logging.getLogger("arionex.upload_logic")
 async def execute_upload_logic(file: UploadFile) -> dict:
     """
     /// <summary>
-    /// اجرای کامل pipeline آپلود: ذخیره موقت → PII → تشخیص نوع → پردازش تخصصی → پاکسازی
+    /// Runs the full upload pipeline: temporary storage → PII → type detection → specialized processing → cleanup
     /// </summary>
-    /// <param name="file">فایل آپلود شده از طریق multipart form</param>
-    /// <returns>دیکشنری نتایج شامل file_id، تعداد chunks، آدرس آرشیو و آمار PII</returns>
+    /// <param name="file">File uploaded via multipart form</param>
+    /// <returns>Result dict including file_id, chunk count, archive URL, and PII stats</returns>
     /// <remarks>
-    /// فایل موقت در finally block حتی در صورت خطا حذف می‌شود تا هارد سرور خالی بماند.
-    /// فرمت‌های پشتیبانی‌شده: PDF, DOCX, DOC, TXT, JSON, XML, MMD, CSV
+    /// The temporary file is deleted in the finally block even on error, so the server disk stays free.
+    /// Supported formats: PDF, DOCX, DOC, TXT, JSON, XML, MMD, CSV, JPG, JPEG, PNG
     /// </remarks>
     """
     filename = file.filename
     _, ext = os.path.splitext(filename.lower())
 
-    # ساخت دایرکتوری موقت امن روی سرور
+    # Create a secure temporary directory on the server
     temp_dir = tempfile.mkdtemp()
     temp_path = os.path.join(temp_dir, filename)
 
     try:
-        # ۱. ذخیره فیزیکی فایل آپلود شده با اعمال محدودیت حجم فایل (حداکثر ۲۰ مگابایت)
+        # 1. Physically store the uploaded file, enforcing the file size limit (max 20 MB)
         MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
         total_size = 0
         with open(temp_path, "wb") as buffer:
@@ -69,7 +69,7 @@ async def execute_upload_logic(file: UploadFile) -> dict:
 
         file_id = get_next_file_id()
 
-        # تبدیل فایل‌های Excel به CSV جهت پردازش یکپارچه در سیستم محاسباتی
+        # Convert Excel files to CSV for unified processing in the computing system
         if ext in (".xlsx", ".xls"):
             import pandas as pd
             try:
@@ -77,7 +77,7 @@ async def execute_upload_logic(file: UploadFile) -> dict:
                 temp_csv_path = temp_path.replace(ext, ".csv")
                 df.to_csv(temp_csv_path, index=False, encoding='utf-8')
                 
-                # به‌روزرسانی اطلاعات فایل به فرمت جدید
+                # Update the file info to the new format
                 temp_path = temp_csv_path
                 filename = os.path.splitext(filename)[0] + ".csv"
                 ext = ".csv"
@@ -86,7 +86,7 @@ async def execute_upload_logic(file: UploadFile) -> dict:
                 logger.error(f"Excel conversion failed: {str(e)}")
                 raise HTTPException(status_code=400, detail=f"Failed to read/convert Excel file: {str(e)}")
 
-        # ۲. پیش‌نمایش PII Redaction برای فایل‌های متنی/CSV (جهت ادمین داشبورد)
+        # 2. PII Redaction preview for text/CSV files (for the admin dashboard)
         pii_preview_text = ""
         pii_audit_counts = {}
         if ext in (".txt", ".csv"):
@@ -97,7 +97,7 @@ async def execute_upload_logic(file: UploadFile) -> dict:
             except Exception:
                 pii_preview_text = "Preview unavailable."
 
-        # ۳. مسیریابی هوشمند به کارگر تخصصی
+        # 3. Smart routing to the specialized worker
         result_data = {}
 
         if ext == ".csv":
@@ -113,10 +113,14 @@ async def execute_upload_logic(file: UploadFile) -> dict:
             result_data = unstructured_processor.process_document(temp_path, filename, file_id)
             result_data["processor_type"] = "unstructured_document"
 
+        elif ext in (".jpg", ".jpeg", ".png"):
+            result_data = unstructured_processor.process_image(temp_path, filename, file_id)
+            result_data["processor_type"] = "image_ocr"
+
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported file format: {ext}")
 
-        # ثبت فایل در دیتابیس برای سیستم ACL/RBAC
+        # Register the file in the database for the ACL/RBAC system
         from app.core.database import get_db_connection
         pii_total_masked = result_data.get("pii_masked_count", 0) or 0
         conn = None
@@ -143,7 +147,7 @@ async def execute_upload_logic(file: UploadFile) -> dict:
             if conn:
                 conn.close()
 
-        # ۴. بازگرداندن نتایج نهایی
+        # 4. Return the final results
         return {
             "file_id": file_id,
             "filename": filename,
@@ -162,7 +166,7 @@ async def execute_upload_logic(file: UploadFile) -> dict:
         logger.error(f"File upload and ingestion failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to ingest file: {str(e)}")
     finally:
-        # حذف دایرکتوری موقت در هر حال (حتی در صورت خطا)
+        # Delete the temporary directory in all cases (even on error)
         try:
             shutil.rmtree(temp_dir)
         except Exception:

@@ -1,10 +1,10 @@
 """
 /// <summary>
-/// فایل مدیریت پیکربندی و تنظیمات هوشمند سیستم آریونکس (ArioNex Configuration Manager)
+/// ArioNex smart configuration and settings management file (ArioNex Configuration Manager)
 /// </summary>
 /// <remarks>
-/// این ماژول وظیفه لود کردن و اعتبارسنجی تنظیمات سیستم از فایل config.yaml (فیچر تاگل‌ها)
-/// و متغیرهای محیطی سیستم (.env) با استفاده از Pydantic را بر عهده دارد.
+/// This module is responsible for loading and validating system settings from the config.yaml file (feature toggles)
+/// and system environment variables (.env) using Pydantic.
 /// </remarks>
 """
 
@@ -16,7 +16,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
-# لود کردن فایل env محلی
+# Load the local env file
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"))
 
 logger = logging.getLogger("arionex.config")
@@ -24,7 +24,7 @@ logger = logging.getLogger("arionex.config")
 class ServiceToggles(BaseSettings):
     """
     /// <summary>
-    /// مدل وضعیت فعال یا غیرفعال بودن سرویس‌های بک‌اند
+    /// Model representing whether backend services are enabled or disabled
     /// </summary>
     """
     unstructured_document_processor: bool = True
@@ -37,6 +37,7 @@ class ServiceToggles(BaseSettings):
     rule_extractor: bool = False
     neo4j: bool = False
     safety_auditor: bool = False
+    unlimited_ocr: bool = False
     check_structure: bool = False
     check_categories: bool = False
     greeting: bool = False
@@ -46,7 +47,7 @@ class ServiceToggles(BaseSettings):
 class ProviderToggles(BaseSettings):
     """
     /// <summary>
-    /// مدل وضعیت فعال یا غیرفعال بودن پروایدرهای مدل‌های زبانی
+    /// Model representing whether language model providers are enabled or disabled
     /// </summary>
     """
     openai: bool = True
@@ -62,7 +63,7 @@ class ProviderToggles(BaseSettings):
 class IntegrationToggles(BaseSettings):
     """
     /// <summary>
-    /// مدل وضعیت فعال یا غیرفعال بودن کانال‌های ارتباطی (ادغام‌ها)
+    /// Model representing whether communication channels (integrations) are enabled or disabled
     /// </summary>
     """
     telegram_bot: bool = True
@@ -72,15 +73,15 @@ class IntegrationToggles(BaseSettings):
 class CrawlerSettings(BaseSettings):
     """
     /// <summary>
-    /// تنظیمات رفتاری موتور کرالر وب آریونکس
+    /// Behavioral settings of the ArioNex web crawler engine
     /// </summary>
     /// <remarks>
-    /// این کلاس تنظیمات قابل‌تنظیم کرالر را نگه می‌دارد:
-    ///   - js_render: آیا صفحات JavaScript-rendered (React/Vue) رندر شوند؟
-    ///   - follow_external_domains: آیا لینک‌های خارجی (خارج از دامنه اصلی) دنبال شوند؟
-    ///   - default_max_pages: حداکثر صفحات پیش‌فرض برای هر job
-    ///   - default_max_depth: حداکثر عمق پیش‌فرض برای هر job
-    ///   - request_delay_ms: تاخیر بین هر درخواست HTTP (میلی‌ثانیه)
+    /// This class holds the configurable crawler settings:
+    ///   - js_render: Should JavaScript-rendered pages (React/Vue) be rendered?
+    ///   - follow_external_domains: Should external links (outside the main domain) be followed?
+    ///   - default_max_pages: Default maximum pages for each job
+    ///   - default_max_depth: Default maximum depth for each job
+    ///   - request_delay_ms: Delay between each HTTP request (milliseconds)
     /// </remarks>
     """
     js_render: bool = False
@@ -95,7 +96,7 @@ class CrawlerSettings(BaseSettings):
 class SecuritySettings(BaseSettings):
     """
     /// <summary>
-    /// تنظیمات امنیتی RAG و ماسک حریم خصوصی
+    /// RAG security settings and privacy masking
     /// </summary>
     """
     pii_redaction: bool = True
@@ -104,20 +105,20 @@ class SecuritySettings(BaseSettings):
 class Settings(BaseSettings):
     """
     /// <summary>
-    /// کلاس اصلی نگهداری تمامی پیکربندی‌های فعال سیستم آریونکس
+    /// Main class holding all active configurations of the ArioNex system
     /// </summary>
     /// <remarks>
-    /// پشتیبانی از چندین LLM provider: openrouter (پیشنهادی)، openai، anthropic، google، deepseek
-    /// provider پیش‌فرض از env LLM_PROVIDER خوانده می‌شود و در صورت عدم تنظیم openrouter استفاده می‌شود.
+    /// Supports multiple LLM providers: openrouter (recommended), openai, anthropic, google, deepseek
+    /// The default provider is read from the LLM_PROVIDER env and openrouter is used if it is not set.
     /// </remarks>
     """
     # -------------------------------------------------------
-    # تنظیمات LLM Provider — چندگانه و قابل‌تعویض
+    # LLM Provider Settings — multiple and interchangeable
     # -------------------------------------------------------
     llm_provider: str = Field(default="openrouter", validation_alias="LLM_PROVIDER")
     model_name: str = Field(default="openai/gpt-4o-mini", validation_alias="MODEL_NAME")
 
-    # کلیدهای API هر provider
+    # API keys for each provider
     openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
     openrouter_api_key: str = Field(default="", validation_alias="OPENROUTER_API_KEY")
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
@@ -128,20 +129,27 @@ class Settings(BaseSettings):
     hormouz_api_key: str = Field(default="", validation_alias="HORMOUZ_API_KEY")
 
     # -------------------------------------------------------
-    # تنظیمات Embedding Provider — مستقل از Chat LLM
+    # Embedding Provider Settings — independent of the Chat LLM
     # -------------------------------------------------------
     embedding_provider: str = Field(default="openai", validation_alias="EMBEDDING_PROVIDER")
     embedding_model: str = Field(default="text-embedding-3-large", validation_alias="EMBEDDING_MODEL")
     hormouz_embedding_model: str = Field(default="openai/text-embedding-3-large", validation_alias="HORMOUZ_EMBEDDING_MODEL")
 
     # -------------------------------------------------------
-    # تنظیمات سرور محلی Ollama
+    # Local Ollama server settings
     # -------------------------------------------------------
     ollama_model: str = Field(default="gemma3:4b", validation_alias="OLLAMA_MODEL")
     ollama_base_url: str = Field(default="http://localhost:11434", validation_alias="OLLAMA_BASE_URL")
 
     # -------------------------------------------------------
-    # تنظیمات سایر سرویس‌ها
+    # Unlimited-OCR settings (baidu/Unlimited-OCR via vLLM/SGLang)
+    # -------------------------------------------------------
+    unlimited_ocr_base_url: str = Field(default="http://localhost:8000", validation_alias="UNLIMITED_OCR_BASE_URL")
+    unlimited_ocr_model: str = Field(default="baidu/Unlimited-OCR", validation_alias="UNLIMITED_OCR_MODEL")
+    unlimited_ocr_image_mode: str = Field(default="gundam", validation_alias="UNLIMITED_OCR_IMAGE_MODE")
+
+    # -------------------------------------------------------
+    # Settings for other services
     # -------------------------------------------------------
     tavily_api_key: str = Field(default="", validation_alias="TAVILY_API_KEY")
     
@@ -165,7 +173,7 @@ class Settings(BaseSettings):
     env: str = Field(default="development", validation_alias="ENV")
     cors_allowed_origins: str = Field(default="", validation_alias="CORS_ALLOWED_ORIGINS")
     
-    # تنظیمات داینامیک لود شده از config.yaml
+    # Dynamic settings loaded from config.yaml
     services: ServiceToggles = ServiceToggles()
     providers: ProviderToggles = ProviderToggles()
     integrations: IntegrationToggles = IntegrationToggles()
@@ -181,14 +189,14 @@ class Settings(BaseSettings):
 def load_settings() -> Settings:
     """
     /// <summary>
-    /// متد کمکی برای خواندن همزمان فایل yaml و متغیرهای محیطی و تولید آبجکت تنظیمات واحد
+    /// Helper method for simultaneously reading the yaml file and environment variables and producing a unified settings object
     /// </summary>
-    /// <returns>یک نمونه معتبر از کلاس Settings</returns>
+    /// <returns>A valid instance of the Settings class</returns>
     """
-    # ابتدا تنظیمات پیش‌فرض را لود می‌کنیم
+    # First, load the default settings
     settings_obj = Settings()
     
-    # پیدا کردن مسیر فایل config.yaml
+    # Find the path of the config.yaml file
     config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config.yaml")
     
     if os.path.exists(config_path):
@@ -197,7 +205,7 @@ def load_settings() -> Settings:
                 yaml_data = yaml.safe_load(f)
                 
             if yaml_data:
-                # ادغام تنظیمات سرویس‌ها
+                # Merge service settings
                 if "services" in yaml_data:
                     services_data = {
                         k: v.get("enabled", True) if isinstance(v, dict) else v
@@ -205,7 +213,23 @@ def load_settings() -> Settings:
                     }
                     settings_obj.services = ServiceToggles(**services_data)
 
-                # ادغام تنظیمات پروایدرها
+                # Merge Unlimited-OCR sub-settings (base_url, model_name, image_mode)
+                unlimited_cfg = None
+                if "services" in yaml_data and isinstance(yaml_data["services"].get("unlimited_ocr"), dict):
+                    unlimited_cfg = yaml_data["services"]["unlimited_ocr"]
+                if unlimited_cfg:
+                    if "base_url" in unlimited_cfg:
+                        settings_obj.unlimited_ocr_base_url = unlimited_cfg["base_url"]
+                    if "model_name" in unlimited_cfg:
+                        settings_obj.unlimited_ocr_model = unlimited_cfg["model_name"]
+                    if "image_mode" in unlimited_cfg:
+                        settings_obj.unlimited_ocr_image_mode = unlimited_cfg["image_mode"]
+                    logger.info(
+                        f"Unlimited-OCR configured: base_url={settings_obj.unlimited_ocr_base_url}, "
+                        f"model={settings_obj.unlimited_ocr_model}, image_mode={settings_obj.unlimited_ocr_image_mode}"
+                    )
+
+                # Merge provider settings
                 if "providers" in yaml_data:
                     providers_data = {
                         k: v.get("enabled", True) if isinstance(v, dict) else v
@@ -213,7 +237,7 @@ def load_settings() -> Settings:
                     }
                     settings_obj.providers = ProviderToggles(**providers_data)
                 
-                # ادغام تنظیمات کانال‌های خروجی
+                # Merge output channel settings
                 if "integrations" in yaml_data:
                     integrations_data = {
                         k: v.get("enabled", True) if isinstance(v, dict) else v
@@ -221,7 +245,7 @@ def load_settings() -> Settings:
                     }
                     settings_obj.integrations = IntegrationToggles(**integrations_data)
                     
-                # ادغام تنظیمات ایمنی و حریم خصوصی
+                # Merge safety and privacy settings
                 if "security" in yaml_data:
                     security_data = {
                         k: v.get("enabled", True) if isinstance(v, dict) else v
@@ -229,19 +253,19 @@ def load_settings() -> Settings:
                     }
                     settings_obj.security = SecuritySettings(**security_data)
 
-                # ادغام تنظیمات موتور کرالر وب
+                # Merge web crawler engine settings
                 if "crawler" in yaml_data:
                     crawler_raw = yaml_data["crawler"]
                     crawler_data = {}
                     for k, v in crawler_raw.items():
                         if isinstance(v, dict):
-                            # پشتیبانی از فرمت {enabled: true} یا {value: 300}
+                            # Support the {enabled: true} or {value: 300} format
                             crawler_data[k] = v.get("value", v.get("enabled", True))
                         else:
                             crawler_data[k] = v
                     settings_obj.crawler = CrawlerSettings(**crawler_data)
 
-                # ادغام تنظیمات عمومی ریشه
+                # Merge general root settings
                 if "jwt_secret_key" in yaml_data:
                     settings_obj.jwt_secret_key = yaml_data["jwt_secret_key"]
                 if "password_salt" in yaml_data:
@@ -276,5 +300,5 @@ def load_settings() -> Settings:
         
     return settings_obj
 
-# آبجکت تنظیمات سراسری برنامه جهت استفاده در تمام ماژول‌ها
+# Global settings object of the application for use across all modules
 settings = load_settings()
