@@ -261,6 +261,45 @@ async def update_active_configuration(update: ConfigUpdateRequest):
 
 
 # -------------------------------------------------------------------
+# Ollama Connectivity Test Endpoint
+# -------------------------------------------------------------------
+
+@router.post(
+    "/config/test-ollama",
+    summary="آزمون اتصال بک‌اند به سرور Ollama",
+    description="از سمت سرور به آدرس ollama_base_url/api/tags متصل شده و وضعیت اتصال و لیست مدل‌های نصب‌شده را برمی‌گرداند.",
+)
+def test_ollama_connection():
+    import json as _json
+    import urllib.request
+
+    base_url = getattr(settings, "ollama_base_url", "http://localhost:11434").rstrip("/")
+    tags_url = f"{base_url}/api/tags"
+
+    try:
+        req = urllib.request.Request(tags_url, method="GET")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            payload = _json.loads(resp.read().decode("utf-8"))
+
+        models = [m.get("name") for m in (payload.get("models") or []) if m.get("name")]
+        return {
+            "status": "success",
+            "connected": True,
+            "base_url": base_url,
+            "model_count": len(models),
+            "models": models,
+        }
+    except Exception as e:
+        logger.warning(f"Ollama connectivity test failed against {tags_url}: {str(e)}")
+        return {
+            "status": "error",
+            "connected": False,
+            "base_url": base_url,
+            "error": str(e),
+        }
+
+
+# -------------------------------------------------------------------
 # System Prompts Management Endpoints
 # -------------------------------------------------------------------
 from pydantic import BaseModel

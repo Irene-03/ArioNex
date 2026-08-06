@@ -10,6 +10,10 @@ export const PII_KEY_LABELS = {
 };
 
 export const OLLAMA_MODELS = [
+  { id: 'deepseek-r1:1.5b', label: 'DeepSeek R1 1.5B (سبک و سریع)' },
+  { id: 'gemma4:latest', label: 'Gemma 4 8B' },
+  { id: 'gemma4-coder:latest', label: 'Gemma 4 Coder 8B' },
+  { id: 'qwen3:14b', label: 'Qwen 3 14B (قوی)' },
   { id: 'gemma2:9b', label: 'Gemma 2 9B (پیشنهادی)' },
   { id: 'gemma2:2b', label: 'Gemma 2 2B (سبک‌ترین)' },
   { id: 'gemma2:27b', label: 'Gemma 2 27B (قدرتمند)' },

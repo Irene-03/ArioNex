@@ -34,6 +34,23 @@ export default function AdminView() {
     hormouz: ''
   });
 
+  const [installedModels, setInstalledModels] = React.useState([]);
+
+  const mergedOllamaModels = React.useMemo(() => {
+    const base = [...OLLAMA_MODELS];
+    const existing = new Set(base.map(m => m.id));
+    installedModels.forEach(name => {
+      if (!existing.has(name)) {
+        base.push({ id: name, label: name });
+        existing.add(name);
+      }
+    });
+    if (ollamaModel && !existing.has(ollamaModel)) {
+      base.push({ id: ollamaModel, label: ollamaModel });
+    }
+    return base;
+  }, [installedModels, ollamaModel]);
+
   return (
     <div className="screen fade-in">
       <div className="admin-grid">
@@ -196,7 +213,7 @@ export default function AdminView() {
                   }}
                   style={{width: '100%', padding: '8px 12px', border: '1px solid var(--gray-100)', borderRadius: 'var(--radius)', fontSize: '13px', background: 'var(--gray-50)', color: 'var(--text-primary)', fontFamily: 'inherit'}}
                 >
-                  {OLLAMA_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  {mergedOllamaModels.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
                 </select>
               </div>
               <div>
@@ -216,12 +233,20 @@ export default function AdminView() {
                 style={{width: '100%', justifyContent: 'center'}}
                 onClick={async () => {
                   try {
-                    const res = await fetch(`${ollamaEndpoint}/api/tags`, { signal: AbortSignal.timeout(3000) });
+                    const res = await fetch('http://localhost:8000/v1/config/test-ollama', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' }
+                    });
                     const data = await res.json();
-                    const modelCount = data?.models?.length ?? 0;
-                    alert(`✅ اتصال موفق! ${modelCount} مدل روی Ollama یافت شد.`);
+                    if (data.connected) {
+                      setInstalledModels(data.models || []);
+                      const models = data.models || [];
+                      alert(`✅ اتصال موفق! ${models.length} مدل روی Ollama یافت شد:\n${models.join('\n')}`);
+                    } else {
+                      alert(`❌ اتصال به Ollama ناموفق (${data.base_url || 'نامشخص'}):\n${data.error || 'سرویس در دسترس نیست.'}`);
+                    }
                   } catch {
-                    alert('❌ اتصال به Ollama ناموفق. مطمئن شوید سرویس در حال اجراست.');
+                    alert('❌ اتصال به بک‌اند ناموفق. مطمئن شوید سرویس آریونکس روی پورت 8000 در حال اجراست.');
                   }
                 }}
               >
@@ -230,7 +255,7 @@ export default function AdminView() {
               <div style={{background: 'var(--color-info-bg)', border: '1px solid rgba(21, 101, 192, 0.2)', borderRadius: 'var(--radius)', padding: '12px', fontSize: '12px', color: 'var(--color-info)', lineHeight: '1.8'}}>
                 <strong>راهنمای نصب Ollama:</strong><br/>
                 ۱. از <span style={{direction: 'ltr', display: 'inline'}}>ollama.com</span> نصب کنید<br/>
-                ۲. دستور <code style={{background: 'rgba(21,101,192,0.1)', padding: '1px 5px', borderRadius: '3px', direction: 'ltr'}}>ollama pull gemma3:4b</code> را اجرا کنید<br/>
+                ۲. دستور <code style={{background: 'rgba(21,101,192,0.1)', padding: '1px 5px', borderRadius: '3px', direction: 'ltr'}}>ollama pull deepseek-r1:1.5b</code> را اجرا کنید<br/>
                 ۳. این حالت را فعال کنید و «آزمون اتصال» بزنید
               </div>
             </div>

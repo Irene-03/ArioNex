@@ -258,13 +258,13 @@ def load_settings() -> Settings:
                     settings_obj.proxy_url = yaml_data["proxy_url"]
                 if "fallback_embedding_provider" in yaml_data:
                     settings_obj.fallback_embedding_provider = yaml_data["fallback_embedding_provider"]
-                if "llm_provider" in yaml_data:
+                if "llm_provider" in yaml_data and not os.environ.get("LLM_PROVIDER"):
                     settings_obj.llm_provider = yaml_data["llm_provider"]
-                if "model_name" in yaml_data:
+                if "model_name" in yaml_data and not os.environ.get("MODEL_NAME"):
                     settings_obj.model_name = yaml_data["model_name"]
-                if "ollama_model" in yaml_data:
+                if "ollama_model" in yaml_data and not os.environ.get("OLLAMA_MODEL"):
                     settings_obj.ollama_model = yaml_data["ollama_model"]
-                if "ollama_base_url" in yaml_data:
+                if "ollama_base_url" in yaml_data and not os.environ.get("OLLAMA_BASE_URL"):
                     settings_obj.ollama_base_url = yaml_data["ollama_base_url"]
                     
             logger.info("Successfully loaded dynamic feature toggles from config.yaml")

@@ -82,7 +82,7 @@ async def get_knowledge_stats(user: dict = Depends(get_current_user)):
 
             # ۴. میانگین زمان پاسخ RAG (امروز — هماهنگ با total_queries_today)
             cur.execute(
-                "SELECT COALESCE(AVG(response_time_ms), 1200) FROM pg_audit_logs "
+                "SELECT COALESCE(AVG(response_time_ms), 0) FROM pg_audit_logs "
                 "WHERE response_time_ms > 0 AND timestamp >= CURRENT_DATE"
             )
             avg_response_ms = cur.fetchone()[0]

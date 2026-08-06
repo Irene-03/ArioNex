@@ -77,6 +77,11 @@ services:
       - MODEL_NAME=gpt-4o-mini
       - TAVILY_API_KEY=
       - TELEGRAM_BOT_TOKEN=
+      - LLM_PROVIDER=ollama
+      - OLLAMA_MODEL=deepseek-r1:1.5b
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     depends_on:
@@ -109,6 +114,11 @@ services:
       - OPENAI_API_KEY=
       - MODEL_NAME=gpt-4o-mini
       - PYTHONPATH=/app
+      - LLM_PROVIDER=ollama
+      - OLLAMA_MODEL=deepseek-r1:1.5b
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy
@@ -125,7 +135,7 @@ services:
     build: ./frontend
     container_name: arionex-frontend
     ports:
-      - "3000:80"
+      - "80:80"
     depends_on:
       - backend
     restart: always
