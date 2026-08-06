@@ -1,162 +1,126 @@
-# ArioNex: Persian Enterprise AI Assistant & RAG Platform
+# ArioNex (آریونکس): Commercial Persian Enterprise AI Assistant & RAG Platform
 
-ArioNex is an enterprise-grade Persian RAG (Retrieval-Augmented Generation) assistant with a Deep Navy and Metallic Copper design theme. It provides secure data ingestion, live Farsi PII redaction, analytical LangGraph agents, dynamic feature toggles, multi-channel gateways, and an orchestrated Docker infrastructure.
+<p align="center">
+  <b>ArioNex</b> is a state-of-the-art, aristocratic-themed, enterprise-grade Persian RAG (Retrieval-Augmented Generation) assistant. Designed with a gorgeous <b>Persian Deep Navy & Metallic Copper</b> aesthetic, it offers ultra-secure data ingestion, live Farsi PII redaction, advanced analytical LangGraph agents, dynamic feature toggles, multi-channel gateways, and an orchestrated docker infrastructure.
+</p>
 
-| Layer | Stack |
-|-------|-------|
-| Backend | FastAPI |
-| Frontend | React + Vite |
-| Database | PostgreSQL + pgvector |
-| Object Storage | MinIO |
-| Infrastructure | Docker Compose |
-| Background Jobs | Celery |
-
----
-
-## Table of Contents
-
-- [System Architecture and Data Flow](#system-architecture-and-data-flow)
-- [Key Features](#key-features)
-- [Repository Structure](#repository-structure)
-- [Quick Start and Deployment](#quick-start-and-deployment)
-- [Integration Tests](#integration-tests)
-- [Security and Data Governance](#security-and-data-governance)
+<p align="center">
+  <img src="https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Frontend-React_Vite-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React Vite" />
+  <img src="https://img.shields.io/badge/Database-PostgreSQL_pgvector-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/Storage-MinIO-C92B2B?style=for-the-badge&logo=minio&logoColor=white" alt="MinIO" />
+  <img src="https://img.shields.io/badge/DevOps-Docker_Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker Compose" />
+</p>
 
 ---
 
-## System Architecture and Data Flow
+## System Architecture & Data Flow (معماری و جریان داده سیستم)
 
-ArioNex processes user input through a **Farsi Security Airlock** and routes queries between analytical solvers and semantic indexes.
+ArioNex coordinates safe text processing through its specialized **Farsi Security Airlock** and routes queries intelligently between analytical solvers and semantic indexes:
 
 ```mermaid
 flowchart TD
     User([End User / Telegram Bot / Web Widget]) -->|1. Live Input Query| Airlock[Farsi Security Airlock]
-
-    subgraph Airlock_Layer [Persian Security Airlock]
-        Airlock -->|2. Normalization| Norm[Persian Normalizer and Diacritics Stripper]
+    
+    subgraph Airlock_Layer [ایرلاک امنیتی فارسی]
+        Airlock -->|2. Normalization| Norm[Persian Normalizer & Diacritics Stripper]
         Norm -->|3. Mask PII| PII[PII Redactor: Mask National ID, Cards, Phones]
     end
 
     PII -->|4. Safe Query| Router{Farsi Intent Router}
-
-    subgraph Engine_Layer [Processing Engines]
+    
+    subgraph Engine_Layer [موتورهای پردازش]
         Router -->|Computational/Numerical Intent| Analyst[LangGraph Analyst Solver - Pandas REPL]
-        Router -->|General/Textual Intent| RAG_Engine[Librarian and Support Lead Vector Search]
+        Router -->|General/Textual Intent| RAG_Engine[Librarian & Support Lead Vector Search]
     end
 
     Analyst -->|Read Ledger Data| VectorDB[(PostgreSQL + pgvector)]
     RAG_Engine -->|Similarity Search| VectorDB
-
-    RAG_Engine -->|Golden Rule Verification| Synthesizer[Synthesizer and Hallucination Shield]
-
+    
+    RAG_Engine -->|Golden Rule Verification| Synthesizer[Synthesizer & Hallucination Shield]
+    
     Synthesizer -->|If no sources found| Refusal[Standard Persian Refusal Message]
-    Synthesizer -->|If sources valid| Answer[Final Answer with Citation Cards]
-
+    Synthesizer -->|If sources valid| Answer[Final Answer with Beautiful Citation Cards]
+    
     Answer & Refusal & Analyst -->|5. Multi-channel Response| User
 ```
 
 ---
 
-## Key Features
+## Key Features (ویژگی‌های کلیدی آریونکس)
 
-- **Persian UI Theme:** A Deep Navy (`#0f1a2e`) and Metallic Copper (`#c4894a`) design system with the Vazirmatn typeface for Persian typography.
-- **Farsi Security Airlock:** Sanitizes Persian inputs by standardizing Arabic characters, stripping diacritics, and normalizing localized digits.
-- **Live PII Masking Preview:** Automatically censors national IDs, mobile numbers, credit card numbers, IBANs, and email addresses with live rendering in the dashboard.
-- **Multi-Agent Orchestration:**
-  - **Intent Router:** Zero-shot semantic matching to classify requests.
-  - **Librarian Agent:** Vector search over embedded document chunks.
-  - **Support Lead Agent:** FAQ CSV template matching for precise answers.
-  - **LangGraph Analyst Agent:** Sandboxed pandas code generation for financial ledger computation.
-- **Anti-Hallucination Guardrails:** Refuses to answer when semantic confidence falls below thresholds, issuing a polite refusal instead.
-- **Outbound Gateways:** Full REST API, an asynchronous non-blocking Telegram Bot Service with session management, and a website chat widget at `/v1/widget.js`.
-- **Production Containerization:** Multi-stage React + Nginx and slim FastAPI images orchestrated in a single `docker-compose.yml` with healthchecks and named volumes.
-- **Web Crawler Engine:** Celery background jobs that fetch, parse, chunk, and embed website content into the vector store.
+*   **Aristocratic Persian UI Theme:** Built with a stunning Deep Navy (`#0f1a2e`) and Classic Metallic Copper (`#c4894a`) visual design system using Google Fonts Outfit/Inter and **Vazirmatn** for beautiful Persian typography.
+*   **Farsi Security Airlock:** Proactively sanitizes Persian inputs by standardizing Arabic characters (ی/ک), stripping diacritics, and translating localized digits to database numerals.
+*   **Live PII Masking Preview:** Automatically censors National IDs, mobile phone numbers, credit card numbers, IBANs (Sheba), and email addresses with side-by-side live rendering inside the dashboard upload tab.
+*   **Multi-Agent Orchestration:**
+    *   **Intent Router:** Uses zero-shot semantic matching to classify requests.
+    *   **Librarian Agent:** Searches database embeddings for semantically closest text chunks.
+    *   **Support Lead Agent:** Matches FAQ CSV templates to ensure precise organizational answers.
+    *   **LangGraph Analyst Agent:** Writes dynamic pandas Python code within a sandboxed interpreter to run computations on financial ledgers.
+*   **Anti-Hallucination Guardrails:** Implements the golden rule of enterprise RAG: if semantic matches fall below thresholds, it refuses to hallucinate and issues a standard polite Persian refusal.
+*   **Plentiful Outbound Gateways:** Includes a full REST API, an asynchronous, non-blocking **Telegram Bot Service** with chat session management, and a custom **Website Chat Widget** (`/v1/widget.js`).
+*   **Production-Ready Containerization:** Multi-stage React + Nginx setup and optimized slim FastAPI deployments configured in a single `docker-compose.yml` with healthchecks and named volume persistence.
 
 ---
 
-## Repository Structure
+## Repository File Structure (ساختار فیزیکی فایل‌ها)
 
 ```text
 e:\ario\
-├── backend/                          # FastAPI backend application
+├── backend/                        # FastAPI Backend Application
 │   ├── app/
-│   │   ├── core/                     # Configuration, database, and clients
-│   │   │   ├── config.py             # Pydantic settings and YAML feature-toggles loader
-│   │   │   ├── database.py           # PostgreSQL pgvector connections and schemas
-│   │   │   ├── logging.py            # Centralized structured logging
-│   │   │   ├── llm_factory.py        # Multi-provider LLM abstraction
-│   │   │   ├── embeddings.py         # Embedding generation
-│   │   │   ├── minio_client.py       # Object storage with local filesystem fallback
-│   │   │   ├── celery_app.py         # Celery broker configuration
-│   │   │   └── local_storage.py      # Local sandbox storage fallback
-│   │   ├── routes/                   # REST API routers (per-topic)
-│   │   │   ├── query_routes.py       # RAG query and chat
-│   │   │   ├── upload_routes.py      # Document and file upload
-│   │   │   ├── config_routes.py      # Live feature-toggle configuration
-│   │   │   ├── auth_routes.py        # Authentication and user management
-│   │   │   ├── crawler_routes.py     # Crawl job management
-│   │   │   ├── knowledge_routes.py   # Knowledge base management
-│   │   │   ├── integration_routes.py # Widget and API key management
-│   │   │   └── widget_routes.py      # Website chat widget endpoints
-│   │   ├── logics/                   # Business logic, decoupled from routes
-│   │   ├── schemas/                  # Pydantic request/response models
-│   │   ├── prompts/                  # System prompt templates per agent
-│   │   ├── helpers/                  # Reusable utilities (auth, CSV detector, rate limiter)
-│   │   ├── tasks/                    # Celery background tasks (crawler, extraction)
-│   │   └── services/                 # AI and RAG workers
-│   │       ├── safety/               # PII masking and redaction
-│   │       ├── retrieval/            # RAG pipeline (analyst, librarian, lawyer, QnA)
-│   │       ├── integrations/         # Telegram bot and external integrations
-│   │       └── workers/              # Crawler engine, text/structured/unstructured processors
-│   ├── scripts/                      # Helper scripts (local data ingestion)
-│   ├── Dockerfile                    # Slim Python 3.11 container
-│   ├── requirements.txt              # Python dependencies
-│   └── config.yaml                   # Dynamic feature-toggles configuration
+│   │   ├── core/                   # Configurations, Database & Clients
+│   │   │   ├── config.py           # Pydantic Settings & YAML feature toggles loader
+│   │   │   ├── database.py         # Postgres pgvector connections and schemas
+│   │   │   ├── logging.py          # Unified system loggers (English)
+│   │   │   └── minio_client.py     # Object storage client with local filesystem fallback
+│   │   ├── endpoints/
+│   │   │   └── routes.py           # REST API Route Handlers
+│   │   └── services/               # AI & RAG Expert Workers
+│   │       ├── safety/
+│   │       │   └── pii_redactor.py # PII Masking & Security Auditing
+│   │       └── workers/
+│   │           ├── text_processor.py# Farsi normalizer & sliding window chunker
+│   │           ├── unstructured.py # Docx/PDF/TXT text parsing engine
+│   │           ├── analyst.py      # LangGraph computational pandas REPL solver
+│   │           ├── librarian.py    # Vector DB retriever
+│   │           └── support_lead.py # QnA template matcher
+│   ├── Dockerfile                  # Lightweight Python 3.11-slim container
+│   ├── requirements.txt            # Python dependencies
+│   └── config.yaml                 # Active dynamic feature toggles config
 │
-├── frontend/                         # Vite React client application
+├── frontend/                       # Vite React Client Application
 │   ├── src/
-│   │   ├── App.jsx                   # Dashboard, Chat, Upload, Admin panels
-│   │   ├── main.jsx                  # SPA entry point
-│   │   ├── api/                      # API client and endpoint configuration
-│   │   ├── components/               # Reusable UI components
-│   │   ├── constants/                # Shared constants
-│   │   ├── context/                  # Global application state
-│   │   ├── views/                    # Page-level components
-│   │   ├── App.css
-│   │   └── index.css                 # Design system and color palettes
-│   ├── Dockerfile                    # Multi-stage build (Node compile, Nginx serve)
-│   ├── nginx.conf                    # SPA routing configuration
-│   └── package.json                  # Frontend dependencies
+│   │   ├── App.jsx                 # Dynamic Dashboard, Chat, Upload, Admin Panels
+│   │   ├── App.css                 # Custom chat bubble and PII container CSS
+│   │   ├── index.css               # Design system & Persian color palettes
+│   │   └── main.jsx                # SPA Client entry point
+│   ├── Dockerfile                  # Multi-stage build (Node.js compile -> Nginx serve)
+│   ├── nginx.conf                  # Nginx router with SPA Try-Files configuration
+│   └── package.json                # Frontend package dependencies
 │
-├── tests/                            # Integration test suite
-│   ├── test_phase2.py                # PII airlock and normalizer tests
-│   ├── test_phase3.py                # File ingestion and pandas analytics tests
-│   ├── test_phase4.py                # Agent routing and anti-hallucination tests
-│   ├── test_phase5.py                # Gateways, widget, and Telegram bot tests
-│   └── test_phase8.py                # Global test runner
+├── tests/                          # Quality Control Integration Test Suite
+│   ├── test_phase2.py              # PII Airlock & normalizer tests
+│   ├── test_phase3.py              # File ingestion & pandas analytics tests
+│   ├── test_phase4.py              # Agent routing & anti-hallucination tests
+│   ├── test_phase5.py              # Gateways, Widget & Telegram Bot tests
+│   └── test_phase7.py              # Integrated global test runner script
 │
-├── data/                             # Sample local data (structured/unstructured/QnA)
-├── docs/pitch-deck/                  # Pitch-deck materials
-├── knowledge_base_data/              # Knowledge base seed content
-├── reports/                          # Technical documentation reports
-├── docker-compose.yml                # Multi-container orchestrator
-└── README.md
+├── docker-compose.yml              # Central multi-container orchestrator
+└── reports/                        # Detailed technical documentation reports
 ```
 
 ---
 
-## Quick Start and Deployment
+## Quick Start & Deployment Guide (راهنمای راه‌اندازی سریع)
 
-Deploy the React client, FastAPI backend, pgvector database, and MinIO storage with Docker Compose.
+Deploy the entire commercial ArioNex network containing **React Client, FastAPI Backend, pgvector Database, and MinIO Ingestion storage** in minutes:
 
-### Prerequisites
+### 1. Prerequisites
+Ensure you have **Docker** and **Docker Compose** installed on your server.
 
-Install Docker and Docker Compose on your server.
-
-### Environment Variables
-
-Create a `.env` file under `backend/`. If LLM keys are left blank, ArioNex boots in **Mock Simulator Mode** with zero-embeddings and zero errors.
-
+### 2. Configure Environment Variables
+Create a `.env` file under the `backend/` directory (if LLM keys are blank, ArioNex will gracefully boot in **Mock Simulator Mode** with zero-embeddings and zero errors):
 ```env
 POSTGRES_HOST=db
 POSTGRES_PORT=5432
@@ -174,41 +138,16 @@ TAVILY_API_KEY=your_tavily_web_search_key
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 ```
 
-### Start the Stack
-
+### 3. Spin Up the Network
+From the root workspace directory, run:
 ```powershell
 docker-compose up -d --build
 ```
+This automatically downloads, builds, checks container health, links network pathways, and launches all 4 services.
 
-This downloads, builds, checks container health, and launches all four services.
-
-### Service Addresses
-
-| Service | URL |
-|---------|-----|
-| Admin and AI Dashboard | http://localhost (Nginx, port 80) |
-| Swagger API Docs | http://localhost:8000/docs |
-| MinIO Admin Console | http://localhost:9001 (admin / admin123) |
-
----
-
-## Integration Tests
-
-Run the integration test suite locally:
-
-```powershell
-$env:PYTHONIOENCODING="utf-8"
-python tests/test_phase8.py
-```
-
----
-
-## Security and Data Governance
-
-ArioNex enforces a data sovereignty model to protect enterprise privacy:
-
-1. **PII Sanitization:** Uploaded documents are sanitized locally in `pii_redactor.py` before chunks are passed to public or private LLM endpoints.
-2. **Audit Logs:** Masking statistics are stored in the `pg_audit_logs` table for compliance tracking.
-3. **Local Storage Fallback:** If MinIO is unreachable, backend modules redirect data flow to a protected local sandbox directory (`backend/storage/raw_files`).
+### 4. Direct Service Addresses
+*   **Administrative & AI Dashboard:** [http://localhost](http://localhost) (Served via Nginx Port 80)
+*   **Swagger OpenAPI Interactive Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+*   **MinIO Admin Console:** [http://localhost:9001](http://localhost:9001) (User: `admin` | Pass: `admin123`)
 
 ---
