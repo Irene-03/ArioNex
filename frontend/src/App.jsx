@@ -1,6 +1,6 @@
-import React from 'react';
 import './App.css';
 import { AppProvider, useApp } from './context/AppContext';
+import { ToastProvider, ConfirmProvider } from './components/ui/ToastProvider';
 import Sidebar from './components/Layout/Sidebar';
 import Topbar from './components/Layout/Topbar';
 import InviteModal from './components/Modals/InviteModal';
@@ -26,7 +26,7 @@ function DashboardLayout() {
       <Sidebar />
       <div className="main">
         <Topbar />
-        
+
         {activeScreen === 'dashboard' && <DashboardView />}
         {activeScreen === 'chat' && <ChatView />}
         {activeScreen === 'knowledge' && <KnowledgeView />}
@@ -35,8 +35,6 @@ function DashboardLayout() {
         {activeScreen === 'admin' && <AdminView />}
         {activeScreen === 'integrations' && <IntegrationsView />}
         {activeScreen === 'categories' && <CategoriesView />}
-        
-        <div className="wf-tag">ArioNex Commercial AI — v1.0.0</div>
       </div>
       <InviteModal />
     </div>
@@ -45,8 +43,12 @@ function DashboardLayout() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <DashboardLayout />
-    </AppProvider>
+    <ToastProvider>
+      <ConfirmProvider>
+        <AppProvider>
+          <DashboardLayout />
+        </AppProvider>
+      </ConfirmProvider>
+    </ToastProvider>
   );
 }

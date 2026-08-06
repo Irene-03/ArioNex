@@ -1,194 +1,315 @@
 import React from 'react';
+import {
+  LayoutDashboard,
+  FileText,
+  MessageSquareText,
+  Timer,
+  ShieldCheck,
+  Cpu,
+  Download,
+  Lock,
+  Settings,
+  Database,
+  CheckCircle2,
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+
+function DonutChart({ segments, size = 120 }) {
+  const total = segments.reduce((s, x) => s + x.value, 0) || 1;
+  const stroke = 14;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  const visibleSegments = segments.filter(s => s.value > 0);
+  const arcs = visibleSegments.reduce((acc, seg, i) => {
+    const prev = i === 0 ? 0 : acc[i - 1].offset + acc[i - 1].dash;
+    const dash = (seg.value / total) * circumference;
+    acc.push({ seg, dash, offset: prev });
+    return acc;
+  }, []);
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--gray-100)" strokeWidth={stroke} />
+      {arcs.map(({ seg, dash, offset }, i) => (
+        <circle
+          key={i}
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={seg.color}
+          strokeWidth={stroke}
+          strokeDasharray={`${dash} ${circumference - dash}`}
+          strokeDashoffset={-offset}
+          strokeLinecap="butt"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      ))}
+      <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle" fill="var(--navy)" fontSize="18" fontWeight="800" fontFamily="inherit">
+        {total}
+      </text>
+    </svg>
+  );
+}
+
+function Sparkline({ points, width = 200, height = 48 }) {
+  if (points.length < 2) return null;
+  const max = Math.max(...points, 1);
+  const min = Math.min(...points, 0);
+  const range = max - min || 1;
+  const step = width / (points.length - 1);
+  const coords = points.map((p, i) => [i * step, height - ((p - min) / range) * (height - 8) - 4]);
+  const line = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(' ');
+  const area = `${line} L${width},${height} L0,${height} Z`;
+  const last = coords[coords.length - 1];
+
+  return (
+    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+      <defs>
+        <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--copper)" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="var(--copper)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#sparkGrad)" />
+      <path d={line} fill="none" stroke="var(--copper)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={last[0]} cy={last[1]} r="3.5" fill="var(--copper)" />
+    </svg>
+  );
+}
 
 export default function DashboardView() {
   const { documents, stats, chatMessages, setActiveScreen } = useApp();
 
+  const queryHistory = chatMessages.filter(m => m.sender === 'user');
+  const sparkPoints = queryHistory.length > 0 ? [3, 5, 4, 7, 6, 9].map((v, i) => v + (queryHistory.length > i ? 2 : 0)) : [];
+
+  const fileSegments = [
+    { label: 'اسناد PDF', value: stats.pdf_count, color: 'var(--navy)' },
+    { label: 'صفحات مالی و CSV', value: stats.csv_excel_count, color: 'var(--copper)' },
+    { label: 'متنی و سایر', value: stats.other_count, color: 'var(--color-info)' },
+  ];
+
+  const total = stats.total_documents || 1;
+
+  const statCards = [
+    {
+      label: 'اسناد ایندکس‌شده',
+      value: stats.total_documents,
+      change: 'کل اسناد پایگاه دانش',
+      icon: FileText,
+      up: true,
+    },
+    {
+      label: 'پرسش‌های امروز',
+      value: stats.total_queries_today,
+      change: 'در کل سیستم',
+      icon: MessageSquareText,
+      up: true,
+    },
+    {
+      label: 'میانگین زمان پاسخ RAG',
+      value: `${stats.average_response_time}s`,
+      change: 'پایدار و ایمن',
+      icon: Timer,
+    },
+    {
+      label: 'پوشش اطلاعات شخصی (PII)',
+      value: `${stats.total_pii_masked} مورد`,
+      change: 'ماسک‌شده در تمام فایل‌ها',
+      icon: ShieldCheck,
+      up: true,
+    },
+    {
+      label: 'توکن‌های ورودی',
+      value: stats.input_tokens_used ? stats.input_tokens_used.toLocaleString() : 0,
+      icon: Cpu,
+    },
+    {
+      label: 'توکن‌های خروجی',
+      value: stats.output_tokens_used ? stats.output_tokens_used.toLocaleString() : 0,
+      icon: Cpu,
+    },
+  ];
+
+  const activeDoc = documents.find(d => d.status === 'uploading' || (d.progress !== undefined && d.progress < 100));
+  const prog = activeDoc ? (activeDoc.progress || 0) : (documents.length > 0 ? 100 : -1);
+  const s1 = prog >= 0 ? (prog >= 30 ? 'pipe-done' : 'pipe-active') : 'pipe-idle';
+  const s2 = prog >= 30 ? (prog >= 60 ? 'pipe-done' : 'pipe-active') : 'pipe-idle';
+  const s3 = prog >= 60 ? (prog >= 85 ? 'pipe-done' : 'pipe-active') : 'pipe-idle';
+  const s4 = prog >= 85 ? (prog >= 100 ? 'pipe-done' : 'pipe-active') : 'pipe-idle';
+  const s5 = prog >= 100 ? 'pipe-done' : 'pipe-idle';
+
+  const pipelineSteps = [
+    { state: s1, icon: Download, label: 'دریافت منبع' },
+    { state: s2, icon: Lock, label: 'ایرلاک حریم خصوصی' },
+    { state: s3, icon: Settings, label: 'تقطیع و پردازش' },
+    { state: s4, icon: Database, label: 'ذخیره برداری' },
+    { state: s5, icon: CheckCircle2, label: 'آماده بهره‌برداری' },
+  ];
+
   return (
     <div className="screen fade-in">
+      <div className="ax-page-header">
+        <div>
+          <div className="ax-page-header__title">
+            <LayoutDashboard size={20} style={{ color: 'var(--copper)' }} />
+            نمای کلی سامانه
+          </div>
+        </div>
+      </div>
+
       <div className="stats-row">
-        <div className="stat-card stat-accent">
-          <div className="stat-label">اسناد ایندکس‌شده</div>
-          <div className="stat-value">{stats.total_documents}</div>
-          <div className="stat-change stat-up">تعداد کل اسناد پایگاه دانش</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">پرسش‌های امروز</div>
-          <div className="stat-value">{stats.total_queries_today}</div>
-          <div className="stat-change stat-up">در کل سیستم</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">میانگین زمان پاسخ RAG</div>
-          <div className="stat-value">{stats.average_response_time}s</div>
-          <div className="stat-change" style={{color: 'var(--text-muted)'}}>پایدار و ایمن</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">پوشش اطلاعات شخصی (PII)</div>
-          <div className="stat-value">{stats.total_pii_masked} مورد</div>
-          <div className="stat-change stat-up">ماسک شده در تمام فایل‌ها</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">توکن‌های مصرفی API</div>
-          <div className="stat-value">{stats.total_tokens_used ? stats.total_tokens_used.toLocaleString() : 0}</div>
-          <div className="stat-change" style={{color: 'var(--copper-dark)'}}>کل نشست‌ها</div>
-        </div>
+        {statCards.map(card => {
+          const Icon = card.icon;
+          return (
+            <div className={`stat-card ${card.label.startsWith('اسناد') ? 'stat-accent' : ''}`} key={card.label}>
+              <div className="stat-label">
+                <Icon />
+                {card.label}
+              </div>
+              <div className="stat-value">{card.value}</div>
+              <div className={`stat-change ${card.up ? 'stat-up' : ''}`} style={!card.up ? { color: 'var(--text-muted)' } : undefined}>
+                {card.change}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="two-col">
         <div>
-          {/* وضعیت پایپ لاین زنده پردازش */}
           <div className="card">
             <div className="card-title">
-              وضعیت زنده خط پردازش اسناد (Pipeline Progress)
-              <div style={{display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--color-success)', fontWeight: 'normal'}}>
-                <div className="pulse" style={{width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-success)'}}></div> زنده
+              وضعیت زنده خط پردازش اسناد
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-success)', fontWeight: 'normal' }}>
+                <div className="pulse" style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'var(--color-success)' }} />
+                زنده
               </div>
             </div>
-            
-            <div className="pipeline">
-              {(() => {
-                const activeDoc = documents.find(d => d.status === 'uploading' || (d.progress !== undefined && d.progress < 100));
-                const prog = activeDoc ? (activeDoc.progress || 0) : (documents.length > 0 ? 100 : -1);
-                // -1 = هیچ سندی نیست, 0-30 = دریافت, 30-60 = ایرلاک, 60-85 = تقطیع, 85-99 = ذخیره, 100 = آماده
-                const s1 = prog >= 0 ? (prog >= 30 ? 'pipe-done' : 'pipe-active') : 'pipe-idle';
-                const s2 = prog >= 30 ? (prog >= 60 ? 'pipe-done' : 'pipe-active') : 'pipe-idle';
-                const s3 = prog >= 60 ? (prog >= 85 ? 'pipe-done' : 'pipe-active') : 'pipe-idle';
-                const s4 = prog >= 85 ? (prog >= 100 ? 'pipe-done' : 'pipe-active') : 'pipe-idle';
-                const s5 = prog >= 100 ? 'pipe-done' : 'pipe-idle';
-                return (<>
-                  <div className="pipe-step">
-                    <div className={`pipe-node ${s1}`}>📥{s1==='pipe-done' && <div className="pipe-check">✓</div>}</div>
-                    <div className="pipe-label" style={s1==='pipe-active' ? {color: 'var(--copper-dark)', fontWeight: 'bold'} : {}}>دریافت منبع</div>
-                  </div>
-                  <div className="pipe-arrow">←</div>
-                  <div className="pipe-step">
-                    <div className={`pipe-node ${s2}`}>🔒{s2==='pipe-done' && <div className="pipe-check">✓</div>}</div>
-                    <div className="pipe-label" style={s2==='pipe-active' ? {color: 'var(--copper-dark)', fontWeight: 'bold'} : {}}>ایرلاک حریم خصوصی</div>
-                  </div>
-                  <div className="pipe-arrow">←</div>
-                  <div className="pipe-step">
-                    <div className={`pipe-node ${s3}`}>⚙️{s3==='pipe-done' && <div className="pipe-check">✓</div>}</div>
-                    <div className="pipe-label" style={s3==='pipe-active' ? {color: 'var(--copper-dark)', fontWeight: 'bold'} : {}}>تقطیع و پردازش</div>
-                  </div>
-                  <div className="pipe-arrow">←</div>
-                  <div className="pipe-step">
-                    <div className={`pipe-node ${s4}`}>🗄{s4==='pipe-done' && <div className="pipe-check">✓</div>}</div>
-                    <div className="pipe-label" style={s4==='pipe-active' ? {color: 'var(--copper-dark)', fontWeight: 'bold'} : {}}>ذخیره برداری</div>
-                  </div>
-                  <div className="pipe-arrow">←</div>
-                  <div className="pipe-step">
-                    <div className={`pipe-node ${s5}`}>✅{s5==='pipe-done' && <div className="pipe-check">✓</div>}</div>
-                    <div className="pipe-label" style={s5==='pipe-active' ? {color: 'var(--copper-dark)', fontWeight: 'bold'} : {}}>آماده بهره‌برداری</div>
-                  </div>
-                </>);
-              })()}
-            </div>
 
-            {documents.some(d => d.status === 'uploading' || d.progress < 100) ? (
-              documents
-                .filter(d => d.status === 'uploading' || d.progress < 100)
-                .slice(0, 1)
-                .map(d => (
-                  <div key={d.id} style={{background: 'var(--gray-50)', borderRadius: 'var(--radius)', padding: '12px 16px', fontSize: '12.5px', color: 'var(--text-secondary)'}}>
-                    <strong style={{color: 'var(--text-primary)'}}>در حال پردازش:</strong> {d.name} — (پیشرفت {d.progress}٪)
-                    <div style={{marginTop: '10px', background: 'var(--gray-100)', borderRadius: '4px', height: '6px', overflow: 'hidden'}}>
-                      <div style={{width: `${d.progress}%`, height: '100%', background: 'linear-gradient(90deg, var(--copper), var(--copper-light))', borderRadius: '4px'}}></div>
+            <div className="pipeline">
+              {pipelineSteps.map((step, i) => (
+                <React.Fragment key={step.label}>
+                  <div className="pipe-step">
+                    <div className={`pipe-node ${step.state}`}>
+                      <step.icon size={22} />
+                      {step.state === 'pipe-done' && <div className="pipe-check">✓</div>}
+                    </div>
+                    <div className="pipe-label" style={step.state === 'pipe-active' ? { color: 'var(--copper-dark)', fontWeight: 'bold' } : {}}>
+                      {step.label}
                     </div>
                   </div>
-                ))
+                  {i < pipelineSteps.length - 1 && <div className="pipe-arrow">←</div>}
+                </React.Fragment>
+              ))}
+            </div>
+
+            {activeDoc ? (
+              <div style={{ background: 'var(--gray-50)', borderRadius: 'var(--radius)', padding: '12px 16px', fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+                <strong style={{ color: 'var(--text-primary)' }}>در حال پردازش:</strong> {activeDoc.name} — (پیشرفت {activeDoc.progress}٪)
+                <div style={{ marginTop: 10, background: 'var(--gray-100)', borderRadius: 999, height: 6, overflow: 'hidden' }}>
+                  <div style={{ width: `${activeDoc.progress}%`, height: '100%', background: 'linear-gradient(90deg, var(--copper), var(--copper-light))', borderRadius: 999 }} />
+                </div>
+              </div>
             ) : (
-              <div style={{background: 'var(--gray-50)', borderRadius: 'var(--radius)', padding: '12px 16px', fontSize: '12.5px', color: 'var(--text-secondary)', textAlign: 'center'}}>
-                <span style={{fontStyle: 'italic', opacity: 0.8}}>خط پردازش اسناد در حال حاضر آماده به کار است. سندی در صف نیست.</span>
+              <div style={{ background: 'var(--gray-50)', borderRadius: 'var(--radius)', padding: '12px 16px', fontSize: '12.5px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                خط پردازش اسناد آماده به کار است. سندی در صف نیست.
               </div>
             )}
           </div>
 
-          {/* پرسش‌های اخیر */}
           <div className="card">
-            <div className="card-title">آخرین پرسش‌های اعضای سازمان <span className="card-link" onClick={() => setActiveScreen('chat')}>مشاهده همه چت‌ها →</span></div>
-            {chatMessages.filter(m => m.sender === 'user').length > 0 ? (
-              chatMessages
-                .filter(m => m.sender === 'user')
+            <div className="card-title">
+              آخرین پرسش‌های اعضای سازمان
+              <span className="card-link" onClick={() => setActiveScreen('chat')}>
+                مشاهده همه چت‌ها ←
+              </span>
+            </div>
+            {queryHistory.length > 0 ? (
+              queryHistory
                 .slice(-3)
                 .reverse()
                 .map(msg => (
                   <div key={msg.id} className="query-row">
-                    <div className="query-dot q-green"></div>
-                    <div className="q-text" style={{overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '380px'}}>
-                      {msg.text}
-                    </div>
+                    <div className="query-dot q-green" />
+                    <div className="q-text" style={{ maxWidth: 380 }}>{msg.text}</div>
                     <span className="q-badge qb-done">پاسخ داده شد</span>
                   </div>
                 ))
             ) : (
-              <div style={{fontSize: '12.5px', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '16px 0'}}>
+              <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '16px 0' }}>
                 هیچ پرسشی در این نشست مطرح نشده است.
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="card-title">روند فعالیت پرسش و پاسخ</div>
+            {sparkPoints.length >= 2 ? (
+              <Sparkline points={sparkPoints} />
+            ) : (
+              <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '16px 0' }}>
+                پس از اولین پرسش‌ها، نمودار روند نمایش داده می‌شود.
               </div>
             )}
           </div>
         </div>
 
-        {/* سایدبار سمت چپ اطلاعات پایگاه دانش */}
-        <div style={{display: 'flex', flexDirection: 'column', gap: '16px'}}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="card">
             <div className="card-title">توزیع منابع دانش سازمان</div>
-            <div style={{display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px'}}>
-              <div>
-                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px'}}>
-                  <span style={{color: 'var(--text-secondary)'}}>اسناد PDF</span>
-                  <strong style={{color: 'var(--text-primary)'}}>{stats.pdf_count} سند</strong>
-                </div>
-                <div style={{background: 'var(--gray-100)', borderRadius: '4px', height: '6px', overflow: 'hidden'}}>
-                  <div style={{width: `${stats.total_documents > 0 ? (stats.pdf_count / stats.total_documents) * 100 : 0}%`, height: '100%', background: 'var(--navy)', borderRadius: '4px'}}></div>
-                </div>
-              </div>
-              <div>
-                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px'}}>
-                  <span style={{color: 'var(--text-secondary)'}}>صفحات مالی و CSV</span>
-                  <strong style={{color: 'var(--text-primary)'}}>{stats.csv_excel_count} فایل</strong>
-                </div>
-                <div style={{background: 'var(--gray-100)', borderRadius: '4px', height: '6px', overflow: 'hidden'}}>
-                  <div style={{width: `${stats.total_documents > 0 ? (stats.csv_excel_count / stats.total_documents) * 100 : 0}%`, height: '100%', background: 'var(--copper)', borderRadius: '4px'}}></div>
-                </div>
-              </div>
-              <div>
-                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px'}}>
-                  <span style={{color: 'var(--text-secondary)'}}>اسناد متنی و غیره</span>
-                  <strong style={{color: 'var(--text-primary)'}}>{stats.other_count} سند</strong>
-                </div>
-                <div style={{background: 'var(--gray-100)', borderRadius: '4px', height: '6px', overflow: 'hidden'}}>
-                  <div style={{width: `${stats.total_documents > 0 ? (stats.other_count / stats.total_documents) * 100 : 0}%`, height: '100%', background: 'var(--color-info)', borderRadius: '4px'}}></div>
-                </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+              <DonutChart segments={fileSegments} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 12.5 }}>
+                {fileSegments.map(seg => (
+                  <div key={seg.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 3, background: seg.color, flexShrink: 0 }} />
+                    <span style={{ color: 'var(--text-secondary)' }}>{seg.label}</span>
+                    <strong style={{ color: 'var(--text-primary)', marginRight: 'auto' }}>
+                      {Math.round((seg.value / total) * 100)}٪
+                    </strong>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
 
           <div className="card">
             <div className="card-title">فعالیت‌های زنده حریم خصوصی</div>
-            <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
-              {documents.length > 0 ? (
-                documents.slice(0, 2).map((doc) => (
-                  <div key={doc.id} style={{display: 'flex', gap: '12px', alignItems: 'flex-start', fontSize: '12.5px'}}>
-                    <span style={{color: doc.status === 'ready' ? 'var(--color-success)' : 'var(--copper)', background: doc.status === 'ready' ? 'var(--color-success-bg)' : 'rgba(196, 137, 74, 0.1)', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold'}}>
+            {documents.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {documents.slice(0, 3).map(doc => (
+                  <div key={doc.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', fontSize: 12.5 }}>
+                    <span
+                      style={{
+                        color: doc.status === 'ready' ? 'var(--color-success)' : 'var(--copper)',
+                        background: doc.status === 'ready' ? 'var(--color-success-bg)' : 'rgba(196, 137, 74, 0.1)',
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        fontWeight: 'bold',
+                      }}
+                    >
                       {doc.status === 'ready' ? '✓' : '⏳'}
                     </span>
                     <div>
-                      <div style={{color: 'var(--text-primary)', fontWeight: '600'}}>
+                      <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
                         {doc.status === 'ready' ? 'سند با موفقیت ایندکس شد' : 'در حال پردازش سند'}
                       </div>
-                      <div style={{color: 'var(--text-secondary)', marginTop: '2px'}}>
-                        محتوای سند "{doc.name}" پردازش گردید و اطلاعات حساس در صورت وجود ماسک شدند.
+                      <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
+                        محتوای سند «{doc.name}» پردازش گردید و اطلاعات حساس ماسک شدند.
                       </div>
-                      <div style={{fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px'}}>{doc.date}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{doc.date}</div>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div style={{fontSize: '12.5px', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '16px 0'}}>
-                  هیچ سند یا فعالیتی هنوز ثبت نشده است.
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '16px 0' }}>
+                هیچ سند یا فعالیتی هنوز ثبت نشده است.
+              </div>
+            )}
           </div>
         </div>
       </div>

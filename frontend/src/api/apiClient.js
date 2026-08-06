@@ -1,3 +1,5 @@
+import { API_BASE } from './config';
+
 export const createApiClient = (token, refreshToken, handleLogout, onTokenRefresh) => {
   let isRefreshing = false;
   let refreshSubscribers = [];
@@ -17,7 +19,7 @@ export const createApiClient = (token, refreshToken, handleLogout, onTokenRefres
       throw new Error('Refresh token not found');
     }
 
-    const res = await fetch('http://localhost:8000/v1/auth/refresh', {
+    const res = await fetch(`${API_BASE}/v1/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -79,7 +81,7 @@ export const createApiClient = (token, refreshToken, handleLogout, onTokenRefres
           } catch (err) {
             isRefreshing = false;
             if (handleLogout) handleLogout();
-            throw new Error('جلسه شما منقضی شده است. لطفاً مجدداً وارد شوید.');
+            throw new Error('جلسه شما منقضی شده است. لطفاً مجدداً وارد شوید.', { cause: err });
           }
         }
 
