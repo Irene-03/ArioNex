@@ -28,6 +28,8 @@ class DocumentResponse(BaseModel):
     file_type: str = Field(..., description="نوع فایل (pdf, docx, csv, txt)")
     min_role_required: str = Field(..., description="حداقل نقش لازم برای دسترسی")
     created_at: str = Field(..., description="زمان بارگذاری")
+    chunk_count: int = Field(0, description="تعداد قطعات برداری ایندکس شده برای این سند")
+    status: str = Field("indexed", description="وضعیت ایندکس: indexed یا pending")
 
 class UpdateDocumentRole(BaseModel):
     min_role_required: str = Field(..., description="نقش مجاز: Admin یا Analyst")
@@ -53,14 +55,24 @@ async def get_knowledge_stats(user: dict = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            # ۱. تعداد کل اسناد
-            cur.execute("SELECT COUNT(*) FROM documents")
+            # ۱. تعداد کل اسناد دارای قطعات ایندکس شده (رکوردهای یتیم و بدون chunk حذف می‌شوند)
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM documents d
+                WHERE (SELECT COUNT(*) FROM pg_supervisor s WHERE s.file_id = d.id) +
+                      (SELECT COUNT(*) FROM qna_query q WHERE q.file_id = d.id) > 0
+                """
+            )
             total_documents = cur.fetchone()[0]
 
-            # ۲. تعداد قطعات در pg_supervisor و qna_query
-            cur.execute("SELECT COUNT(*) FROM pg_supervisor")
+            # ۲. تعداد قطعات در pg_supervisor و qna_query (فقط مربوط به اسناد ثبت شده)
+            cur.execute(
+                "SELECT COUNT(*) FROM pg_supervisor WHERE file_id IN (SELECT id FROM documents)"
+            )
             chunks_sup = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(*) FROM qna_query")
+            cur.execute(
+                "SELECT COUNT(*) FROM qna_query WHERE file_id IN (SELECT id FROM documents)"
+            )
             chunks_qna = cur.fetchone()[0]
             total_chunks = chunks_sup + chunks_qna
 
@@ -68,30 +80,34 @@ async def get_knowledge_stats(user: dict = Depends(get_current_user)):
             cur.execute("SELECT COUNT(*) FROM pg_audit_logs WHERE timestamp >= CURRENT_DATE")
             total_queries_today = cur.fetchone()[0]
 
-            # ۴. میانگین زمان پاسخ RAG
-            cur.execute("SELECT COALESCE(AVG(response_time_ms), 1200) FROM pg_audit_logs WHERE response_time_ms > 0")
+            # ۴. میانگین زمان پاسخ RAG (امروز — هماهنگ با total_queries_today)
+            cur.execute(
+                "SELECT COALESCE(AVG(response_time_ms), 1200) FROM pg_audit_logs "
+                "WHERE response_time_ms > 0 AND timestamp >= CURRENT_DATE"
+            )
             avg_response_ms = cur.fetchone()[0]
             average_response_time = round(float(avg_response_ms) / 1000.0, 1)
 
-            # ۵. تعداد کل PIIهای ماسک شده (اگر در لاگ ممیزی ثبت شده باشد، وگرنه تخمینی از اسناد)
-            cur.execute("SELECT COALESCE(SUM(pii_masked_count), 0) FROM pg_audit_logs")
+            # ۵. تعداد کل PIIهای ماسک شده — جمع واقعی ثبت‌شده هنگام آپلود هر سند
+            cur.execute("SELECT COALESCE(SUM(pii_masked_count), 0) FROM documents")
             total_pii_masked = cur.fetchone()[0]
-            if total_pii_masked == 0:
-                # Mock a value based on documents for demonstration if none in logs
-                total_pii_masked = total_documents * 12
 
             # ۵.۱ توکن‌های مصرفی
             cur.execute("SELECT COALESCE(SUM(total_tokens), 0) FROM pg_audit_logs")
             total_tokens_used = cur.fetchone()[0]
 
-            # ۶. تفکیک فرمت‌ها
-            cur.execute("SELECT COUNT(*) FROM documents WHERE file_type IN ('pdf', 'PDF')")
+            # ۶. تفکیک فرمت‌ها (فقط اسناد دارای chunk)
+            indexed_sql = """
+                AND (SELECT COUNT(*) FROM pg_supervisor s WHERE s.file_id = d.id) +
+                    (SELECT COUNT(*) FROM qna_query q WHERE q.file_id = d.id) > 0
+            """
+            cur.execute(f"SELECT COUNT(*) FROM documents d WHERE file_type IN ('pdf', 'PDF') {indexed_sql}")
             pdf_count = cur.fetchone()[0]
 
-            cur.execute("SELECT COUNT(*) FROM documents WHERE file_type IN ('csv', 'CSV', 'xlsx', 'XLSX', 'csv', 'xlsx')")
+            cur.execute(f"SELECT COUNT(*) FROM documents d WHERE file_type IN ('csv', 'CSV', 'xlsx', 'XLSX') {indexed_sql}")
             csv_excel_count = cur.fetchone()[0]
 
-            cur.execute("SELECT COUNT(*) FROM documents WHERE file_type NOT IN ('pdf', 'PDF', 'csv', 'CSV', 'xlsx', 'XLSX')")
+            cur.execute(f"SELECT COUNT(*) FROM documents d WHERE file_type NOT IN ('pdf', 'PDF', 'csv', 'CSV', 'xlsx', 'XLSX') {indexed_sql}")
             other_count = cur.fetchone()[0]
 
             # ۷. تخمین حجم دیسک (مثلاً هر چانک ۱۵ کیلوبایت در دیتابیس)
@@ -123,16 +139,28 @@ async def list_documents(user: dict = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            if role == "Admin":
-                # ادمین به تمام اسناد دسترسی دارد
-                cur.execute(
-                    "SELECT id, filename, file_type, min_role_required, created_at FROM documents ORDER BY id DESC"
-                )
-            else:
-                # تحلیل‌گر فقط اسناد با سطح Analyst را می‌بیند
-                cur.execute(
-                    "SELECT id, filename, file_type, min_role_required, created_at FROM documents WHERE min_role_required = 'Analyst' ORDER BY id DESC"
-                )
+            # فقط اسنادی که واقعاً قطعات برداری ایندکس شده دارند برمی‌گردد.
+            # رکوردهای قدیمی و یتیم (بدون هیچ chunk) نمایش داده نمی‌شوند.
+            role_filter = "AND d.min_role_required = 'Analyst'" if role != "Admin" else ""
+            cur.execute(
+                f"""
+                SELECT d.id, d.filename, d.file_type, d.min_role_required, d.created_at,
+                       COALESCE(ch.chunk_count, 0)
+                FROM documents d
+                LEFT JOIN (
+                    SELECT file_id, COUNT(*) AS chunk_count
+                    FROM (
+                        SELECT file_id FROM pg_supervisor
+                        UNION ALL
+                        SELECT file_id FROM qna_query
+                    ) all_chunks
+                    GROUP BY file_id
+                ) ch ON ch.file_id = d.id
+                WHERE COALESCE(ch.chunk_count, 0) > 0
+                {role_filter}
+                ORDER BY d.id DESC
+                """
+            )
             rows = cur.fetchall()
             return [
                 DocumentResponse(
@@ -140,7 +168,8 @@ async def list_documents(user: dict = Depends(get_current_user)):
                     filename=row[1],
                     file_type=row[2],
                     min_role_required=row[3],
-                    created_at=str(row[4])
+                    created_at=str(row[4]),
+                    chunk_count=row[5]
                 ) for row in rows
             ]
     except Exception as e:
@@ -176,12 +205,24 @@ async def update_document_role(
             if not row:
                 raise HTTPException(status_code=404, detail="سند مورد نظر یافت نشد.")
             conn.commit()
+
+            # محاسبه تعداد قطعات ایندکس شده برای پاسخ سازگار
+            cur.execute(
+                """
+                SELECT (SELECT COUNT(*) FROM pg_supervisor s WHERE s.file_id = %s) +
+                       (SELECT COUNT(*) FROM qna_query q WHERE q.file_id = %s)
+                """,
+                (file_id, file_id)
+            )
+            chunk_count = cur.fetchone()[0]
+
             return DocumentResponse(
                 id=row[0],
                 filename=row[1],
                 file_type=row[2],
                 min_role_required=row[3],
-                created_at=str(row[4])
+                created_at=str(row[4]),
+                chunk_count=chunk_count
             )
     except HTTPException:
         raise

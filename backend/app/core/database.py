@@ -9,32 +9,157 @@
 """
 
 import logging
+import threading
 import psycopg2
+from psycopg2 import extensions
+from psycopg2.pool import ThreadedConnectionPool
 from psycopg2.extras import RealDictCursor
 from app.core.config import settings
 
 logger = logging.getLogger("arionex.database")
 
+# -------------------------------------------------------------------
+# اتصال‌پول (Connection Pool) برای کاهش سربار دست‌دادن TCP + احراز هویت
+# در هر فراخوانی — به‌جای ساخت کانکشن جدید برای هر کوئری
+# -------------------------------------------------------------------
+_pool = None
+_pool_lock = threading.Lock()
+_POOL_MAX_CONNECTIONS = 30
+
+
+def _get_pool():
+    """
+    /// <summary>
+    /// ساخت یا بازیابی اتصال‌پول سراسری PostgreSQL (lazy init)
+    /// </summary>
+    """
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                _pool = ThreadedConnectionPool(
+                    minconn=1,
+                    maxconn=_POOL_MAX_CONNECTIONS,
+                    dbname=settings.postgres_db,
+                    user=settings.postgres_user,
+                    password=settings.postgres_password,
+                    host=settings.postgres_host,
+                    port=settings.postgres_port
+                )
+    return _pool
+
+
+def _reset_connection(conn) -> None:
+    """
+    /// <summary>
+    /// بازنشانی وضعیت تراکنش کانکشن پیش از برگرداندن به پول
+    /// </summary>
+    """
+    try:
+        if conn.get_transaction_status() != extensions.TRANSACTION_STATUS_IDLE:
+            conn.rollback()
+    except Exception:
+        pass
+
+
+def _return_connection(conn) -> None:
+    try:
+        _reset_connection(conn)
+        _get_pool().putconn(conn)
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+class _PooledConnection:
+    """
+    /// <summary>
+    /// پوسته کانکشن پول‌شده — متد close() به‌جای بستن واقعی، کانکشن را به پول برمی‌گرداند
+    /// تا تمامی کدهای موجود (conn.close()) بدون تغییر سازگار بمانند.
+    /// </summary>
+    """
+    __slots__ = ("_conn",)
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def close(self) -> None:
+        conn, self._conn = self._conn, None
+        if conn is not None:
+            _return_connection(conn)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+        return False
+
+
 def get_db_connection():
     """
     /// <summary>
-    /// برقراری ارتباط با پایگاه داده PostgreSQL بر اساس کانفیگ‌های فعال سیستم
+    /// برقراری ارتباط با پایگاه داده PostgreSQL از اتصال‌پول بر اساس کانفیگ‌های فعال سیستم
     /// </summary>
-    /// <returns>یک شیء کانکشن معتبر از کتابخانه psycopg2</returns>
+    /// <returns>یک شیء کانکشن پول‌شده سازگار با psycopg2</returns>
     /// <exception cref="psycopg2.OperationalError">در صورت بروز خطا در اتصال به پایگاه داده</exception>
     """
     try:
-        conn = psycopg2.connect(
-            dbname=settings.postgres_db,
-            user=settings.postgres_user,
-            password=settings.postgres_password,
-            host=settings.postgres_host,
-            port=settings.postgres_port
-        )
-        return conn
+        conn = _get_pool().getconn()
+        _reset_connection(conn)
+        return _PooledConnection(conn)
     except Exception as e:
-        logger.error(f"PostgreSQL connection failed: {str(e)}")
+        logger.error(f"PostgreSQL pooled connection failed: {str(e)}")
         raise e
+
+def _create_vector_indexes(cur) -> None:
+    """
+    /// <summary>
+    /// ساخت ایندکس برداری بهینه برای جداول جستجوی شباهت (pgvector)
+    /// </summary>
+    /// <remarks>
+    /// ابتدا HNSW امتحان می‌شود (سریع‌ترین برای داده‌های حجیم). اگر ابعاد امبدینگ
+    /// بیش از سقف ۲۰۰۰ بعدی HNSW باشد، به IVFFlat برمی‌گردد که هر ابعادی را پشتیبانی می‌کند.
+    /// </remarks>
+    """
+    index_specs = [
+        ("idx_pg_supervisor_embedding", "pg_supervisor"),
+        ("idx_qna_query_embedding", "qna_query"),
+        ("idx_pg_dummy_embedding", "pg_dummy"),
+    ]
+    for name, table in index_specs:
+        # SAVEPOINT: خطای یک ایندکس نباید تراکنش جاری را مسموم کند
+        cur.execute("SAVEPOINT vector_index_sp;")
+        try:
+            cur.execute(
+                f"CREATE INDEX IF NOT EXISTS {name}_hnsw "
+                f"ON {table} USING hnsw (embedding vector_cosine_ops);"
+            )
+            cur.execute("RELEASE SAVEPOINT vector_index_sp;")
+            logger.info(f"Created HNSW vector index on {table}")
+        except Exception as e:
+            cur.execute("ROLLBACK TO SAVEPOINT vector_index_sp;")
+            logger.warning(
+                f"HNSW index on {table} failed ({str(e)[:80]}). "
+                f"Falling back to IVFFlat."
+            )
+            try:
+                cur.execute(
+                    f"CREATE INDEX IF NOT EXISTS {name}_ivfflat "
+                    f"ON {table} USING ivfflat (embedding vector_cosine_ops) "
+                    f"WITH (lists = 100);"
+                )
+                cur.execute("RELEASE SAVEPOINT vector_index_sp;")
+                logger.info(f"Created IVFFlat vector index on {table}")
+            except Exception as e2:
+                cur.execute("ROLLBACK TO SAVEPOINT vector_index_sp;")
+                logger.error(f"Vector index on {table} failed: {str(e2)}")
+
 
 def init_db() -> None:
     """
@@ -161,6 +286,7 @@ def init_db() -> None:
             filename VARCHAR(255) NOT NULL,
             file_type VARCHAR(50) NOT NULL,
             min_role_required VARCHAR(50) NOT NULL DEFAULT 'Analyst',
+            pii_masked_count INT DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """,
@@ -239,15 +365,31 @@ def init_db() -> None:
             field_name VARCHAR(255) NOT NULL,
             is_active BOOLEAN DEFAULT TRUE
         );
-        """
+        """,
     ]
-    
+
+    # Migration: existing tables created by older schema versions may be missing
+    # columns that were added later. CREATE TABLE IF NOT EXISTS does not alter
+    # existing tables, so we add the missing columns idempotently here.
+    migrations = [
+        "ALTER TABLE pg_audit_logs ADD COLUMN IF NOT EXISTS pii_masked_count INT DEFAULT 0;",
+        "ALTER TABLE pg_audit_logs ADD COLUMN IF NOT EXISTS total_tokens INT DEFAULT 0;",
+        "ALTER TABLE pg_audit_logs ADD COLUMN IF NOT EXISTS response_time_ms INT DEFAULT 0;",
+        "ALTER TABLE documents ADD COLUMN IF NOT EXISTS pii_masked_count INT DEFAULT 0;",
+    ]
+
     conn = None
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
             for query in queries:
                 cur.execute(query)
+
+            for migration in migrations:
+                cur.execute(migration)
+
+            # ایندکس‌های برداری (HNSW یا IVFFlat بسته به ابعاد امبدینگ)
+            _create_vector_indexes(cur)
             
             # ثبت کاربر ادمین پیش‌فرض در صورت عدم وجود (پسورد: admin123)
             from app.routes.auth_routes import hash_password

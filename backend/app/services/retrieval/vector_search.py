@@ -13,7 +13,7 @@
 import logging
 from app.core.config import settings
 from app.core.database import get_db_connection
-from app.core.embeddings import get_embedding
+from app.core.embeddings import get_embedding_cached
 
 logger = logging.getLogger("arionex.vector_search")
 
@@ -27,7 +27,7 @@ class VectorSearchAgent:
         # بررسی روشن بودن کارگر اسناد در تنظیمات ویژگی‌ها
         self.is_enabled = settings.services.unstructured_document_processor
 
-    def retrieve_categorical(self, query: str, threshold: float = 0.3, k: int = 5, file_ids: list[int] = None) -> list[dict]:
+    def retrieve_categorical(self, query: str, threshold: float = 0.3, k: int = 5, file_ids: list[int] = None, embedding: list = None) -> list[dict]:
         """
         /// <summary>
         /// بازیابی معنایی قطعات از جدول pg_supervisor با فیلتر دسته‌بندی / شناسه فایل
@@ -39,11 +39,12 @@ class VectorSearchAgent:
             
         logger.info(f"Librarian Agent starting categorical search for query: '{query}'")
         
-        try:
-            embedding = get_embedding(query)
-        except Exception as emb_err:
-            logger.error(f"Librarian Agent failed to generate query embedding: {str(emb_err)}")
-            return []
+        if embedding is None:
+            try:
+                embedding = get_embedding_cached(query)
+            except Exception as emb_err:
+                logger.error(f"Librarian Agent failed to generate query embedding: {str(emb_err)}")
+                return []
             
         filter_clause = ""
         params = [embedding]
@@ -93,7 +94,7 @@ class VectorSearchAgent:
                 
         return results
 
-    def retrieve_general(self, query: str, threshold: float = 0.3, k: int = 5) -> list[dict]:
+    def retrieve_general(self, query: str, threshold: float = 0.3, k: int = 5, embedding: list = None) -> list[dict]:
         """
         /// <summary>
         /// بازیابی معنایی قطعات عمومی از جدول pg_dummy
@@ -104,11 +105,12 @@ class VectorSearchAgent:
             
         logger.info(f"Librarian Agent starting general search for query: '{query}'")
         
-        try:
-            embedding = get_embedding(query)
-        except Exception as emb_err:
-            logger.error(f"Librarian Agent failed to generate query embedding: {str(emb_err)}")
-            return []
+        if embedding is None:
+            try:
+                embedding = get_embedding_cached(query)
+            except Exception as emb_err:
+                logger.error(f"Librarian Agent failed to generate query embedding: {str(emb_err)}")
+                return []
             
         sql = """
         SELECT content, 
@@ -146,18 +148,18 @@ class VectorSearchAgent:
                 
         return results
 
-    def retrieve_context(self, query: str, threshold: float = 0.5, k: int = 4, file_ids: list[int] = None) -> list[dict]:
+    def retrieve_context(self, query: str, threshold: float = 0.5, k: int = 4, file_ids: list[int] = None, embedding: list = None) -> list[dict]:
         """
         /// <summary>
         /// بازیابی ترکیبی (سازگاری عقب‌رو)
         /// </summary>
         """
-        categorical = self.retrieve_categorical(query, threshold=threshold, k=k, file_ids=file_ids)
+        categorical = self.retrieve_categorical(query, threshold=threshold, k=k, file_ids=file_ids, embedding=embedding)
         if len(categorical) >= k:
             return categorical[:k]
             
         remaining = k - len(categorical)
-        general = self.retrieve_general(query, threshold=threshold, k=remaining)
+        general = self.retrieve_general(query, threshold=threshold, k=remaining, embedding=embedding)
         return categorical + general
 
 # نمونه سراسری عامل جستجوی برداری اسناد

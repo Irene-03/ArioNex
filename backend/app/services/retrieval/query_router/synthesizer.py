@@ -1,12 +1,15 @@
 import logging
 import json
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, AsyncGenerator
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
 from app.core.config import settings
 from app.core.llm_factory import get_llm
+from app.core.embeddings import get_embedding_cached
 from app.prompts.rag_prompts import (
     STANDARD_REFUSAL_MESSAGE,
     GREETING_TEMPLATE,
@@ -34,6 +37,87 @@ from app.services.retrieval.analyst import analyst_agent
 from app.services.retrieval.query_router.router import route_query_intent
 
 logger = logging.getLogger("arionex.query_router")
+
+# -------------------------------------------------------------------
+# کش TTL برای داده‌های ثابت پایگاه داده (کاهش فراخوانی‌های DB در مسیر داغ)
+# -------------------------------------------------------------------
+_CACHE_TTL_SECONDS = 300
+_cache_store = {}
+
+
+def _ttl_get(key: str, loader) -> object:
+    """
+    /// <summary>
+    /// کش ساده با انقضای زمانی (TTL) برای داده‌های به‌نسبت ثابت پایگاه داده
+    /// </summary>
+    """
+    now = time.time()
+    entry = _cache_store.get(key)
+    if entry is not None and now - entry[0] < _CACHE_TTL_SECONDS:
+        return entry[1]
+    value = loader()
+    # فقط مقادیر پایه (رشته/لیست) کش می‌شوند تا از کش کردن موک‌های تست جلوگیری شود
+    if isinstance(value, (str, list)):
+        _cache_store[key] = (now, value)
+    return value
+
+
+def _load_system_instruction_from_db() -> str:
+    system_instruction = None
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT prompt FROM system_prompts WHERE key = 'default_system_instruction'")
+            row = cur.fetchone()
+            if row:
+                system_instruction = row[0]
+    except Exception as e:
+        logger.error(f"Failed to fetch system instruction from DB: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+    if not system_instruction:
+        system_instruction = (
+            "شما یک دستیار دانش حرفه‌ای برای آریونکس هستید. همیشه منابع را دقیق استناد دهید. "
+            "هیچ‌گاه فراتر از اسناد ارائه‌شده گمانه‌زنی نکنید. اگر سند مرتبطی یافت نشد، صادقانه بگویید."
+        )
+    return system_instruction
+
+
+def _load_active_categories() -> list:
+    categories_list = []
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name FROM categories WHERE is_active = TRUE;")
+            rows = cur.fetchall()
+            categories_list = [{"category_id": r[0], "category_name": r[1]} for r in rows]
+    except Exception as e:
+        logger.error(f"Failed to load categories from database: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+    return categories_list
+
+
+def _load_customization_fields() -> list:
+    customization_fields = []
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT field_name FROM customization_fields WHERE is_active = TRUE;")
+            customization_fields = [r[0] for r in cur.fetchall()]
+    except Exception as e:
+        logger.error(f"Failed to load customization fields from DB: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+    return customization_fields
+
 
 # -------------------------------------------------------------------
 # تعاریف محلی زنجیره‌های پردازشی جهت انطباق با مک‌های یونیت تست
@@ -115,30 +199,10 @@ def customization_chain():
 def _fetch_system_instruction() -> str:
     """
     /// <summary>
-    /// دریافت system instruction از دیتابیس یا استفاده از متن پیش‌فرض
+    /// دریافت system instruction از دیتابیس (با کش TTL) یا استفاده از متن پیش‌فرض
     /// </summary>
     """
-    system_instruction = None
-    conn = None
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute("SELECT prompt FROM system_prompts WHERE key = 'default_system_instruction'")
-            row = cur.fetchone()
-            if row:
-                system_instruction = row[0]
-    except Exception as e:
-        logger.error(f"Failed to fetch system instruction from DB: {str(e)}")
-    finally:
-        if conn:
-            conn.close()
-
-    if not system_instruction:
-        system_instruction = (
-            "شما یک دستیار دانش حرفه‌ای برای آریونکس هستید. همیشه منابع را دقیق استناد دهید. "
-            "هیچ‌گاه فراتر از اسناد ارائه‌شده گمانه‌زنی نکنید. اگر سند مرتبطی یافت نشد، صادقانه بگویید."
-        )
-    return system_instruction
+    return _ttl_get("system_instruction", _load_system_instruction_from_db)
 
 
 def synthesize_rag_response(
@@ -242,19 +306,7 @@ def synthesize_rag_response(
     # ۵. دسته‌بندی موضوعی بر اساس دسته‌بندی‌های دیتابیس (Check Categories)
     category_ids = []
     if getattr(settings.services, "check_categories", False):
-        categories_list = []
-        conn = None
-        try:
-            conn = get_db_connection()
-            with conn.cursor() as cur:
-                cur.execute("SELECT id, name FROM categories WHERE is_active = TRUE;")
-                rows = cur.fetchall()
-                categories_list = [{"category_id": r[0], "category_name": r[1]} for r in rows]
-        except Exception as e:
-            logger.error(f"Failed to load categories from database: {str(e)}")
-        finally:
-            if conn:
-                conn.close()
+        categories_list = _ttl_get("categories", _load_active_categories)
 
         if categories_list:
             cc_chain = check_categories_chain()
@@ -276,18 +328,7 @@ def synthesize_rag_response(
     # ۶. بررسی فیلدهای سفارشی‌سازی (Customization Configs)
     customization_filters = None
     if getattr(settings.services, "customization", False):
-        customization_fields = []
-        conn = None
-        try:
-            conn = get_db_connection()
-            with conn.cursor() as cur:
-                cur.execute("SELECT field_name FROM customization_fields WHERE is_active = TRUE;")
-                customization_fields = [r[0] for r in cur.fetchall()]
-        except Exception as e:
-            logger.error(f"Failed to load customization fields from DB: {str(e)}")
-        finally:
-            if conn:
-                conn.close()
+        customization_fields = _ttl_get("customization_fields", _load_customization_fields)
 
         if customization_fields:
             cust_chain = customization_chain()
@@ -305,13 +346,11 @@ def synthesize_rag_response(
                     customization_filters = {"content": filter_values}
 
     # ۷. بازیابی سه‌گانه منابع (Hybrid Search - QnA, General, Categorical)
-    qna_results = qna_agent.retrieve_context(
-        standalone_query,
-        threshold=threshold,
-        k=k,
-        file_ids=file_ids,
-        filters=customization_filters
-    )
+    # تولید امبدینگ پرسش فقط یک‌بار و استفاده مشترک در تمامی بازیابی‌ها
+    try:
+        query_embedding = get_embedding_cached(standalone_query)
+    except Exception:
+        query_embedding = None
 
     if hasattr(vector_search_agent, "retrieve_context") and type(vector_search_agent.retrieve_context).__name__ in ('MagicMock', 'Mock'):
         logger.info("vector_search_agent.retrieve_context is mocked. Bypassing separate retrievals.")
@@ -319,24 +358,49 @@ def synthesize_rag_response(
             standalone_query,
             threshold=threshold,
             k=k,
-            file_ids=file_ids
+            file_ids=file_ids,
+            embedding=query_embedding
+        )
+        qna_results = qna_agent.retrieve_context(
+            standalone_query,
+            threshold=threshold,
+            k=k,
+            file_ids=file_ids,
+            filters=customization_filters,
+            embedding=query_embedding
         )
         general_results = []
         categorical_results = vector_results
     else:
-        general_results = vector_search_agent.retrieve_general(
-            standalone_query,
-            threshold=threshold,
-            k=k
-        )
-
         active_file_ids = category_ids if category_ids else file_ids
-        categorical_results = vector_search_agent.retrieve_categorical(
-            standalone_query,
-            threshold=threshold,
-            k=k,
-            file_ids=active_file_ids
-        )
+        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="arionex-retrieval") as pool:
+            f_qna = pool.submit(
+                qna_agent.retrieve_context,
+                standalone_query,
+                threshold=threshold,
+                k=k,
+                file_ids=file_ids,
+                filters=customization_filters,
+                embedding=query_embedding
+            )
+            f_gen = pool.submit(
+                vector_search_agent.retrieve_general,
+                standalone_query,
+                threshold=threshold,
+                k=k,
+                embedding=query_embedding
+            )
+            f_cat = pool.submit(
+                vector_search_agent.retrieve_categorical,
+                standalone_query,
+                threshold=threshold,
+                k=k,
+                file_ids=active_file_ids,
+                embedding=query_embedding
+            )
+            qna_results = f_qna.result()
+            general_results = f_gen.result()
+            categorical_results = f_cat.result()
 
     # ادغام و رتبه‌بندی مجدد بر اساس شباهت کسینوسی (Rerank)
     all_results = qna_results + general_results + categorical_results
@@ -582,19 +646,7 @@ async def synthesize_rag_response_stream(
     # ۵. دسته‌بندی موضوعی
     category_ids = []
     if getattr(settings.services, "check_categories", False):
-        categories_list = []
-        conn = None
-        try:
-            conn = get_db_connection()
-            with conn.cursor() as cur:
-                cur.execute("SELECT id, name FROM categories WHERE is_active = TRUE;")
-                rows = cur.fetchall()
-                categories_list = [{"category_id": r[0], "category_name": r[1]} for r in rows]
-        except Exception as e:
-            logger.error(f"Failed to load categories from database: {str(e)}")
-        finally:
-            if conn:
-                conn.close()
+        categories_list = _ttl_get("categories", _load_active_categories)
 
         if categories_list:
             cc_chain = check_categories_chain()
@@ -616,18 +668,7 @@ async def synthesize_rag_response_stream(
     # ۶. بررسی فیلدهای سفارشی‌سازی
     customization_filters = None
     if getattr(settings.services, "customization", False):
-        customization_fields = []
-        conn = None
-        try:
-            conn = get_db_connection()
-            with conn.cursor() as cur:
-                cur.execute("SELECT field_name FROM customization_fields WHERE is_active = TRUE;")
-                customization_fields = [r[0] for r in cur.fetchall()]
-        except Exception as e:
-            logger.error(f"Failed to load customization fields from DB: {str(e)}")
-        finally:
-            if conn:
-                conn.close()
+        customization_fields = _ttl_get("customization_fields", _load_customization_fields)
 
         if customization_fields:
             cust_chain = customization_chain()
@@ -644,14 +685,11 @@ async def synthesize_rag_response_stream(
                 if filter_values:
                     customization_filters = {"content": filter_values}
 
-    # ۷. بازیابی منابع (QnA, General, Categorical)
-    qna_results = qna_agent.retrieve_context(
-        standalone_query,
-        threshold=threshold,
-        k=k,
-        file_ids=file_ids,
-        filters=customization_filters
-    )
+    # ۷. بازیابی منابع (QnA, General, Categorical) — امبدینگ مشترک و اجرای موازی
+    try:
+        query_embedding = get_embedding_cached(standalone_query)
+    except Exception:
+        query_embedding = None
 
     if hasattr(vector_search_agent, "retrieve_context") and type(vector_search_agent.retrieve_context).__name__ in ('MagicMock', 'Mock'):
         logger.info("vector_search_agent.retrieve_context is mocked in stream. Bypassing separate retrievals.")
@@ -659,24 +697,49 @@ async def synthesize_rag_response_stream(
             standalone_query,
             threshold=threshold,
             k=k,
-            file_ids=file_ids
+            file_ids=file_ids,
+            embedding=query_embedding
+        )
+        qna_results = qna_agent.retrieve_context(
+            standalone_query,
+            threshold=threshold,
+            k=k,
+            file_ids=file_ids,
+            filters=customization_filters,
+            embedding=query_embedding
         )
         general_results = []
         categorical_results = vector_results
     else:
-        general_results = vector_search_agent.retrieve_general(
-            standalone_query,
-            threshold=threshold,
-            k=k
-        )
-
         active_file_ids = category_ids if category_ids else file_ids
-        categorical_results = vector_search_agent.retrieve_categorical(
-            standalone_query,
-            threshold=threshold,
-            k=k,
-            file_ids=active_file_ids
-        )
+        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="arionex-retrieval") as pool:
+            f_qna = pool.submit(
+                qna_agent.retrieve_context,
+                standalone_query,
+                threshold=threshold,
+                k=k,
+                file_ids=file_ids,
+                filters=customization_filters,
+                embedding=query_embedding
+            )
+            f_gen = pool.submit(
+                vector_search_agent.retrieve_general,
+                standalone_query,
+                threshold=threshold,
+                k=k,
+                embedding=query_embedding
+            )
+            f_cat = pool.submit(
+                vector_search_agent.retrieve_categorical,
+                standalone_query,
+                threshold=threshold,
+                k=k,
+                file_ids=active_file_ids,
+                embedding=query_embedding
+            )
+            qna_results = f_qna.result()
+            general_results = f_gen.result()
+            categorical_results = f_cat.result()
 
     # ادغام و رتبه‌بندی مجدد
     all_results = qna_results + general_results + categorical_results

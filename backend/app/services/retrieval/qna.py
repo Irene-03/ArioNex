@@ -11,7 +11,7 @@
 import logging
 from app.core.config import settings
 from app.core.database import get_db_connection
-from app.core.embeddings import get_embedding
+from app.core.embeddings import get_embedding_cached
 
 logger = logging.getLogger("arionex.qna")
 
@@ -25,7 +25,7 @@ class QnAAgent:
         # بررسی روشن بودن ماژول در تنظیمات ویژگی‌ها
         self.is_enabled = settings.services.qna_processor
 
-    def retrieve_context(self, query: str, threshold: float = 0.5, k: int = 4, file_ids: list[int] = None, filters: dict = None) -> list[dict]:
+    def retrieve_context(self, query: str, threshold: float = 0.5, k: int = 4, file_ids: list[int] = None, filters: dict = None, embedding: list = None) -> list[dict]:
         """
         /// <summary>
         /// بازیابی معنایی و تطبیق مستقیم الگوهای Q&A از جدول qna_query
@@ -35,6 +35,7 @@ class QnAAgent:
         /// <param name="k">تعداد رکوردهای بازگشتی (پیش‌فرض: ۴)</param>
         /// <param name="file_ids">شناسه‌های فایل محدودکننده RAG</param>
         /// <param name="filters">فیلترهای سفارشی‌سازی داینامیک</param>
+        /// <param name="embedding">بردار از پیش محاسبه‌شده پرسش (در صورت وجود) برای حذف فراخوانی تکراری API</param>
         /// <returns>لیستی از الگوهای پرسش و پاسخ متناظر یافت شده فوق آستانه</returns>
         """
         if not self.is_enabled:
@@ -43,8 +44,9 @@ class QnAAgent:
             
         logger.info(f"Support Lead Agent starting similarity search for query: '{query}'")
         
-        # ۱. استخراج امبدینگ ۳۰۷۲ تایی برای جستار ورودی
-        embedding = get_embedding(query)
+        # ۱. استخراج امبدینگ ۳۰۷۲ تایی برای جستار ورودی (با کش در صورت عدم ارسال از بیرون)
+        if embedding is None:
+            embedding = get_embedding_cached(query)
         
         # ۲. فیلترینگ داینامیک بر اساس شناسه‌ها و فیلترهای سفارشی
         filter_clause = ""

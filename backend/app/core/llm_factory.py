@@ -21,6 +21,7 @@
 """
 
 import logging
+from functools import lru_cache
 from typing import Optional
 
 from app.core.config import settings
@@ -44,12 +45,23 @@ def get_llm(
     /// <remarks>
     /// این تابع به عنوان تنها نقطه ورود برای ساخت مدل زبانی در سراسر سیستم استفاده می‌شود.
     /// در صورت خالی بودن کلید، یک خطای ValueError صادر می‌کند.
+    /// نمونه‌های ساخته‌شده برای هر (provider, model, temperature) کش می‌شوند تا سربار
+    /// ساخت مجدد آبجکت مدل در هر فراخوانی زنجیره حذف شود.
     /// </remarks>
     """
     # استفاده از مقادیر پیش‌فرض از settings در صورت عدم ارائه
     active_provider = provider or settings.llm_provider
     active_model = model or settings.model_name
+    return _get_llm_cached(active_provider, active_model, temperature)
 
+
+@lru_cache(maxsize=32)
+def _get_llm_cached(active_provider: str, active_model: str, temperature: float):
+    """
+    /// <summary>
+    /// نسخه کش‌شده ساخت نمونه LLM (یک نمونه به ازای هر پیکربندی فعال)
+    /// </summary>
+    """
     # بررسی فعال بودن پروایدر در تنظیمات سیستم
     is_enabled = True
     if hasattr(settings, "providers"):

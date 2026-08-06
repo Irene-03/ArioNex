@@ -18,9 +18,24 @@
 
 import logging
 import numpy as np
+from functools import lru_cache
+from typing import Optional
 from app.core.config import settings
 
 logger = logging.getLogger("arionex.embeddings")
+
+# کش سراسری کلاینت‌های OpenAI-compatible جهت جلوگیری از ساخت کلاینت در هر فراخوانی
+@lru_cache(maxsize=32)
+def _get_cached_openai_client(provider: str, base_url: Optional[str], api_key: str, timeout: Optional[float], max_retries: Optional[int]):
+    """
+    /// <summary>
+    /// ساخت یا بازیابی کلاینت OpenAI-compatible کش‌شده (یک کلاینت به ازای هر پیکربندی)
+    /// </summary>
+    """
+    from openai import OpenAI
+    if base_url:
+        return OpenAI(api_key=api_key, base_url=base_url, timeout=timeout, max_retries=max_retries)
+    return OpenAI(api_key=api_key, timeout=timeout, max_retries=max_retries)
 
 # نگاشت ابعاد مدل‌های شناخته‌شده
 _EMBEDDING_DIMENSIONS = {
@@ -104,8 +119,6 @@ def _embed_with_openai(text: str) -> list[float]:
     /// تولید embedding از طریق OpenAI API یا هر endpoint سازگار با OpenAI (OpenRouter ...)
     /// </summary>
     """
-    from openai import OpenAI
-
     provider = settings.embedding_provider
     model = settings.embedding_model
 
@@ -117,8 +130,8 @@ def _embed_with_openai(text: str) -> list[float]:
         api_key = settings.openai_api_key
         base_url = None
 
-    # تولید امبدینگ با کلاینت OpenAI
-    client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
+    # استفاده از کلاینت OpenAI کش‌شده برای حذف سربار ساخت کلاینت در هر فراخوانی
+    client = _get_cached_openai_client(provider, base_url, api_key, None, None)
     response = client.embeddings.create(model=model, input=text)
     return response.data[0].embedding
 
@@ -129,17 +142,10 @@ def _embed_with_hormouz(text: str) -> list[float]:
     /// تولید embedding از طریق Hormouz API با timeout ۳۰ ثانیه
     /// </summary>
     """
-    from openai import OpenAI
-
     api_key = settings.hormouz_api_key
     model = settings.hormouz_embedding_model or settings.embedding_model
 
-    client = OpenAI(
-        api_key=api_key,
-        base_url="https://api.hormouz.net/v1",
-        timeout=30.0,
-        max_retries=0,
-    )
+    client = _get_cached_openai_client("hormouz", "https://api.hormouz.net/v1", api_key, 30.0, 0)
     response = client.embeddings.create(model=model, input=text)
     return response.data[0].embedding
 
@@ -163,3 +169,14 @@ def _embed_with_google(text: str) -> list[float]:
     genai.configure(api_key=api_key)
     result = genai.embed_content(model=model, content=text)
     return result["embedding"]
+
+
+@lru_cache(maxsize=4096)
+def get_embedding_cached(text: str) -> list[float]:
+    """
+    /// <summary>
+    /// نسخه کش‌شده تولید امبدینگ — برای پرسش‌های تکراری و فراخوانی از چند نقطه،
+    /// فراخوانی شبکه‌ای API فقط یک‌بار انجام می‌شود.
+    /// </summary>
+    """
+    return get_embedding(text)
