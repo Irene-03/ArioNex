@@ -21,7 +21,6 @@ ArioNex is an enterprise-grade Persian RAG (Retrieval-Augmented Generation) assi
 - [Quick Start and Deployment](#quick-start-and-deployment)
 - [Integration Tests](#integration-tests)
 - [Security and Data Governance](#security-and-data-governance)
-- [License and Authorship](#license-and-authorship)
 
 ---
 
@@ -202,13 +201,6 @@ $env:PYTHONIOENCODING="utf-8"
 python tests/test_phase8.py
 ```
 
-| Suite | Coverage | Status |
-|-------|----------|--------|
-| `test_phase2.py` | PII security airlock and normalizers | PASSED |
-| `test_phase3.py` | Office document extraction and Excel ingestion | PASSED |
-| `test_phase4.py` | Intent router, LangGraph REPL, hallucination shields | PASSED |
-| `test_phase5.py` | API endpoints, widget injection, Telegram bot | PASSED |
-
 ---
 
 ## Security and Data Governance
@@ -220,12 +212,3 @@ ArioNex enforces a data sovereignty model to protect enterprise privacy:
 3. **Local Storage Fallback:** If MinIO is unreachable, backend modules redirect data flow to a protected local sandbox directory (`backend/storage/raw_files`).
 
 ---
-
-## License and Authorship
-
-Developed by **Irene-03** for Persian enterprise environments.
-
-- **Repository:** https://github.com/Irene-03/ArioNex.git
-- **Branch:** `main`
-
-ArioNex combines data privacy, specialized mathematical ledger graph execution, and Persian RAG search into a single corporate assistant platform.
