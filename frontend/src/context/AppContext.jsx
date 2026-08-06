@@ -564,10 +564,10 @@ export const AppProvider = ({ children }) => {
             id: doc.id,
             name: doc.filename,
             size: 'دیتابیس',
-            chunks: 0,
+            chunks: doc.chunk_count ?? 0,
             date: doc.created_at ? new Date(doc.created_at).toLocaleDateString('fa-IR') : '—',
-            status: 'ready',
-            progress: 100,
+            status: (doc.chunk_count ?? 0) > 0 ? 'ready' : 'pending',
+            progress: (doc.chunk_count ?? 0) > 0 ? 100 : 0,
             ext: doc.file_type ? doc.file_type.toUpperCase() : 'DOC',
             min_role_required: doc.min_role_required
           }));
