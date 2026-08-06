@@ -94,7 +94,7 @@ providers:
   hormouz:
     enabled: true
   ollama:
-    enabled: true
+    enabled: false
 
 # ----------------------------------------------------
 # Web crawler engine settings (Web Crawler Engine Settings)
@@ -140,7 +140,8 @@ password_salt: "arionex_fixed_salt_2026_secure"
 env: "development"
 hormouz_embedding_model: "openai/text-embedding-3-large"
 embedding_provider: "hormouz"
-llm_provider: "ollama"
+# Local (offline) mode is OFF by default: chat LLM uses the external provider below.
+llm_provider: "openrouter"
 model_name: "openai/gpt-4o-mini"
 ollama_base_url: "http://localhost:11434"
 ollama_model: "deepseek-r1:1.5b"
