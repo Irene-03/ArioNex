@@ -136,6 +136,20 @@ export default function ChatView() {
                     </div>
                   )}
 
+                  {msg.sender === 'user' && msg.text && !msg.isLoading && (
+                    <div className="msg-actions">
+                      <button
+                        className="msg-action"
+                        title="کپی پیام"
+                        aria-label="کپی پیام"
+                        onClick={() => copyText(msg.id, msg.text)}
+                        style={{ color: copiedId === msg.id ? 'var(--color-success)' : undefined }}
+                      >
+                        {copiedId === msg.id ? <Check size={14} /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                  )}
+
                   {!msg.text && msg.isLoading && (
                     <div className="ai-bubble loading-bubble">
                       <div className="typing-indicator">
