@@ -8,12 +8,16 @@
 /// </remarks>
 """
 
+import io
+import base64
 import logging
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db_connection
+from app.core.minio_client import storage_manager
 from app.routes.auth_routes import get_current_user, require_admin
 
 logger = logging.getLogger("arionex.knowledge_routes")
@@ -30,6 +34,13 @@ class DocumentResponse(BaseModel):
     created_at: str = Field(..., description="زمان بارگذاری")
     chunk_count: int = Field(0, description="تعداد قطعات برداری ایندکس شده برای این سند")
     status: str = Field("indexed", description="وضعیت ایندکس: indexed یا pending")
+
+class DocumentContentResponse(BaseModel):
+    filename: str
+    file_type: str
+    content: str = Field("", description="متن استخراج شده فایل (برای فایل‌های متنی)")
+    mime_type: str = Field("text/plain", description="نوع MIME فایل")
+    size_bytes: int = Field(0, description="حجم فایل به بایت")
 
 class UpdateDocumentRole(BaseModel):
     min_role_required: str = Field(..., description="نقش مجاز: Admin یا Analyst")
@@ -281,6 +292,94 @@ async def delete_document(file_id: int, admin: dict = Depends(require_admin)):
         if conn:
             conn.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.get("/documents/{file_id}/content", response_model=DocumentContentResponse, summary="دریافت محتوای سند جهت پیش‌نمایش")
+async def get_document_content(file_id: int, user: dict = Depends(get_current_user)):
+    conn = None
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, filename, file_type FROM documents WHERE id = %s",
+                (file_id,)
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="سند مورد نظر یافت نشد.")
+
+            doc_id, filename, file_type = row[0], row[1], row[2]
+
+        # Determine the storage category based on file type
+        if file_type in ("csv", "xlsx", "xls"):
+            storage_category = "structured"
+        elif file_type in ("txt",):
+            storage_category = "unstructured"
+        else:
+            storage_category = "unstructured"
+
+        object_name = f"{storage_category}/{doc_id}/{filename}"
+
+        try:
+            raw_bytes = storage_manager.get_object_data(object_name)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="فایل اصلی سند در استوریج یافت نشد.")
+
+        file_size = len(raw_bytes)
+        content = ""
+        mime_type = "application/octet-stream"
+
+        # Extract text content based on file type
+        if file_type in ("txt", "csv"):
+            try:
+                content = raw_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                content = raw_bytes.decode("windows-1256", errors="ignore")
+            mime_type = "text/plain"
+
+        elif file_type == "pdf":
+            content = base64.b64encode(raw_bytes).decode("ascii")
+            mime_type = "application/pdf"
+
+        elif file_type in ("docx", "doc"):
+            try:
+                from docx import Document as Doc
+                doc = Doc(io.BytesIO(raw_bytes))
+                content = "\n".join([p.text for p in doc.paragraphs])
+            except Exception:
+                content = "[امکان استخراج متن از فایل Word وجود ندارد]"
+            mime_type = "text/plain"
+
+        elif file_type in ("jpg", "jpeg", "png"):
+            content = base64.b64encode(raw_bytes).decode("ascii")
+            mime_type = f"image/{file_type}"
+
+        elif file_type in ("json", "xml", "mmd"):
+            try:
+                content = raw_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                content = raw_bytes.decode("windows-1256", errors="ignore")
+            mime_type = "text/plain"
+
+        else:
+            content = "[نوع فایل قابل پیش‌نمایش نیست]"
+
+        return DocumentContentResponse(
+            filename=filename,
+            file_type=file_type,
+            content=content,
+            mime_type=mime_type,
+            size_bytes=file_size,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to fetch document content: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"خطا در دریافت محتوای سند: {str(e)}")
     finally:
         if conn:
             conn.close()
