@@ -157,7 +157,7 @@ export default function CategoriesView() {
             onClick={() => toggleFeature('checkCategories')}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span style={{ fontWeight: 600, color: 'var(--navy)', fontSize: 13 }}>فعال‌سازی در جریان RAG</span>
+              <span style={{ fontWeight: 600, color: 'var(--heading)', fontSize: 13 }}>فعال‌سازی در جریان RAG</span>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>با فعال‌سازی، هوش مصنوعی موضوع سوال را تشخیص می‌دهد.</span>
             </div>
             <Switch checked={!!features.checkCategories} onChange={() => toggleFeature('checkCategories')} aria-label="فعال‌سازی عامل دسته‌بندی" />
@@ -197,7 +197,7 @@ export default function CategoriesView() {
                   }}
                 >
                   <span style={{ color: 'var(--text-muted)', fontWeight: 'bold', fontSize: 12, minWidth: 36 }}>#{cat.id}</span>
-                  <span style={{ fontWeight: 600, color: 'var(--navy)', minWidth: 160 }}>{cat.name}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--heading)', minWidth: 160 }}>{cat.name}</span>
                   <span style={{ color: 'var(--text-secondary)', flex: 1, fontSize: 12.5, lineHeight: 1.6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {cat.description || '—'}
                   </span>

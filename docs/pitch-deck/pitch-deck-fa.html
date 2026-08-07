@@ -143,7 +143,7 @@
             padding: 10px 16px
         }
 
-        .slide-13 .content {
+        .slide-14 .content {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -314,7 +314,7 @@
             width: 360px;
             height: 360px;
             border-radius: 50%;
-            background: conic-gradient(#c98345 0 30%, #101b33 30% 55%, #67a36b 55% 80%, #d9c3a5 80% 100%);
+            background: conic-gradient(#c98345 0 30%, #101b33 30% 55%, #67a36b 55% 75%, #d9c3a5 75% 90%, #a8b2c8 90% 100%);
             display: grid;
             place-items: center;
             box-shadow: 0 22px 60px rgba(16, 27, 51, .22)
@@ -347,6 +347,64 @@
             border-radius: 34px;
             padding: 70px 50px;
             box-shadow: 0 25px 70px rgba(16, 27, 51, .28)
+        }
+
+        .deck-nav {
+            position: fixed;
+            bottom: 18px;
+            left: 0;
+            right: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            z-index: 50;
+            pointer-events: none
+        }
+
+        .deck-nav button {
+            pointer-events: auto;
+            font-family: Vazirmatn, Tahoma, sans-serif;
+            font-size: 18px;
+            font-weight: 800;
+            color: #fff;
+            background: #101b33;
+            border: 1px solid rgba(255, 255, 255, .25);
+            border-radius: 999px;
+            padding: 10px 26px;
+            cursor: pointer;
+            box-shadow: 0 12px 30px rgba(16, 27, 51, .35);
+            opacity: .85;
+            transition: opacity .2s, transform .2s
+        }
+
+        .deck-nav button:hover {
+            opacity: 1;
+            transform: translateY(-2px)
+        }
+
+        .deck-nav button:disabled {
+            opacity: .3;
+            cursor: default;
+            transform: none
+        }
+
+        .deck-nav .counter {
+            pointer-events: auto;
+            background: #fff;
+            color: #101b33;
+            border-radius: 999px;
+            padding: 8px 20px;
+            font-size: 16px;
+            font-weight: 800;
+            box-shadow: 0 12px 30px rgba(16, 27, 51, .25);
+            direction: ltr
+        }
+
+        @media print {
+            .deck-nav {
+                display: none
+            }
         }
 
         @page {
@@ -430,9 +488,10 @@
     <div class="content">
         <p class="kicker">03 / Value Proposition</p>
         <h1>ارزش پیشنهادی: پاسخ امن، سریع و فارسی</h1>
-        <h2>آریونکس زمان رسیدن به جواب را کم می‌کند و کیفیت پاسخ‌گویی سازمان را قابل کنترل می‌سازد.</h2>
-        <p class="lead">برای مدیران، ارزش محصول فقط تکنولوژی نیست؛ کاهش هزینه عملیاتی، کاهش وابستگی به افراد کلیدی،
-            افزایش سرعت پاسخ‌گویی و کنترل امنیت داده است.</p>
+        <h2>حالا AI می‌تواند به داده‌های پراکنده شرکت وصل شود، فارسی بفهمد و به سؤال‌های بیزینسی جواب بدهد — بدون SQL و
+            بدون درخواست به تیم فنی.</h2>
+        <p class="lead">می‌تواند بگوید این عدد غیرعادی است، توضیح دهد افت فروش از کدام کانال آمده، و پیشنهاد کند حالا
+            چه کاری باید انجام شود.</p>
         <ul>
             <li>کاهش زمان جست‌وجوی دانش داخلی</li>
             <li>استانداردسازی پاسخ‌ها در پشتیبانی و عملیات</li>
@@ -495,7 +554,6 @@
         <p class="lead">در فاز اول، آریونکس به شرکت‌های فناوری، SaaS و مراکز پشتیبانی فروخته می‌شود؛ سپس می‌تواند به
             واحدهای حقوقی، منابع انسانی، مالی و سازمان‌های بزرگ‌تر توسعه پیدا کند.</p>
         <ul>
-            <li>SOM سه‌ساله: ۳۰ تا ۵۰ مشتری سازمانی</li>
             <li>مشتریان اولیه: تیم‌های پشتیبانی، عملیات و محصول</li>
             <li>بازار فقط ایران در فاز اول</li>
             <li>پتانسیل توسعه به سازمان‌های داده‌محور</li>
@@ -588,26 +646,48 @@
 </section>
 <section class="slide slide-11">
     <div class="content">
-        <h1>درخواست سرمایه: ۱.۵ میلیارد تومان برای ۱۲ ماه Runway</h1>
+        <p class="kicker">10 / The Ask</p>
+        <h1>درخواست سرمایه: ۸۰۰ میلیون تومان برای ۱۲ ماه Runway</h1>
         <h2>هدف سرمایه، تبدیل MVP به محصول قابل فروش و ایجاد اولین درآمدهای B2B است.</h2>
-        <p class="lead">هزینه‌کرد پیشنهادی به‌صورت متوازن بین توسعه محصول، فروش B2B، نیروی انسانی، سرور و امور حقوقی
-            تقسیم می‌شود.</p>
+        <p class="lead">هزینه‌کرد پیشنهادی به‌صورت دقیق و متناسب با نیاز واقعی توزیع می‌شود؛ با تمرکز روی زیرساخت GPU
+            برای اجرای LLM و OCR سازمانی.</p>
         <ul>
-            <li>۳۰٪ توسعه محصول، API و بهینه‌سازی مدل</li>
-            <li>۲۵٪ فروش B2B و بازاریابی هدفمند</li>
-            <li>۲۵٪ نیروی انسانی فنی و محصول</li>
-            <li>۲۰٪ زیرساخت، امنیت، ثبت شرکت و حقوقی</li>
+            <li>۳۰٪ نیروی انسانی فنی و محصول</li>
+            <li>۲۵٪ توسعه محصول، API و بهینه‌سازی مدل — SQL Agent</li>
+            <li>۲۰٪ زیرساخت و سرور GPU — LLM محلی، موتور OCR با API سازگار با OpenAI و PaddleOCR روی CPU به‌عنوان
+                fallback</li>
+            <li>۱۵٪ فروش B2B و بازاریابی هدفمند</li>
+            <li>۱۰٪ امنیت، ثبت شرکت و امور حقوقی</li>
         </ul>
     </div>
     <aside class="visual">
-        <div class="donut"><span>۱.۵ میلیارد تومان<br><small>۱۲ ماه Runway</small></span></div>
+        <div class="donut"><span>۸۰۰ میلیون تومان<br><small>۱۲ ماه Runway</small></span></div>
     </aside>
 </section>
 
-<!-- اسلاید ۱۲ کاملاً ویرایش شده و تمیز طبق درخواست نهایی شما -->
 <section class="slide slide-12">
     <div class="content">
-        <p class="kicker">11 / Team</p>
+        <p class="kicker">11 / Research &amp; Roadmap</p>
+        <h1>تحقیق و توسعه: از اسناد به گراف سازمانی</h1>
+        <h2>در فازهای بعدی، بخشی از ظرفیت تیم به قابلیت‌های تحقیقاتی محصول اختصاص می‌یابد.</h2>
+        <p class="lead">هدف، فراتر رفتن از پاسخ ساده به سؤال است: فهمیدن ساختار و روابط پنهان در اسناد سازمان.</p>
+        <ul>
+            <li>استخراج موجودیت‌های سازمانی (افراد، واحدها، نقش‌ها و روابط) از اسناد سازمانی</li>
+            <li>رسم گراف سازمانی از متن اسناد و جست‌وجو روی آن</li>
+            <li>مدل‌های استدلال ساختاری برای سؤال‌هایی مثل «گزارشگر فلان واحد چه کسی است؟»</li>
+            <li>بهبود درک فارسی برای داده‌های مالی، حقوقی و منابع انسانی</li>
+        </ul>
+    </div>
+    <aside class="visual">
+        <div class="stack"><span>اسناد سازمان</span><span>استخراج موجودیت‌ها</span><span>گراف سازمانی</span><span>پاسخ ساختاری</span><span>دانش عمیق‌تر</span>
+        </div>
+    </aside>
+</section>
+
+<!-- اسلاید ۱۳ کاملاً ویرایش شده و تمیز طبق درخواست نهایی شما -->
+<section class="slide slide-13">
+    <div class="content">
+        <p class="kicker">12 / Team</p>
         <h1>تیم: تجربه فنی، محصول و LLM فارسی</h1>
         <h2>تیم کوچک است، اما دقیقاً در نقطه تلاقی نرم‌افزار سازمانی، محصول AI و زبان فارسی تجربه دارد.</h2>
         <ul>
@@ -627,12 +707,49 @@
     </aside>
 </section>
 
-<section class="slide slide-13">
+<section class="slide slide-14">
     <div class="content" style="grid-column: 1 / -1; text-align: center">
         <p class="kicker" style="margin-left:auto;margin-right:auto">Thank You</p>
         <h1 style="font-size:58px">متشکریم</h1>
         <h2 style="font-weight:400;color:#26324d">آریونکس | <span style="font-family:'Times New Roman',serif">ArioNex</span></h2>
     </div>
 </section>
+<nav class="deck-nav">
+    <button id="nextSlide" type="button">بعدی →</button>
+    <span class="counter" id="slideCounter">1 / 14</span>
+    <button id="prevSlide" type="button">← قبلی</button>
+</nav>
+<script>
+    (function () {
+        var slides = document.querySelectorAll('.slide');
+        var counter = document.getElementById('slideCounter');
+        var prevBtn = document.getElementById('prevSlide');
+        var nextBtn = document.getElementById('nextSlide');
+        var current = 0;
+
+        function show(i) {
+            if (i < 0) i = 0;
+            if (i > slides.length - 1) i = slides.length - 1;
+            current = i;
+            for (var s = 0; s < slides.length; s++) {
+                slides[s].style.display = s === current ? '' : 'none';
+            }
+            counter.textContent = (current + 1) + ' / ' + slides.length;
+            prevBtn.disabled = current === 0;
+            nextBtn.disabled = current === slides.length - 1;
+            window.scrollTo(0, 0);
+        }
+
+        prevBtn.addEventListener('click', function () { show(current - 1); });
+        nextBtn.addEventListener('click', function () { show(current + 1); });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'ArrowRight') show(current + 1);
+            if (e.key === 'ArrowLeft') show(current - 1);
+            if (e.key === ' ') { e.preventDefault(); show(current + 1); }
+        });
+
+        show(0);
+    })();
+</script>
 </body>
 </html>

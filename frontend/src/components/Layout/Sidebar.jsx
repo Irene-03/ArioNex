@@ -7,6 +7,7 @@ import {
   Radar,
   Settings2,
   Plug,
+  ScrollText,
   LogOut,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -32,6 +33,7 @@ export default function Sidebar() {
             section: 'مدیریت سیستم',
             items: [
               { key: 'admin', label: 'پنل مدیریت', icon: Settings2 },
+              { key: 'audit', label: 'لاگ حسابرسی', icon: ScrollText },
               { key: 'integrations', label: 'یکپارچه‌سازی', icon: Plug },
             ],
           },

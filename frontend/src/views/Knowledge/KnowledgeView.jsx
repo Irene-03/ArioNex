@@ -68,7 +68,7 @@ export default function KnowledgeView() {
       value: `${stats.total_chunks} قطعه`,
       hint: 'مستقر در افزونه PostgreSQL pgvector',
       icon: Database,
-      color: 'var(--navy)',
+      color: 'var(--brand)',
     },
     {
       label: 'حد آستانه شباهت بازیابی',

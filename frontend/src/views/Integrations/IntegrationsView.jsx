@@ -234,14 +234,14 @@ export default function IntegrationsView() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--gray-50)', padding: '12px 14px', borderRadius: 'var(--radius)', marginBottom: 16, border: '1px solid var(--gray-100)' }}>
-              <span style={{ fontSize: 12.5, fontWeight: 'bold', color: 'var(--navy)' }}>وضعیت ربات:</span>
+              <span style={{ fontSize: 12.5, fontWeight: 'bold', color: 'var(--heading)' }}>وضعیت ربات:</span>
               <Badge variant={telegramStatus.variant}>
                 <TelegramIcon size={12} /> {telegramStatus.label}
               </Badge>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, background: 'var(--gray-50)', padding: 16, borderRadius: 'var(--radius)', border: '1px solid var(--gray-100)' }}>
-              <div style={{ fontWeight: 'bold', fontSize: 13, color: 'var(--navy)' }}>پیکربندی توکن ربات:</div>
+              <div style={{ fontWeight: 'bold', fontSize: 13, color: 'var(--heading)' }}>پیکربندی توکن ربات:</div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <input
                   type="text"
@@ -257,7 +257,7 @@ export default function IntegrationsView() {
               </div>
 
               <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.8, borderTop: '1px dashed var(--gray-200)', paddingTop: 10 }}>
-                <div style={{ fontWeight: 'bold', marginBottom: 4, color: 'var(--navy)' }}>راهنمای راه‌اندازی:</div>
+                <div style={{ fontWeight: 'bold', marginBottom: 4, color: 'var(--heading)' }}>راهنمای راه‌اندازی:</div>
                 <div>۱. در تلگرام به BotFather پیام داده و دستور <code>/newbot</code> را ارسال کنید.</div>
                 <div>۲. نام و شناسه ربات را تعیین کرده و API Token را کپی کنید.</div>
                 <div>۳. دکمه «ذخیره و فعال‌سازی» را بزنید.</div>
@@ -278,7 +278,7 @@ export default function IntegrationsView() {
             </div>
 
             <form onSubmit={handleCreateWidget} style={{ display: 'flex', flexDirection: 'column', gap: 12, background: 'var(--gray-50)', padding: 16, borderRadius: 'var(--radius)', border: '1px solid var(--gray-100)', marginBottom: 20 }}>
-              <div style={{ fontWeight: 'bold', fontSize: 13, color: 'var(--navy)' }}>ثبت دامنه جدید برای پاپ‌آپ:</div>
+              <div style={{ fontWeight: 'bold', fontSize: 13, color: 'var(--heading)' }}>ثبت دامنه جدید برای پاپ‌آپ:</div>
               <div className="grid-2-col" style={{ gap: 10 }}>
                 <input type="text" className="ax-input" style={{ fontSize: 12.5 }} placeholder="عنوان سایت (مثلاً: پورتال پشتیبانی)" value={newWidgetName} onChange={(e) => setNewWidgetName(e.target.value)} />
                 <input type="text" className="ax-input" style={{ fontSize: 12.5 }} placeholder="دامنه یا آدرس (مثلاً: support.company.ir)" value={newWidgetUrl} onChange={(e) => setNewWidgetUrl(e.target.value)} />
@@ -301,7 +301,7 @@ export default function IntegrationsView() {
               </button>
             </form>
 
-            <div style={{ fontWeight: 'bold', fontSize: 13, color: 'var(--navy)', marginBottom: 10 }}>وب‌سایت‌های متصل:</div>
+            <div style={{ fontWeight: 'bold', fontSize: 13, color: 'var(--heading)', marginBottom: 10 }}>وب‌سایت‌های متصل:</div>
             <div className="ax-table-wrap" style={{ marginBottom: 20 }}>
               {widgets.length === 0 ? (
                 <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>هیچ ابزارکی ثبت نشده است.</div>
@@ -331,7 +331,7 @@ export default function IntegrationsView() {
 
             {widgetPreviewSelected && (
               <div style={{ background: 'var(--gray-50)', border: '1px solid var(--gray-100)', borderRadius: 'var(--radius)', padding: 14 }}>
-                <div style={{ fontWeight: 'bold', fontSize: 13, color: 'var(--navy)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontWeight: 'bold', fontSize: 13, color: 'var(--heading)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Clipboard size={14} style={{ color: 'var(--copper)' }} /> کد اسکریپت برای «{widgetPreviewSelected.name}»
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>

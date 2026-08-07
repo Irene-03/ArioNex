@@ -19,6 +19,22 @@ export const AppProvider = ({ children }) => {
   const confirmDialog = useConfirm();
   const [activeScreen, setActiveScreen] = useState('dashboard');
 
+  // ─── Theme (dark / light) ────────────────────────────────────────────────────
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('arionex_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    } catch {
+      return 'light';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('arionex_theme', theme);
+      document.documentElement.setAttribute('data-theme', theme);
+    } catch { /* ignore storage errors */ }
+  }, [theme]);
+
   // ─── Authentication State ──────────────────────────────────────────────────
   const [currentUser, setCurrentUser] = useState(() => {
     try {
@@ -327,7 +343,7 @@ export const AppProvider = ({ children }) => {
         providers: {
           openai: providerKey === 'openai' ? !features.providerOpenAI : features.providerOpenAI,
           openrouter: providerKey === 'openrouter' ? !features.providerOpenRouter : features.providerOpenRouter,
-          anthropic: providerKey === 'anthropic' ? !features.providerOpenAnthropic : features.providerAnthropic, // Note typo fix
+          anthropic: providerKey === 'anthropic' ? !features.providerAnthropic : features.providerAnthropic,
           google: providerKey === 'google' ? !features.providerGoogle : features.providerGoogle,
           deepseek: providerKey === 'deepseek' ? !features.providerDeepSeek : features.providerDeepSeek,
           gapgpt: providerKey === 'gapgpt' ? !features.providerGapGPT : features.providerGapGPT,
@@ -575,17 +591,20 @@ export const AppProvider = ({ children }) => {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          const mappedDocs = data.map(doc => ({
-            id: doc.id,
-            name: doc.filename,
-            size: 'دیتابیس',
-            chunks: doc.chunk_count ?? 0,
-            date: doc.created_at ? new Date(doc.created_at).toLocaleDateString('fa-IR') : '—',
-            status: (doc.chunk_count ?? 0) > 0 ? 'ready' : 'pending',
-            progress: (doc.chunk_count ?? 0) > 0 ? 100 : 0,
-            ext: doc.file_type ? doc.file_type.toUpperCase() : 'DOC',
-            min_role_required: doc.min_role_required
-          }));
+          const mappedDocs = data.map(doc => {
+            const chunkCount = doc.chunk_count ?? 0;
+            return {
+              id: doc.id,
+              name: doc.filename,
+              size: chunkCount > 0 ? `${((chunkCount * 15) / 1024).toFixed(1)} MB` : '—',
+              chunks: chunkCount,
+              date: doc.created_at ? new Date(doc.created_at).toLocaleDateString('fa-IR') : '—',
+              status: chunkCount > 0 ? 'ready' : 'pending',
+              progress: chunkCount > 0 ? 100 : 0,
+              ext: doc.file_type ? doc.file_type.toUpperCase() : 'DOC',
+              min_role_required: doc.min_role_required
+            };
+          });
           setDocuments(mappedDocs);
         }
       }
@@ -748,7 +767,7 @@ export const AppProvider = ({ children }) => {
   }, [activeScreen, currentUser]);
 
   useEffect(() => {
-    if (currentUser && currentUser.role !== 'Admin' && (activeScreen === 'admin' || activeScreen === 'integrations')) {
+    if (currentUser && currentUser.role !== 'Admin' && (activeScreen === 'admin' || activeScreen === 'integrations' || activeScreen === 'audit')) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveScreen('dashboard');
     }
@@ -1166,7 +1185,8 @@ export const AppProvider = ({ children }) => {
       telegramBotToken, setTelegramBotToken,
       handleSaveTelegramToken,
       providerApiKeys, setProviderApiKeys,
-      handleSaveProviderApiKey
+      handleSaveProviderApiKey,
+      theme, setTheme
     }}>
       {children}
     </AppContext.Provider>

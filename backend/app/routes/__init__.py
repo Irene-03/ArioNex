@@ -11,3 +11,4 @@ from .integration_routes import router as integration_router
 from .crawler_routes import router as crawler_router
 from .auth_routes import router as auth_router
 from .knowledge_routes import router as knowledge_router
+from .audit_routes import router as audit_router

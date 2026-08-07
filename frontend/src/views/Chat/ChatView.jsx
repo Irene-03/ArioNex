@@ -1,5 +1,6 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useState } from 'react';
 import {
   Plus,
   ShieldCheck,
@@ -8,6 +9,10 @@ import {
   Send,
   Trash2,
   Bot,
+  Copy,
+  Check,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -22,7 +27,29 @@ export default function ChatView() {
     setActiveSessionId,
     createNewSession,
     deleteSession,
+    setChatMessages,
   } = useApp();
+
+  const [copiedId, setCopiedId] = useState(null);
+
+  const copyText = async (id, text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1600);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  };
+
+  const setFeedback = (id, feedback) => {
+    setChatMessages(prev => prev.map(m => {
+      if (m.id === id) {
+        return { ...m, feedback: feedback === m.feedback ? null : feedback };
+      }
+      return m;
+    }));
+  };
 
   return (
     <div className="screen fade-in" style={{ padding: 16 }}>
@@ -51,7 +78,7 @@ export default function ChatView() {
                       style={{
                         fontSize: 13,
                         fontWeight: activeSessionId === s.id ? '700' : '400',
-                        color: activeSessionId === s.id ? 'var(--navy)' : 'var(--text-primary)',
+                        color: activeSessionId === s.id ? 'var(--heading)' : 'var(--text-primary)',
                       }}
                     >
                       {s.title}
@@ -75,7 +102,7 @@ export default function ChatView() {
               <Bot size={18} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--navy)' }}>دستیار هوش سازمانی آریونکس</div>
+              <div style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--heading)' }}>دستیار هوش سازمانی آریونکس</div>
               <div style={{ fontSize: 11.5, color: 'var(--color-success)', fontWeight: 600 }}>● آنلاین · RAG فعال و امن</div>
             </div>
             <span className="q-badge qb-done" style={{ fontSize: 12 }}>مخزن متصل</span>
@@ -126,6 +153,36 @@ export default function ChatView() {
                           <FileText size={12} /> {src.name} · {src.page}
                         </span>
                       ))}
+                    </div>
+                  )}
+
+                  {msg.sender === 'ai' && !msg.isWelcome && msg.text && !msg.isLoading && (
+                    <div className="msg-actions">
+                      <button
+                        className="msg-action"
+                        title="کپی پاسخ"
+                        aria-label="کپی پاسخ"
+                        onClick={() => copyText(msg.id, msg.text)}
+                        style={{ color: copiedId === msg.id ? 'var(--color-success)' : undefined }}
+                      >
+                        {copiedId === msg.id ? <Check size={14} /> : <Copy size={14} />}
+                      </button>
+                      <button
+                        className={`msg-action ${msg.feedback === 'up' ? 'msg-action--active' : ''}`}
+                        title="پاسخ مفید بود"
+                        aria-label="پاسخ مفید بود"
+                        onClick={() => setFeedback(msg.id, 'up')}
+                      >
+                        <ThumbsUp size={14} />
+                      </button>
+                      <button
+                        className={`msg-action ${msg.feedback === 'down' ? 'msg-action--active msg-action--danger' : ''}`}
+                        title="پاسخ مفید نبود"
+                        aria-label="پاسخ مفید نبود"
+                        onClick={() => setFeedback(msg.id, 'down')}
+                      >
+                        <ThumbsDown size={14} />
+                      </button>
                     </div>
                   )}
                 </div>

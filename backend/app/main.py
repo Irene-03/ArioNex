@@ -25,7 +25,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.database import init_db
 from app.helpers.rate_limiter import RateLimitMiddleware
-from app.routes import query_router, upload_router, config_router, widget_router, integration_router, crawler_router, auth_router, knowledge_router
+from app.routes import query_router, upload_router, config_router, widget_router, integration_router, crawler_router, auth_router, knowledge_router, audit_router
 from app.services.integrations.telegram_bot import start_telegram_bot_service, stop_telegram_bot_service
 
 # Configure the centralized logging system
@@ -131,6 +131,7 @@ app.include_router(integration_router)
 app.include_router(crawler_router)
 app.include_router(auth_router)
 app.include_router(knowledge_router)
+app.include_router(audit_router)
 
 
 async def check_postgres() -> bool:

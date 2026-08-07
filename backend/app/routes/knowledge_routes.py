@@ -147,8 +147,9 @@ async def list_documents(user: dict = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         with conn.cursor() as cur:
-            # Only documents that actually have indexed vector chunks are returned.
-            # Old and orphan records (without any chunk) are not shown.
+            # All documents are returned so that the full inventory is visible.
+            # The "indexed" status is derived from the actual chunk count, so a
+            # document that was uploaded but not (yet) indexed is still listed.
             role_filter = "AND d.min_role_required = 'Analyst'" if role != "Admin" else ""
             cur.execute(
                 f"""
@@ -164,7 +165,6 @@ async def list_documents(user: dict = Depends(get_current_user)):
                     ) all_chunks
                     GROUP BY file_id
                 ) ch ON ch.file_id = d.id
-                WHERE COALESCE(ch.chunk_count, 0) > 0
                 {role_filter}
                 ORDER BY d.id DESC
                 """
@@ -177,7 +177,8 @@ async def list_documents(user: dict = Depends(get_current_user)):
                     file_type=row[2],
                     min_role_required=row[3],
                     created_at=str(row[4]),
-                    chunk_count=row[5]
+                    chunk_count=row[5],
+                    status="indexed" if row[5] > 0 else "pending"
                 ) for row in rows
             ]
     except Exception as e:

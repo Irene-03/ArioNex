@@ -1,10 +1,10 @@
 /*
 ===============================================================
-  ArioNex — page-specific styles (Chat, Pipeline, Upload, Files)
+  ArioNex --- page-specific styles (Chat, Pipeline, Upload, Files)
 ===============================================================
 */
 
-/* ── Pipeline status ─────────────────────────────── */
+/* ------ Pipeline status --------------------------------------------------------------------------------------------- */
 .pipeline {
   display: flex;
   align-items: center;
@@ -44,7 +44,7 @@
 }
 
 .pipe-node.pipe-active {
-  background: var(--navy);
+  background: var(--brand);
   color: white;
   border-color: var(--navy-light);
   transform: scale(1.05);
@@ -91,7 +91,7 @@
   border: 2px solid white;
 }
 
-/* ── Chat layout ─────────────────────────────────── */
+/* ------ Chat layout --------------------------------------------------------------------------------------------------------- */
 .chat-layout { display: flex; gap: 16px; height: 100%; }
 
 .chat-sidebar {
@@ -103,7 +103,7 @@
 }
 
 .chat-history-item {
-  background: var(--white);
+  background: var(--surface);
   border: 1px solid var(--gray-100);
   border-radius: var(--radius);
   padding: 12px 14px;
@@ -136,7 +136,7 @@
 
 .chat-main {
   flex: 1;
-  background: var(--white);
+  background: var(--surface);
   border: 1px solid var(--gray-100);
   border-radius: var(--radius-lg);
   display: flex;
@@ -224,7 +224,7 @@
 }
 
 .user-bubble {
-  background: var(--navy);
+  background: var(--brand);
   color: white;
   border-radius: var(--radius-lg) 0 var(--radius-lg) var(--radius-lg);
   white-space: pre-wrap !important;
@@ -238,12 +238,12 @@
 .ai-bubble .markdown-body > *:last-child { margin-bottom: 0; }
 .ai-bubble .markdown-body p { margin: 0 0 10px; white-space: normal; }
 .ai-bubble .markdown-body p:last-child { margin-bottom: 0; }
-.ai-bubble .markdown-body strong { font-weight: 800; color: var(--navy); }
+.ai-bubble .markdown-body strong { font-weight: 800; color: var(--heading); }
 .ai-bubble .markdown-body em { font-style: italic; }
 .ai-bubble .markdown-body h1, .ai-bubble .markdown-body h2,
 .ai-bubble .markdown-body h3, .ai-bubble .markdown-body h4 {
   font-weight: 800;
-  color: var(--navy);
+  color: var(--heading);
   margin: 16px 0 8px;
   line-height: 1.4;
 }
@@ -260,7 +260,7 @@
 }
 .ai-bubble .markdown-body li { margin: 4px 0; }
 .ai-bubble .markdown-body li > p { margin: 0; }
-.ai-bubble .markdown-body a { color: var(--navy); text-decoration: underline; font-weight: 600; }
+.ai-bubble .markdown-body a { color: var(--heading); text-decoration: underline; font-weight: 600; }
 .ai-bubble .markdown-body blockquote {
   margin: 0 0 10px;
   padding: 6px 14px;
@@ -275,15 +275,15 @@
 .ai-bubble .markdown-body code {
   font-family: 'Consolas', 'Menlo', monospace;
   font-size: 12.5px;
-  background: rgba(26, 39, 68, 0.08);
-  color: var(--navy);
+  background: var(--gray-100);
+  color: var(--heading);
   padding: 1px 6px;
   border-radius: 4px;
   direction: ltr;
   unicode-bidi: embed;
 }
 .ai-bubble .markdown-body pre {
-  background: #1a2744;
+  background: var(--navy-deep);
   color: #e6eaf2;
   padding: 12px 14px;
   border-radius: var(--radius);
@@ -291,11 +291,12 @@
   margin: 0 0 10px;
   direction: ltr;
   text-align: left;
+  border: 1px solid var(--gray-100);
 }
 .ai-bubble .markdown-body pre code { background: transparent; color: inherit; padding: 0; font-size: 12.5px; }
 .ai-bubble .markdown-body table { border-collapse: collapse; width: 100%; margin: 0 0 10px; font-size: 12.5px; display: block; overflow-x: auto; }
 .ai-bubble .markdown-body th, .ai-bubble .markdown-body td { border: 1px solid var(--gray-100); padding: 6px 10px; text-align: right; }
-.ai-bubble .markdown-body th { background: var(--gray-50); font-weight: 700; color: var(--navy); }
+.ai-bubble .markdown-body th { background: var(--gray-50); font-weight: 700; color: var(--heading); }
 
 .source-tags {
   display: flex;
@@ -322,6 +323,46 @@
 .source-tag svg { width: 12px; height: 12px; }
 .source-tag:hover { background: rgba(196, 137, 74, 0.18); transform: translateY(-1px); }
 
+.msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.msg-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-100);
+  background: var(--surface);
+  color: var(--gray-400);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  line-height: 0;
+}
+
+.msg-action:hover {
+  color: var(--text-primary);
+  border-color: var(--gray-300);
+  background: var(--surface-muted);
+}
+
+.msg-action--active {
+  color: var(--color-success);
+  border-color: rgba(21, 128, 61, 0.25);
+  background: var(--color-success-bg);
+}
+
+.msg-action--danger.msg-action--active {
+  color: var(--color-danger);
+  border-color: rgba(185, 28, 28, 0.25);
+  background: var(--color-danger-bg);
+}
+
 .safety-tag {
   display: inline-flex;
   align-items: center;
@@ -345,7 +386,7 @@
   display: flex;
   gap: 12px;
   align-items: flex-end;
-  background: var(--white);
+  background: var(--surface);
 }
 
 .chat-input-box {
@@ -363,7 +404,7 @@
 }
 
 .chat-input-box:focus {
-  background: var(--white);
+  background: var(--surface);
   border-color: var(--copper);
   box-shadow: 0 0 0 3px rgba(176, 125, 63, 0.12);
 }
@@ -372,7 +413,7 @@
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: var(--navy);
+  background: var(--brand);
   color: white;
   display: flex;
   align-items: center;
@@ -422,7 +463,7 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Upload zone ─────────────────────────────────── */
+/* ------ Upload zone --------------------------------------------------------------------------------------------------------- */
 .upload-zone {
   border: 2px dashed var(--gray-300);
   border-radius: var(--radius-xl);
@@ -430,7 +471,7 @@
   text-align: center;
   cursor: pointer;
   transition: all var(--transition);
-  background: var(--white);
+  background: var(--surface);
   margin-bottom: 24px;
   display: flex;
   flex-direction: column;
@@ -448,7 +489,7 @@
 
 .upload-zone:hover .upload-icon { transform: translateY(-4px); }
 
-.upload-title { font-size: 15.5px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+.upload-title { font-size: 15.5px; font-weight: 700; color: var(--heading); margin-bottom: 8px; }
 .upload-sub { font-size: 12.5px; color: var(--text-muted); max-width: 480px; line-height: 1.8; }
 
 .file-type-pills { display: flex; justify-content: center; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
@@ -463,9 +504,9 @@
   font-weight: 600;
 }
 
-/* ── Files table (legacy grid-based) ─────────────── */
+/* ------ Files table (legacy grid-based) --------------------------------------------- */
 .files-table {
-  background: var(--white);
+  background: var(--surface);
   border: 1px solid var(--gray-100);
   border-radius: var(--radius-lg);
   overflow: hidden;

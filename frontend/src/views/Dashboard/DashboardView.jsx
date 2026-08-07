@@ -46,35 +46,9 @@ function DonutChart({ segments, size = 120 }) {
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       ))}
-      <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle" fill="var(--navy)" fontSize="18" fontWeight="800" fontFamily="inherit">
+      <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle" fill="var(--heading)" fontSize="18" fontWeight="800" fontFamily="inherit">
         {total}
       </text>
-    </svg>
-  );
-}
-
-function Sparkline({ points, width = 200, height = 48 }) {
-  if (points.length < 2) return null;
-  const max = Math.max(...points, 1);
-  const min = Math.min(...points, 0);
-  const range = max - min || 1;
-  const step = width / (points.length - 1);
-  const coords = points.map((p, i) => [i * step, height - ((p - min) / range) * (height - 8) - 4]);
-  const line = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c[0].toFixed(1)},${c[1].toFixed(1)}`).join(' ');
-  const area = `${line} L${width},${height} L0,${height} Z`;
-  const last = coords[coords.length - 1];
-
-  return (
-    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ display: 'block' }}>
-      <defs>
-        <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--copper)" stopOpacity="0.25" />
-          <stop offset="100%" stopColor="var(--copper)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill="url(#sparkGrad)" />
-      <path d={line} fill="none" stroke="var(--copper)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={last[0]} cy={last[1]} r="3.5" fill="var(--copper)" />
     </svg>
   );
 }
@@ -83,10 +57,9 @@ export default function DashboardView() {
   const { documents, stats, chatMessages, setActiveScreen } = useApp();
 
   const queryHistory = chatMessages.filter(m => m.sender === 'user');
-  const sparkPoints = queryHistory.length > 0 ? [3, 5, 4, 7, 6, 9].map((v, i) => v + (queryHistory.length > i ? 2 : 0)) : [];
 
   const fileSegments = [
-    { label: 'اسناد PDF', value: stats.pdf_count, color: 'var(--navy)' },
+    { label: 'اسناد PDF', value: stats.pdf_count, color: 'var(--brand)' },
     { label: 'صفحات مالی و CSV', value: stats.csv_excel_count, color: 'var(--copper)' },
     { label: 'متنی و سایر', value: stats.other_count, color: 'var(--color-info)' },
   ];
@@ -247,13 +220,9 @@ export default function DashboardView() {
 
           <div className="card">
             <div className="card-title">روند فعالیت پرسش و پاسخ</div>
-            {sparkPoints.length >= 2 ? (
-              <Sparkline points={sparkPoints} />
-            ) : (
-              <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '16px 0' }}>
-                پس از اولین پرسش‌ها، نمودار روند نمایش داده می‌شود.
-              </div>
-            )}
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '16px 0' }}>
+              نمودار روند پس از ثبت آمار فعالیت در لاگ حسابرسی سامانه نمایش داده می‌شود.
+            </div>
           </div>
         </div>
 
@@ -285,7 +254,7 @@ export default function DashboardView() {
                     <span
                       style={{
                         color: doc.status === 'ready' ? 'var(--color-success)' : 'var(--copper)',
-                        background: doc.status === 'ready' ? 'var(--color-success-bg)' : 'rgba(196, 137, 74, 0.1)',
+                        background: doc.status === 'ready' ? 'var(--color-success-bg)' : 'var(--copper-pale)',
                         padding: '2px 6px',
                         borderRadius: 4,
                         fontWeight: 'bold',

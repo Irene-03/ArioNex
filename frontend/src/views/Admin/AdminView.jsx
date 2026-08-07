@@ -231,7 +231,7 @@ export default function AdminView() {
               <button className="ax-btn ax-btn--primary ax-btn--block" onClick={testOllama}>
                 <Zap size={15} /> آزمون اتصال به Ollama
               </button>
-              <div style={{ background: 'var(--color-info-bg)', border: '1px solid rgba(29,78,216,0.2)', borderRadius: 'var(--radius)', padding: 12, fontSize: 12, color: 'var(--color-info)', lineHeight: 1.8 }}>
+              <div style={{ background: 'var(--color-info-bg)', border: '1px solid rgba(90,156,244,0.3)', borderRadius: 'var(--radius)', padding: 12, fontSize: 12, color: 'var(--color-info)', lineHeight: 1.8 }}>
                 <strong>راهنمای نصب:</strong>
                 <div>۱. از ollama.com نصب کنید</div>
                 <div>۲. <code>ollama pull gemma3:4b</code> را اجرا کنید</div>

@@ -13,6 +13,7 @@ import CrawlerView from './views/Crawler/CrawlerView';
 import AdminView from './views/Admin/AdminView';
 import IntegrationsView from './views/Integrations/IntegrationsView';
 import CategoriesView from './views/Categories/CategoriesView';
+import AuditLogView from './views/Audit/AuditLogView';
 
 function DashboardLayout() {
   const { currentUser, activeScreen } = useApp();
@@ -35,6 +36,7 @@ function DashboardLayout() {
         {activeScreen === 'admin' && <AdminView />}
         {activeScreen === 'integrations' && <IntegrationsView />}
         {activeScreen === 'categories' && <CategoriesView />}
+        {activeScreen === 'audit' && <AuditLogView />}
       </div>
       <InviteModal />
     </div>

@@ -53,7 +53,7 @@ export default function CrawlerView() {
   const confirmDialog = useConfirm();
 
   const statCards = [
-    { label: 'کل jobهای کرال', value: crawlJobs.length, icon: Layers, color: 'var(--navy)' },
+    { label: 'کل jobهای کرال', value: crawlJobs.length, icon: Layers, color: 'var(--brand)' },
     { label: 'تکمیل‌شده', value: crawlJobs.filter(j => j.status === 'completed').length, icon: CheckCircle2, color: 'var(--color-success)' },
     { label: 'در حال اجرا', value: crawlJobs.filter(j => j.status === 'running').length, icon: Loader2, color: 'var(--copper)' },
     { label: 'کل chunkهای ایندکس', value: crawlJobs.reduce((s, j) => s + (j.chunks_indexed || 0), 0), icon: Database, color: 'var(--color-info)' },
@@ -222,9 +222,9 @@ export default function CrawlerView() {
                   className="ax-btn ax-btn--sm"
                   style={{
                     border: '1px solid',
-                    background: crawlStatusFilter === s ? 'var(--navy)' : 'transparent',
-                    color: crawlStatusFilter === s ? '#fff' : 'var(--text-muted)',
-                    borderColor: crawlStatusFilter === s ? 'var(--navy)' : 'var(--gray-200)',
+                    background: crawlStatusFilter === s ? 'var(--brand)' : 'transparent',
+                    color: crawlStatusFilter === s ? 'var(--brand-text)' : 'var(--text-muted)',
+                    borderColor: crawlStatusFilter === s ? 'var(--brand)' : 'var(--gray-200)',
                   }}
                 >
                   {s === '' ? 'همه' : STATUS_META[s]?.label || s}
@@ -252,7 +252,7 @@ export default function CrawlerView() {
                     <div key={job.job_id} style={{ border: '1px solid var(--gray-100)', borderRadius: 'var(--radius)', padding: 14, background: 'var(--gray-50)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, gap: 10 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--navy)', direction: 'ltr', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--heading)', direction: 'ltr', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
                             <ExternalLink size={13} style={{ color: 'var(--copper)', flexShrink: 0 }} />
                             {job.url}
                           </div>
@@ -293,15 +293,15 @@ export default function CrawlerView() {
                       )}
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, fontSize: 11.5 }}>
-                        <div style={{ textAlign: 'center', background: '#fff', borderRadius: 4, padding: 6 }}>
-                          <div style={{ fontWeight: 700, color: 'var(--navy)' }}>{job.pages_crawled ?? 0}</div>
+                        <div style={{ textAlign: 'center', background: 'var(--surface)', borderRadius: 4, padding: 6 }}>
+                          <div style={{ fontWeight: 700, color: 'var(--heading)' }}>{job.pages_crawled ?? 0}</div>
                           <div style={{ color: 'var(--text-muted)' }}>صفحه کرال شد</div>
                         </div>
-                        <div style={{ textAlign: 'center', background: '#fff', borderRadius: 4, padding: 6 }}>
+                        <div style={{ textAlign: 'center', background: 'var(--surface)', borderRadius: 4, padding: 6 }}>
                           <div style={{ fontWeight: 700, color: 'var(--copper)' }}>{job.chunks_indexed ?? 0}</div>
                           <div style={{ color: 'var(--text-muted)' }}>chunk ایندکس</div>
                         </div>
-                        <div style={{ textAlign: 'center', background: '#fff', borderRadius: 4, padding: 6 }}>
+                        <div style={{ textAlign: 'center', background: 'var(--surface)', borderRadius: 4, padding: 6 }}>
                           <div style={{ fontWeight: 700, color: (job.pages_failed || 0) > 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
                             {job.pages_failed ?? 0}
                           </div>
@@ -311,8 +311,8 @@ export default function CrawlerView() {
 
                       <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                         <span className="file-pill" style={{ fontSize: 10.5, padding: '2px 8px' }}>عمق: {job.max_depth ?? 0}</span>
-                        {job.js_render && <span className="file-pill" style={{ fontSize: 10.5, padding: '2px 8px', background: 'rgba(196,137,74,0.12)', color: 'var(--copper-dark)' }}>JS Render</span>}
-                        {job.follow_external_domains && <span className="file-pill" style={{ fontSize: 10.5, padding: '2px 8px', background: 'rgba(29,78,216,0.08)', color: 'var(--color-info)' }}>دامنه خارجی</span>}
+                        {job.js_render && <span className="file-pill" style={{ fontSize: 10.5, padding: '2px 8px', background: 'var(--copper-pale)', color: 'var(--copper-dark)' }}>JS Render</span>}
+                        {job.follow_external_domains && <span className="file-pill" style={{ fontSize: 10.5, padding: '2px 8px', background: 'var(--color-info-bg)', color: 'var(--color-info)' }}>دامنه خارجی</span>}
                         {job.label && <span className="file-pill" style={{ fontSize: 10.5, padding: '2px 8px', fontFamily: 'monospace', direction: 'ltr' }}>{job.label}</span>}
                       </div>
 

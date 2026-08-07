@@ -19,8 +19,7 @@ WORKDIR /app
 # Copy and install the project's Python dependencies
 COPY requirements.txt /app/
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip \
-    && pip install -r requirements.txt \
+    pip install -r requirements.txt \
     && pip install python-multipart \
     && (apt-get update -qq --fix-missing && apt-get install -y -qq --no-install-recommends --fix-missing \
         libnss3 libnspr4 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 \

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Search, Plus, UploadCloud, Circle } from 'lucide-react';
+import { Search, UploadCloud, Circle, Sun, Moon } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 const pageMeta = {
   dashboard: { title: 'داشبورد اصلی', subtitle: 'نمای کلی وضعیت سامانه و دانش سازمانی' },
   chat: { title: 'دستیار دانش هوشمند', subtitle: 'حالت RAG امن — پاسخ مبتنی بر اسناد سازمان' },
+  audit: { title: 'لاگ حسابرسی', subtitle: 'ثبت کامل تعاملات سامانه با جزئیات فنی' },
   knowledge: { title: 'پایگاه دانش', subtitle: 'مدیریت و توزیع منابع دانش' },
   upload: { title: 'آپلود اسناد', subtitle: 'فیلتر حریم خصوصی و درون‌ریزی امن' },
   categories: { title: 'دسته‌بندی‌ها', subtitle: 'مدیریت عامل دسته‌بندی اسناد' },
@@ -14,7 +15,7 @@ const pageMeta = {
 };
 
 export default function Topbar() {
-  const { activeScreen, setActiveScreen, handleSendMessage } = useApp();
+  const { activeScreen, setActiveScreen, handleSendMessage, theme, setTheme } = useApp();
   const [searchVal, setSearchVal] = useState('');
   const meta = pageMeta[activeScreen] || pageMeta.dashboard;
 
@@ -55,8 +56,13 @@ export default function Topbar() {
         />
       </div>
 
-      <button className="topbar-btn btn-ghost" onClick={() => setActiveScreen('chat')}>
-        <Plus size={15} /> <span className="btn-text">پرسش جدید</span>
+      <button
+        className="theme-toggle"
+        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        title={theme === 'dark' ? 'حالت روشن' : 'حالت تاریک'}
+        aria-label="تغییر تم"
+      >
+        {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
       </button>
 
       <button className="topbar-btn btn-primary" onClick={() => setActiveScreen('upload')}>
