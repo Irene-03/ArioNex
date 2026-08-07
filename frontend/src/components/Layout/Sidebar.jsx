@@ -43,7 +43,7 @@ export default function Sidebar() {
 
   return (
     <div className="sidebar">
-      <div className="sidebar-logo">
+      <div className="sidebar-logo" onClick={() => setActiveScreen('dashboard')} role="button" tabIndex={0} style={{ cursor: 'pointer' }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setActiveScreen('dashboard'); }}>
         <svg className="logo-mark" viewBox="0 0 32 32" fill="none" width="32" height="32">
           <polygon points="16,2 28,26 4,26" fill="none" stroke="#c4894a" strokeWidth="2.5" />
           <polygon points="16,9 22,26 10,26" fill="none" stroke="#c4894a" strokeWidth="1.5" opacity="0.5" />
