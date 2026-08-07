@@ -94,8 +94,9 @@ export default function AdminView() {
   return (
     <div className="screen fade-in">
       <PageHeader
-        icon={<Settings2 size={20} style={{ color: 'var(--copper)' }} />}
+        icon={<Settings2 size={18} style={{ color: 'var(--copper)' }} />}
         title="کنسول مدیریت سیستم"
+        desc="حریم خصوصی، امنیت و تنظیمات سامانه"
       />
 
       <div className="admin-grid">

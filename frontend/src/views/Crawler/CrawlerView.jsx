@@ -95,15 +95,16 @@ export default function CrawlerView() {
   return (
     <div className="screen fade-in">
       <PageHeader
-        icon={<Radar size={20} style={{ color: 'var(--copper)' }} />}
+        icon={<Radar size={18} style={{ color: 'var(--copper)' }} />}
         title="کرالر هوشمند وب‌سایت"
+        desc="استخراج خودکار دانش از وب"
       />
 
       <div className="stats-row">
         {statCards.map(card => {
           const Icon = card.icon;
           return (
-            <div className="stat-card" key={card.label} style={{ borderTop: `3px solid ${card.color}` }}>
+            <div className="stat-card" key={card.label}>
               <div className="stat-label">
                 <Icon />
                 {card.label}
@@ -249,19 +250,19 @@ export default function CrawlerView() {
                   const progress = job.max_pages > 0 ? Math.round((job.pages_crawled / job.max_pages) * 100) : 0;
 
                   return (
-                    <div key={job.job_id} style={{ border: '1px solid var(--gray-100)', borderRadius: 'var(--radius)', padding: 14, background: 'var(--gray-50)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, gap: 10 }}>
+                    <div key={job.job_id} style={{ border: '1px solid var(--gray-100)', borderRadius: 'var(--radius-lg)', padding: 16, background: 'var(--surface)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 10 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--heading)', direction: 'ltr', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
                             <ExternalLink size={13} style={{ color: 'var(--copper)', flexShrink: 0 }} />
                             {job.url}
                           </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, direction: 'ltr' }}>
+                          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 3, direction: 'ltr' }}>
                             {job.job_id ? job.job_id.substring(0, 24) : ''}...
                           </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                          <Badge variant="neutral" className="" style={{ background: meta.bg, color: meta.color, border: 'none' }}>
+                          <Badge variant={job.status === 'completed' ? 'success' : job.status === 'running' ? 'copper' : job.status === 'failed' ? 'danger' : 'neutral'}>
                             <StatusIcon size={12} /> {meta.label}
                           </Badge>
                           {(job.status === 'queued' || job.status === 'running') && (

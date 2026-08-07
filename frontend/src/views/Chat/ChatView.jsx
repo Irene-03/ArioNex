@@ -15,6 +15,7 @@ import {
   ThumbsDown,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import Badge from '../../components/ui/Badge';
 
 export default function ChatView() {
   const {
@@ -58,7 +59,7 @@ export default function ChatView() {
           <button className="ax-btn ax-btn--primary ax-btn--block" onClick={createNewSession}>
             <Plus size={16} /> مکالمه جدید
           </button>
-          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 700, marginTop: 14, padding: '0 4px' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, marginTop: 14, padding: '0 4px' }}>
             مکالمات اخیر
           </div>
 
@@ -76,14 +77,14 @@ export default function ChatView() {
                     <div
                       className="chi-title"
                       style={{
-                        fontSize: 13,
-                        fontWeight: activeSessionId === s.id ? '700' : '400',
+                        fontSize: 12.5,
+                        fontWeight: activeSessionId === s.id ? '600' : '400',
                         color: activeSessionId === s.id ? 'var(--heading)' : 'var(--text-primary)',
                       }}
                     >
                       {s.title}
                     </div>
-                    <div className="chi-sub" style={{ fontSize: 11, marginTop: 2 }}>{userMsgsCount} پیام</div>
+                    <div className="chi-sub" style={{ fontSize: 10.5, marginTop: 2 }}>{userMsgsCount} پیام</div>
                   </div>
                   {sessions.length > 1 && (
                     <button className="icon-btn icon-btn--danger" onClick={(e) => deleteSession(s.id, e)} title="حذف مکالمه" aria-label="حذف مکالمه">
@@ -99,13 +100,13 @@ export default function ChatView() {
         <div className="chat-main">
           <div className="chat-header">
             <div className="chat-header-icon">
-              <Bot size={18} />
+              <Bot size={16} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--heading)' }}>دستیار هوش سازمانی آریونکس</div>
-              <div style={{ fontSize: 11.5, color: 'var(--color-success)', fontWeight: 600 }}>● آنلاین · RAG فعال و امن</div>
+              <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--heading)' }}>دستیار هوش سازمانی آریونکس</div>
+              <div style={{ fontSize: 11, color: 'var(--color-success)', fontWeight: 500 }}>● آنلاین · RAG فعال و امن</div>
             </div>
-            <span className="q-badge qb-done" style={{ fontSize: 12 }}>مخزن متصل</span>
+            <Badge variant="success" style={{ fontSize: 11 }}>مخزن متصل</Badge>
           </div>
 
           <div className="chat-messages">
@@ -150,7 +151,7 @@ export default function ChatView() {
                     <div className="source-tags">
                       {msg.sources.map((src, i) => (
                         <span key={i} className="source-tag">
-                          <FileText size={12} /> {src.name} · {src.page}
+                          <FileText size={11} /> {src.name} · {src.page}
                         </span>
                       ))}
                     </div>
@@ -205,7 +206,7 @@ export default function ChatView() {
               }}
             />
             <button className="send-btn" onClick={handleSendMessage} aria-label="ارسال پیام">
-              <Send size={18} />
+              <Send size={17} />
             </button>
           </div>
         </div>

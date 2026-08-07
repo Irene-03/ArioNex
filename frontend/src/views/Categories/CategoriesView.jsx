@@ -125,12 +125,13 @@ export default function CategoriesView() {
   return (
     <div className="screen fade-in">
       <PageHeader
-        icon={<FolderTree size={20} style={{ color: 'var(--copper)' }} />}
+        icon={<FolderTree size={18} style={{ color: 'var(--copper)' }} />}
         title="مدیریت دسته‌بندی‌ها"
+        desc="مدیریت عامل دسته‌بندی اسناد"
         actions={
           currentUser?.role === 'Admin' && (
             <button className="ax-btn ax-btn--primary" onClick={() => handleOpenModal()}>
-              <Plus size={16} /> افزودن دسته‌بندی
+              <Plus size={15} /> افزودن دسته‌بندی
             </button>
           )
         }

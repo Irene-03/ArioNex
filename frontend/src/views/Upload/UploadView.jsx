@@ -12,9 +12,10 @@ export default function UploadView() {
       <div className="ax-page-header">
         <div>
           <div className="ax-page-header__title">
-            <UploadCloud size={20} style={{ color: 'var(--copper)' }} />
+            <UploadCloud size={18} style={{ color: 'var(--copper)' }} />
             آپلود اسناد سازمانی
           </div>
+          <div className="ax-page-header__desc">فیلتر حریم خصوصی و درون‌ریزی امن</div>
         </div>
       </div>
 

@@ -28,16 +28,16 @@ export default function LoginView() {
     <div className="login-overlay">
       <div className="login-card">
         <div className="login-logo">
-          <svg className="logo-mark" viewBox="0 0 32 32" fill="none" width="40" height="40">
+          <svg className="logo-mark" viewBox="0 0 32 32" fill="none" width="36" height="36">
             <polygon points="16,2 28,26 4,26" fill="none" stroke="#c4894a" strokeWidth="2.5" />
             <polygon points="16,9 22,26 10,26" fill="none" stroke="#c4894a" strokeWidth="1.5" opacity="0.5" />
           </svg>
-          <span className="logo-text" style={{ fontSize: 24, color: 'white' }}>آریو<span>نکس</span></span>
+          <span className="logo-text" style={{ fontSize: 22, color: 'white' }}>آریو<span>نکس</span></span>
         </div>
 
         <h2 className="login-title">{isSignupMode ? 'ثبت‌نام در سامانه آریونکس' : 'ورود به سامانه آریونکس'}</h2>
         <p className="login-subtitle">
-          سامانه هوشمند مدیریت دانش، ممیزی حریم خصوصی (PII) و تحلیل قوانین انطباق سازمان
+          سامانه هوشمند مدیریت دانش و تحلیل قوانین انطباق سازمان
         </p>
 
         {isSignupMode ? (

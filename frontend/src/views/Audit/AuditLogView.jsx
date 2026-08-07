@@ -89,7 +89,7 @@ export default function AuditLogView() {
       <div className="ax-page-header">
         <div>
           <div className="ax-page-header__title">
-            <ScrollText size={20} style={{ color: 'var(--copper)' }} />
+            <ScrollText size={18} style={{ color: 'var(--copper)' }} />
             لاگ حسابرسی سامانه
           </div>
           <div className="ax-page-header__desc">

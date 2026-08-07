@@ -102,15 +102,16 @@ export default function IntegrationsView() {
   return (
     <div className="screen fade-in">
       <PageHeader
-        icon={<KeyRound size={20} style={{ color: 'var(--copper)' }} />}
+        icon={<KeyRound size={18} style={{ color: 'var(--copper)' }} />}
         title="یکپارچه‌سازی و کانال‌های خروجی"
+        desc="کانال‌های خروجی و مستندات اتصال"
       />
 
       <div className="stats-row">
         {statCards.map(card => {
           const Icon = card.icon;
           return (
-            <div className="stat-card" key={card.label} style={{ borderTop: `3px solid ${card.color}` }}>
+            <div className="stat-card" key={card.label}>
               <div className="stat-label">
                 <Icon />
                 {card.label}

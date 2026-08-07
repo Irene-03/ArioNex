@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, UploadCloud, Circle, Sun, Moon } from 'lucide-react';
+import { Search, MessageSquareText, UploadCloud, Circle, Sun, Moon } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 const pageMeta = {
@@ -31,7 +31,7 @@ export default function Topbar() {
     <div className="topbar">
       <div style={{ minWidth: 0, flex: 1 }}>
         <div className="page-title">{meta.title}</div>
-        <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {meta.subtitle}
         </div>
       </div>
@@ -62,14 +62,18 @@ export default function Topbar() {
         title={theme === 'dark' ? 'حالت روشن' : 'حالت تاریک'}
         aria-label="تغییر تم"
       >
-        {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+        {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+      </button>
+
+      <button className="topbar-btn btn-ghost" onClick={() => setActiveScreen('chat')}>
+        <MessageSquareText size={14} /> <span className="btn-text">پرسش جدید</span>
       </button>
 
       <button className="topbar-btn btn-primary" onClick={() => setActiveScreen('upload')}>
-        <UploadCloud size={15} /> <span className="btn-text">آپلود سریع</span>
+        <UploadCloud size={14} /> <span className="btn-text">آپلود سریع</span>
       </button>
 
-      <Circle size={10} fill="var(--color-success)" color="var(--color-success)" title="سیستم آنلاین" aria-label="سیستم آنلاین" />
+      <Circle size={8} fill="var(--color-success)" color="var(--color-success)" title="سیستم آنلاین" aria-label="سیستم آنلاین" />
     </div>
   );
 }

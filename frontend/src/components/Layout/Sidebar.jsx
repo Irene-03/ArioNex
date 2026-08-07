@@ -43,8 +43,8 @@ export default function Sidebar() {
 
   return (
     <div className="sidebar">
-      <div className="sidebar-logo" onClick={() => setActiveScreen('dashboard')} role="button" tabIndex={0} style={{ cursor: 'pointer' }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setActiveScreen('dashboard'); }}>
-        <svg className="logo-mark" viewBox="0 0 32 32" fill="none" width="32" height="32">
+      <div className="sidebar-logo">
+        <svg className="logo-mark" viewBox="0 0 32 32" fill="none" width="28" height="28">
           <polygon points="16,2 28,26 4,26" fill="none" stroke="#c4894a" strokeWidth="2.5" />
           <polygon points="16,9 22,26 10,26" fill="none" stroke="#c4894a" strokeWidth="1.5" opacity="0.5" />
         </svg>
@@ -85,11 +85,11 @@ export default function Sidebar() {
           <button
             className="icon-btn"
             onClick={handleLogout}
-            style={{ color: 'var(--copper-light)', fontSize: '18px', padding: '4px' }}
+            style={{ color: 'var(--copper-light)', fontSize: '16px', padding: '4px' }}
             title="خروج از حساب"
             aria-label="خروج از حساب"
           >
-            <LogOut size={17} />
+            <LogOut size={16} />
           </button>
         </div>
       </div>
