@@ -85,6 +85,12 @@ class _PooledConnection:
     def __init__(self, conn):
         self._conn = conn
 
+    def __setattr__(self, name, value):
+        if name == "_conn":
+            super().__setattr__(name, value)
+        else:
+            setattr(self._conn, name, value)
+
     def close(self) -> None:
         conn, self._conn = self._conn, None
         if conn is not None:
@@ -222,9 +228,11 @@ def init_db() -> None:
             total_tokens INT DEFAULT 0,
             input_tokens INT DEFAULT 0,
             output_tokens INT DEFAULT 0,
-            response_time_ms INT DEFAULT 0
+            response_time_ms INT DEFAULT 0,
+            agent_type VARCHAR(20) DEFAULT 'rag'
         );
         """,
+        "ALTER TABLE pg_audit_logs ADD COLUMN IF NOT EXISTS agent_type VARCHAR(20) DEFAULT 'rag';",
         # 5. Website widgets table (Website Widgets)
         """
         CREATE TABLE IF NOT EXISTS website_widgets (

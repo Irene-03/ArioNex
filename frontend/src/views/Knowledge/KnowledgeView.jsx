@@ -211,7 +211,7 @@ export default function KnowledgeView() {
         })}
       </div>
 
-      <div className="ax-card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="ax-card" style={{ padding: 0, overflow: 'visible' }}>
         <div className="ax-card__header" style={{ padding: '18px 20px 12px', margin: 0 }}>
           <div className="ax-card__title">
             <ShieldCheck size={16} style={{ color: 'var(--copper)' }} />
@@ -222,6 +222,7 @@ export default function KnowledgeView() {
           columns={columns}
           rows={documents}
           rowKey="id"
+          className="ax-table-wrap--full"
           emptyTitle="سندی ثبت نشده است"
           emptyDesc="برای افزودن اولین سند، از دکمه «افزودن فایل جدید» استفاده کنید."
         />

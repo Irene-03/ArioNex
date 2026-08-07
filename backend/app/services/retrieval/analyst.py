@@ -11,6 +11,7 @@
 """
 
 import os
+import json
 import logging
 from typing import List, Dict, Any, TypedDict, Annotated, Literal, Generator
 import pandas as pd
@@ -31,6 +32,7 @@ logger = logging.getLogger("arionex.analyst")
 # ۱. تعریف ساختار وضعیت عامل بر اساس دموی state.py
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
+    tool_call_count: int
 
 # ۲. کلاس اصلی پیاده‌سازی عامل تحلیلگر داده
 class AnalystAgent:
@@ -158,8 +160,12 @@ class AnalystAgent:
             except Exception as e:
                 return f"Error: {str(e)}"
 
-        def filter_rows_func(params: list) -> str:
+        def filter_rows_func(params) -> str:
             try:
+                if isinstance(params, str):
+                    params = json.loads(params)
+                if not isinstance(params, list) or len(params) != 3:
+                    return "Error: filter_rows requires exactly 3 arguments: [column_name, operator, value]. Example: ['نوع سند', '==', 'بدهکاری']"
                 col, op, val = params[0], params[1], params[2]
                 if op == "==":
                     res = df_instance[df_instance[col] == val]
@@ -167,9 +173,15 @@ class AnalystAgent:
                     res = df_instance[df_instance[col] > val]
                 elif op == "<":
                     res = df_instance[df_instance[col] < val]
-                else:
+                elif op == "!=":
                     res = df_instance[df_instance[col] != val]
+                else:
+                    return f"Error: unsupported operator '{op}'. Use '==', '!=', '>', or '<'."
                 return res.head(10).to_string()
+            except json.JSONDecodeError:
+                return "Error: input must be a JSON array like [\"column\", \"==\", \"value\"]. Use python_repl_ast for complex filters."
+            except KeyError as e:
+                return f"Error: column {e} not found in DataFrame."
             except Exception as e:
                 return f"Error: {str(e)}"
 
@@ -177,7 +189,17 @@ class AnalystAgent:
         analyze_df_tool = Tool(name="analyze_df", func=analyze_df_func, description="Preview first 3 rows of DataFrame.")
         column_sum_tool = Tool(name="column_sum", func=column_sum_func, description="Sum numeric values in a column. Input: column name.")
         groupby_agg_tool = Tool(name="groupby_aggregate", func=groupby_aggregate_func, description="Group and aggregate. Input: [group_col, agg_col, func].")
-        filter_rows_tool = Tool(name="filter_rows", func=filter_rows_func, description="Filter rows by condition. Input: [col, op, val].")
+        filter_rows_tool = Tool(
+            name="filter_rows",
+            func=filter_rows_func,
+            description=(
+                "Filter DataFrame rows by a SINGLE simple equality condition. "
+                "Input MUST be a JSON array with exactly 3 elements: [column_name, operator, value]. "
+                "Operators: '==' or '!=' only. "
+                'Example: \'["column_name", "==", "value"]\' '
+                "DO NOT use for string matching, regex, or compound AND/OR conditions — use python_repl_ast instead."
+            ),
+        )
 
         return [analyze_df_tool, column_sum_tool, groupby_agg_tool, filter_rows_tool, python_tool]
 
@@ -206,6 +228,8 @@ class AnalystAgent:
         system_prompt = get_analyst_system_prompt(df_to_use.columns.tolist())
 
         # ۴. تعریف توابع گره (Node Functions) بر اساس دموی nodes.py
+        MAX_TOOL_CALLS = 8
+
         def call_model(state: AgentState):
             messages_to_model = [SystemMessage(content=system_prompt)] + list(state["messages"])
             response = model_with_tools.invoke(messages_to_model)
@@ -215,14 +239,23 @@ class AnalystAgent:
             last_message = state["messages"][-1]
             if not last_message.tool_calls:
                 return "end"
+            tool_count = state.get("tool_call_count", 0)
+            if tool_count >= MAX_TOOL_CALLS:
+                return "end"
             return "continue"
 
         tool_node = ToolNode(tools_list)
+
+        def track_tool_calls(state: AgentState):
+            last_message = state["messages"][-1]
+            extra = 1 if hasattr(last_message, "tool_calls") and last_message.tool_calls else 0
+            return {"tool_call_count": state.get("tool_call_count", 0) + extra}
 
         # ۵. کامپایل گراف با StateGraph
         workflow = StateGraph(AgentState)
         workflow.add_node("agent", call_model)
         workflow.add_node("tools", tool_node)
+        workflow.add_node("track", track_tool_calls)
         
         workflow.set_entry_point("agent")
         workflow.add_conditional_edges(
@@ -233,7 +266,8 @@ class AnalystAgent:
                 "end": END
             }
         )
-        workflow.add_edge("tools", "agent")
+        workflow.add_edge("tools", "track")
+        workflow.add_edge("track", "agent")
         
         memory = MemorySaver()
         graph = workflow.compile(checkpointer=memory)
@@ -251,8 +285,8 @@ class AnalystAgent:
 
         # ۶. اجرای زنجیره و استخراج آخرین پیغام
         try:
-            state_input = {"messages": [HumanMessage(content=query)]}
-            config = {"configurable": {"thread_id": "1", "recursion_limit": 10}}
+            state_input = {"messages": [HumanMessage(content=query)], "tool_call_count": 0}
+            config = {"configurable": {"thread_id": "1", "recursion_limit": 20}}
             
             result = graph.invoke(state_input, config=config)
             last_message = result["messages"][-1]
@@ -275,8 +309,8 @@ class AnalystAgent:
             return
 
         try:
-            state_input = {"messages": [HumanMessage(content=query)]}
-            config = {"configurable": {"thread_id": "1", "recursion_limit": 10}}
+            state_input = {"messages": [HumanMessage(content=query)], "tool_call_count": 0}
+            config = {"configurable": {"thread_id": "1", "recursion_limit": 20}}
             
             yield {"type": "thought", "content": "🤖 *شروع فرآیند تحلیل داده توسط عامل محاسباتی آریونکس...*\n\n"}
             

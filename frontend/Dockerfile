@@ -13,9 +13,7 @@ WORKDIR /app
 COPY package.json package-lock.json /app/
 
 # Use a mirror registry for faster package installation
-RUN npm config set registry https://registry.npmmirror.com \
-    && npm install --no-audit --no-fund \
-    && npm config delete registry
+RUN npm install --no-audit --no-fund
 
 # Copy the frontend sources and run the final build with Vite
 COPY . /app/

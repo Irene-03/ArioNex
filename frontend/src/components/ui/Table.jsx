@@ -9,10 +9,11 @@ export default function Table({
   emptyDesc = 'هنوز رکوردی ثبت نشده است.',
   emptyIcon,
   onRowClick,
+  className,
   ...rest
 }) {
   return (
-    <div className="ax-table-wrap" {...rest}>
+    <div className={`ax-table-wrap${className ? ` ${className}` : ''}`} {...rest}>
       <table className="ax-table">
         <thead>
           <tr>

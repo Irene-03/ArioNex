@@ -15,6 +15,7 @@
 import logging
 import os
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from app.core.config import settings
 from app.schemas.config_schemas import ConfigUpdateRequest
 
@@ -264,21 +265,27 @@ async def update_active_configuration(update: ConfigUpdateRequest):
 # Ollama Connectivity Test Endpoint
 # -------------------------------------------------------------------
 
+class TestOllamaRequest(BaseModel):
+    ollama_base_url: str | None = None
+
 @router.post(
     "/config/test-ollama",
     summary="آزمون اتصال بک‌اند به سرور Ollama",
     description="از سمت سرور به آدرس ollama_base_url/api/tags متصل شده و وضعیت اتصال و لیست مدل‌های نصب‌شده را برمی‌گرداند.",
 )
-def test_ollama_connection():
+def test_ollama_connection(body: TestOllamaRequest | None = None):
     import json as _json
     import urllib.request
 
-    base_url = getattr(settings, "ollama_base_url", "http://localhost:11434").rstrip("/")
+    base_url = (
+        (body.ollama_base_url if body and body.ollama_base_url else None)
+        or getattr(settings, "ollama_base_url", "http://localhost:11434")
+    ).rstrip("/")
     tags_url = f"{base_url}/api/tags"
 
     try:
         req = urllib.request.Request(tags_url, method="GET")
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=10) as resp:
             payload = _json.loads(resp.read().decode("utf-8"))
 
         models = [m.get("name") for m in (payload.get("models") or []) if m.get("name")]
@@ -302,7 +309,6 @@ def test_ollama_connection():
 # -------------------------------------------------------------------
 # System Prompts Management Endpoints
 # -------------------------------------------------------------------
-from pydantic import BaseModel
 from app.core.database import get_db_connection
 
 class PromptUpdateRequest(BaseModel):

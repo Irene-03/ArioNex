@@ -241,7 +241,8 @@ def synthesize_rag_response(
             return {
                 "answer": greeting_content,
                 "sources": [],
-                "is_safe": True
+                "is_safe": True,
+                "agent_type": "rag"
             }
 
     # 3. Domain relevance gatekeeper (Check Structure Gatekeeper)
@@ -286,21 +287,24 @@ def synthesize_rag_response(
             return {
                 "answer": analyst_result,
                 "sources": [{"name": "accounting_data.csv", "page": "تحلیل آماری حسابداری"}],
-                "is_safe": True
+                "is_safe": True,
+                "agent_type": "analyst"
             }
         elif settings.security.strict_non_hallucination:
             logger.warning("Analyst Agent failed to resolve query. Emitting standard refusal.")
             return {
                 "answer": STANDARD_REFUSAL_MESSAGE,
                 "sources": [],
-                "is_safe": True
+                "is_safe": True,
+                "agent_type": "analyst"
             }
         else:
             logger.info("Analyst Agent failed to resolve query. Hallucination guard disabled, returning analyst result anyway.")
             return {
                 "answer": analyst_result,
                 "sources": [{"name": "accounting_data.csv", "page": "تحلیل آماری حسابداری"}],
-                "is_safe": True
+                "is_safe": True,
+                "agent_type": "analyst"
             }
 
     # 5. Topic classification based on database categories (Check Categories)
@@ -417,7 +421,8 @@ def synthesize_rag_response(
             return {
                 "answer": STANDARD_REFUSAL_MESSAGE,
                 "sources": [],
-                "is_safe": True
+                "is_safe": True,
+                "agent_type": "rag"
             }
         logger.info("Zero relevant context retrieved. Hallucination guard disabled, proceeding with empty context.")
 
@@ -505,7 +510,8 @@ def synthesize_rag_response(
                 return {
                     "answer": STANDARD_REFUSAL_MESSAGE,
                     "sources": [],
-                    "is_safe": True
+                    "is_safe": True,
+                    "agent_type": "rag"
                 }
             logger.info("Responder LLM outputted refusal placeholder but guard is disabled. Returning as-is.")
             final_answer = final_answer if final_answer else "I don't have enough information to answer that."
@@ -518,7 +524,8 @@ def synthesize_rag_response(
                 return {
                     "answer": STANDARD_REFUSAL_MESSAGE,
                     "sources": [],
-                    "is_safe": False
+                    "is_safe": False,
+                    "agent_type": "rag"
                 }
 
             report = audit_result.get("audit_report")
@@ -531,7 +538,8 @@ def synthesize_rag_response(
         return {
             "answer": final_answer,
             "sources": sources[:3],
-            "is_safe": True
+            "is_safe": True,
+            "agent_type": "rag"
         }
 
     except ValueError as ve:
@@ -542,13 +550,15 @@ def synthesize_rag_response(
             return {
                 "answer": STANDARD_REFUSAL_MESSAGE,
                 "sources": [],
-                "is_safe": True
+                "is_safe": True,
+                "agent_type": "rag"
             }
         logger.error(f"Final LLM responder synthesis failed: {str(e)}. Guard disabled, returning error message.")
         return {
             "answer": f"An error occurred while generating the response: {str(e)}",
             "sources": [],
-            "is_safe": True
+            "is_safe": True,
+            "agent_type": "rag"
         }
 
 
@@ -585,6 +595,7 @@ async def synthesize_rag_response_stream(
         greeting_content = greeting_response.content.strip()
         if greeting_content != "####":
             logger.info(f"Greeting chain matched in stream.")
+            yield {"event": "agent_type", "data": "rag"}
             yield {"event": "sources", "data": []}
             yield {"event": "token", "data": greeting_content}
             return
@@ -623,6 +634,7 @@ async def synthesize_rag_response_stream(
     is_analyst_intent = route_query_intent(standalone_query) == "analyst"
     if is_analyst_intent or structure_content != "$$$":
         logger.info(f"Running Analyst Agent in stream (intent={is_analyst_intent}, structure={structure_content != '$$$'}) ...")
+        yield {"event": "agent_type", "data": "analyst"}
         yield {"event": "sources", "data": [{"name": "accounting_data.csv", "page": "تحلیل آماری حسابداری"}]}
         
         final_answer = ""
@@ -752,6 +764,7 @@ async def synthesize_rag_response_stream(
 
     if not sorted_results:
         if settings.security.strict_non_hallucination:
+            yield {"event": "agent_type", "data": "rag"}
             yield {"event": "sources", "data": []}
             yield {"event": "token", "data": STANDARD_REFUSAL_MESSAGE}
             yield {"event": "done", "data": {"is_safe": True}}
@@ -783,6 +796,7 @@ async def synthesize_rag_response_stream(
 
     context_str = "\n\n".join(formatted_context_list)
 
+    yield {"event": "agent_type", "data": "rag"}
     yield {"event": "sources", "data": sources[:3]}
 
     rules_list = []

@@ -139,6 +139,7 @@ async def execute_query_logic(request: QueryRequest, current_user: Optional[dict
             input_tokens=approx_input_tokens,
             output_tokens=approx_output_tokens,
             response_time_ms=response_time_ms,
+            agent_type=result.get("agent_type", "rag"),
         )
 
         return QueryResponse(
@@ -215,6 +216,7 @@ async def execute_query_stream_logic(
 
     accumulated_answer = ""
     start_time = time.time()
+    agent_type = "rag"
     try:
         # Enforce a 60-second execution/inactivity timeout on the stream
         async with asyncio.timeout(60.0):
@@ -231,7 +233,9 @@ async def execute_query_stream_logic(
                     logger.warning("Streaming client disconnected actively. Aborting generation task.")
                     break
 
-                if event["event"] == "token":
+                if event["event"] == "agent_type":
+                    agent_type = event["data"]
+                elif event["event"] == "token":
                     # Cap accumulated response memory buffer at 100k characters to prevent memory exhaustion leaks
                     if len(accumulated_answer) < 100000:
                         accumulated_answer += event["data"]
@@ -263,6 +267,7 @@ async def execute_query_stream_logic(
                 input_tokens=approx_input_tokens,
                 output_tokens=approx_output_tokens,
                 response_time_ms=response_time_ms,
+                agent_type=agent_type,
             )
             yield _sse_event("done", {"is_safe": True})
 

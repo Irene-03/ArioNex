@@ -78,7 +78,9 @@ export default function AdminView() {
     try {
       const res = await fetch(`${API_BASE}/v1/config/test-ollama`, {
         method: 'POST',
-        signal: AbortSignal.timeout(8000),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ollama_base_url: ollamaEndpoint }),
+        signal: AbortSignal.timeout(15000),
       });
       const data = await res.json();
       if (data?.connected) {

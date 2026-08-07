@@ -87,6 +87,7 @@ async def execute_widget_logic(request: QueryRequest) -> QueryResponse:
             input_tokens=approx_input_tokens,
             output_tokens=approx_output_tokens,
             response_time_ms=response_time_ms,
+            agent_type=result.get("agent_type", "rag"),
         )
 
         return QueryResponse(
@@ -123,6 +124,7 @@ async def execute_widget_stream_logic(request: QueryRequest) -> AsyncGenerator[s
 
     accumulated_answer = ""
     start_time = time.time()
+    agent_type = "rag"
     try:
         async for event in synthesize_rag_response_stream(
             user_input=request.query,
@@ -131,7 +133,9 @@ async def execute_widget_stream_logic(request: QueryRequest) -> AsyncGenerator[s
             k=4,
             session_id=session_id
         ):
-            if event["event"] == "token":
+            if event["event"] == "agent_type":
+                agent_type = event["data"]
+            elif event["event"] == "token":
                 accumulated_answer += event["data"]
             yield _sse_event(event["event"], event["data"])
 
@@ -154,6 +158,7 @@ async def execute_widget_stream_logic(request: QueryRequest) -> AsyncGenerator[s
             input_tokens=approx_input_tokens,
             output_tokens=approx_output_tokens,
             response_time_ms=response_time_ms,
+            agent_type=agent_type,
         )
     except Exception as e:
         logger.error(f"Widget stream error: {str(e)}")

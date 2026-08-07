@@ -14,13 +14,17 @@ ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
 
 WORKDIR /app
 
+# Use faster pip mirror
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
+
 
 
 # Copy and install the project's Python dependencies
 COPY requirements.txt /app/
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements.txt \
-    && pip install python-multipart \
+    pip install --timeout 300 --retries 5 -r requirements.txt \
+    && pip install --timeout 300 python-multipart \
     && (apt-get update -qq --fix-missing && apt-get install -y -qq --no-install-recommends --fix-missing \
         libnss3 libnspr4 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 \
         libasound2 libxshmfence1 libxcomposite1 libxdamage1 libxrandr2 \

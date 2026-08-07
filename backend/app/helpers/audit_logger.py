@@ -19,8 +19,8 @@ logger = logging.getLogger("arionex.audit_logger")
 
 # SQL statement for audit log insertion — usable in any channel
 _AUDIT_INSERT_SQL = """
-INSERT INTO pg_audit_logs (user_name, user_role, query_text, response_text, status, pii_masked_count, total_tokens, input_tokens, output_tokens, response_time_ms)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+INSERT INTO pg_audit_logs (user_name, user_role, query_text, response_text, status, pii_masked_count, total_tokens, input_tokens, output_tokens, response_time_ms, agent_type)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 
@@ -35,6 +35,7 @@ def log_audit_event(
     input_tokens: int = 0,
     output_tokens: int = 0,
     response_time_ms: int = 0,
+    agent_type: str = "rag",
 ) -> None:
     """
     /// <summary>
@@ -65,6 +66,7 @@ def log_audit_event(
                 input_tokens,
                 output_tokens,
                 response_time_ms,
+                agent_type,
             ))
             conn.commit()
         conn.close()

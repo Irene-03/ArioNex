@@ -655,6 +655,11 @@ code {
   scrollbar-color: var(--gray-300) transparent;
 }
 
+.ax-table-wrap--full {
+  max-height: none;
+  overflow: visible;
+}
+
 .ax-table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
 .ax-table-wrap::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 4px; }
 .ax-table-wrap::-webkit-scrollbar-track { background: transparent; }

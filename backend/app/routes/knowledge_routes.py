@@ -96,7 +96,8 @@ async def get_knowledge_stats(user: dict = Depends(get_current_user)):
             # 4. Average RAG response time (today — in sync with total_queries_today)
             cur.execute(
                 "SELECT COALESCE(AVG(response_time_ms), 0) FROM pg_audit_logs "
-                "WHERE response_time_ms > 0 AND timestamp >= CURRENT_DATE"
+                "WHERE response_time_ms > 0 AND timestamp >= CURRENT_DATE "
+                "AND (agent_type IS NULL OR agent_type NOT IN ('analyst', 'langgraph'))"
             )
             avg_response_ms = cur.fetchone()[0]
             average_response_time = round(float(avg_response_ms) / 1000.0, 1)
@@ -105,12 +106,12 @@ async def get_knowledge_stats(user: dict = Depends(get_current_user)):
             cur.execute("SELECT COALESCE(SUM(pii_masked_count), 0) FROM documents")
             total_pii_masked = cur.fetchone()[0]
 
-            # 5.1 Tokens consumed
-            cur.execute("SELECT COALESCE(SUM(total_tokens), 0) FROM pg_audit_logs")
+            # 5.1 Tokens consumed (excluding analyst/langgraph)
+            cur.execute("SELECT COALESCE(SUM(total_tokens), 0) FROM pg_audit_logs WHERE (agent_type IS NULL OR agent_type NOT IN ('analyst', 'langgraph'))")
             total_tokens_used = cur.fetchone()[0]
-            cur.execute("SELECT COALESCE(SUM(input_tokens), 0) FROM pg_audit_logs")
+            cur.execute("SELECT COALESCE(SUM(input_tokens), 0) FROM pg_audit_logs WHERE (agent_type IS NULL OR agent_type NOT IN ('analyst', 'langgraph'))")
             input_tokens_used = cur.fetchone()[0]
-            cur.execute("SELECT COALESCE(SUM(output_tokens), 0) FROM pg_audit_logs")
+            cur.execute("SELECT COALESCE(SUM(output_tokens), 0) FROM pg_audit_logs WHERE (agent_type IS NULL OR agent_type NOT IN ('analyst', 'langgraph'))")
             output_tokens_used = cur.fetchone()[0]
 
             # 6. Format breakdown (only documents with chunks)
